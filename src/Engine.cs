@@ -63,14 +63,12 @@ namespace Ohman {
         public string Name = "";                    // display name shown in the window/tray (empty = "Ohman")
 
         static readonly string File_ = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Program.FileStem + ".state");
-        static readonly string LegacyFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "omenlite.state");
 
         public static Settings Load() {
             var s = new Settings();
             try {
-                string src = File.Exists(File_) ? File_ : (File.Exists(LegacyFile) ? LegacyFile : null);   // same format; migrate silently
-                if (src == null) return s;
-                foreach (string raw in File.ReadAllLines(src)) {
+                if (!File.Exists(File_)) return s;
+                foreach (string raw in File.ReadAllLines(File_)) {
                     string line = raw.Trim(); int eq = line.IndexOf('=');
                     if (line.Length == 0 || line[0] == '#' || eq < 1) continue;
                     s.Apply(line.Substring(0, eq).Trim(), line.Substring(eq + 1).Trim());
@@ -85,7 +83,7 @@ namespace Ohman {
             try {
                 // per-mode keys: M0.Fan=… M1.TdpOffset=… (M0 Eco, M1 Balanced, M2 Performance)
                 if (k.Length > 3 && k[0] == 'M' && char.IsDigit(k[1]) && k[2] == '.') { int mi = k[1] - '0'; if (mi >= 0 && mi < 3) Modes[mi].Apply(k.Substring(3), v); return; }
-                // legacy single-profile keys from older state files apply to every mode
+                // un-prefixed keys apply to every mode (handy for hand edits and --set)
                 if (k == "Fan" || k == "Fan1" || k == "Fan2" || k == "TdpOffset" || k == "Gpu" || k == "GpuAuto") { foreach (var m in Modes) m.Apply(k, v); return; }
                 {
                     int n; bool b;

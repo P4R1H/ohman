@@ -19,15 +19,6 @@ namespace Ohman {
         public static EventWaitHandle ShowEvent, ExitEvent;   // named events: another instance can ask us to show or exit
         public static bool FlashTest;                         // --flash: show the key OSD at start (preview/screenshot aid)
 
-        /// <summary>The pre-rename build (OmenLite.exe) uses the same BIOS interface; two instances would fight, so retire it.</summary>
-        static void RetireOldBuild() {
-            try {
-                foreach (var p in System.Diagnostics.Process.GetProcessesByName("OmenLite")) {
-                    try { p.Kill(); Log.Write("stopped old OmenLite.exe (pid " + p.Id + ")"); } catch (Exception ex) { Log.Write("old OmenLite.exe still running: " + ex.Message); }
-                }
-            } catch { }
-        }
-
         [STAThread]
         public static int Main(string[] args) {
             bool demo = false, hidden = false, settings = false; string shot = null;
@@ -59,7 +50,6 @@ namespace Ohman {
             try { elevated = new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator); } catch { }
             IHardware hw = (demo || !elevated) ? (IHardware)new DemoHardware() : new Bios();
             Log.Write("---- " + AppName + " " + Version + " start · elevated=" + elevated + " · hardware=" + (hw.IsDemo ? "demo" : "bios") + (hidden ? " · hidden" : ""));
-            if (!hw.IsDemo) RetireOldBuild();
 
             var settingsObj = Settings.Load();
             foreach (string o in overrides) { int eq = o.IndexOf('='); if (eq > 0) settingsObj.Apply(o.Substring(0, eq), o.Substring(eq + 1)); }

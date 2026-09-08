@@ -8,7 +8,6 @@
     <SolidColorBrush x:Key="Muted" Color="#A4ADBF"/>
     <SolidColorBrush x:Key="Accent" Color="#5B8DEF"/>
     <FontFamily x:Key="UiFont">Segoe UI Variable Text, Segoe UI</FontFamily>
-    <FontFamily x:Key="SmallFont">Segoe UI Variable Text, Segoe UI</FontFamily>
     <FontFamily x:Key="HeadFont">Segoe UI Variable Display, Segoe UI</FontFamily>
     <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas</FontFamily>
 

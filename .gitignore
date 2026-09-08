@@ -7,7 +7,6 @@ preview/
 *.log
 *.log.1
 *.state
-omenlite.state
 
 # measurement output from the tools
 tools/verify.txt

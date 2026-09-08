@@ -100,7 +100,6 @@ src\Ui.xaml       layout and styles (embedded)
 src\Ui.cs         window, tray, hotkeys, on-screen flash
 src\Program.cs    entry point
 docs\             research write-up and screenshots
-legacy\           the first WinForms prototype, kept for reference
 ```
 
 ## Credits
