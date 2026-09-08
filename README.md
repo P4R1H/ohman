@@ -98,7 +98,7 @@ src\Sensors.cs    perf counters + nvidia-smi
 src\Ui.xaml       layout and styles (embedded)
 src\Ui.cs         window, tray, hotkeys, on-screen flash
 src\Program.cs    entry point
-docs\             research write-up and screenshots
+docs\             research write-up
 ```
 
 ## Credits
