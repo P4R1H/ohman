@@ -1,6 +1,6 @@
 name: Release
 
-# Push a tag like v2.1 and this builds Ohman with the C# compiler that ships inside Windows
+# Push a tag like v1.0 and this builds Ohman with the C# compiler that ships inside Windows
 # (the same build.cmd you run locally) and attaches the binaries to a GitHub release.
 
 on:
