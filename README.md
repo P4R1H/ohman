@@ -22,9 +22,9 @@ own risk and keep an eye on temperatures the first time you run it.
 | **GPU power** | Base · Boost · Max (what OGH sets behind the scenes per mode), or Auto to follow the mode. |
 | **Per mode** | Fan, power gain and GPU choices are remembered per mode, like tabs. |
 | **Live** | CPU and GPU temperature, both fan speeds, load, clocks, GPU watts, battery. |
-| **OMEN key** | Fn+F12 becomes yours: it opens the panel (or cycles modes, or toggles max fan, your pick). Shift+Fn+F12 always cycles modes, Ctrl+Fn+F12 toggles max fan. OGH's launcher is stopped and its logon task disabled (reversible). |
+| **OMEN key** | Fn+F12 becomes yours: it opens the panel (or cycles modes, or toggles max fan, your pick). OGH's launcher is stopped and its logon task disabled (reversible). |
 | **Safety** | A thermal guard forces max fan when the CPU is hot, the chassis sensor is hot, or the fans read stalled. Fans can never be set below 1800 rpm. Unknown laptops run read-only. |
-| **Extras** | Tray menu, hotkeys, start-with-Windows without a UAC prompt, Eco on battery, on-screen flash on key presses. |
+| **Extras** | Tray menu, hotkeys (Shift+F12 cycles modes, Ctrl+Alt+E/B/P/M/O), start-with-Windows without a UAC prompt, Eco on battery, on-screen flash on key presses. |
 
 Settings live in `ohman.state` (plain text) and everything the app does goes to `ohman.log`.
 
