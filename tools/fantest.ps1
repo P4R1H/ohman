@@ -18,7 +18,7 @@ function Row($phase) {
     $f = Fans; $c = Chassis; $t = CpuTemp
     $line = "{0:HH:mm:ss}  {1,-34} fans {2,5} / {3,5} rpm   chassis {4,3} C   cpu {5,3} C" -f (Get-Date), $phase, $f[0], $f[1], $c, $t
     $line; $line | Out-File $out -Append -Encoding utf8
-    if ($t -ge 85 -or $c -ge 55) { "ABORT: too hot -> max fan"; "ABORT too hot" | Out-File $out -Append; MaxFan $true; $script:aborted = $true }
+    if ($t -ge 85 -or $c -ge 55) { "ABORT: too hot -> max fan"; "ABORT too hot" | Out-File $out -Append -Encoding utf8; Trigger; MaxFan $true; $script:aborted = $true }
 }
 function Wait($sec, $phase, $every, [scriptblock]$each) {
     $end = (Get-Date).AddSeconds($sec); $n = 0
@@ -27,8 +27,9 @@ function Wait($sec, $phase, $every, [scriptblock]$each) {
 
 "fantest $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" | Out-File $out -Append -Encoding utf8
 "This test stops OMEN Gaming Hub's background process so it cannot interfere. It comes back at next logon."
-Get-Process OmenCommandCenterBackground, OmenLite, Vane -ErrorAction SilentlyContinue | ForEach-Object { try { $_.Kill(); "stopped $($_.ProcessName)" } catch { "could not stop $($_.ProcessName): $_" } }
-$t0 = CpuTemp; if ($t0 -gt 70) { "CPU is $t0 C - too warm to start. Let it cool below 65 C and run again."; exit 1 }
+Get-Process OmenCommandCenterBackground, Ohman -ErrorAction SilentlyContinue | ForEach-Object { try { $_.Kill(); "stopped $($_.ProcessName)" } catch { "could not stop $($_.ProcessName): $_" } }
+$t0 = CpuTemp; if ($t0 -lt 0) { "No CPU temperature sensor - the abort rule cannot work, not starting."; exit 1 }
+if ($t0 -gt 65) { "CPU is $t0 C - too warm to start. Let it cool below 65 C and run again."; exit 1 }
 
 "`n--- Phase A (30 s): baseline, nothing sent. Fans should sit on the firmware curve. ---"
 Wait 30 'A baseline' 10 $null
@@ -46,7 +47,13 @@ Wait 90 'D mode only' 15 { param($n) if ($n % 30 -eq 0) { [void](P 'call 1A 0 FF
 "`n--- Phase E (60 s): trigger every 20 s but NO fan levels ever written since fallback. Does the EC keep following its curve? ---"
 Wait 60 'E trigger only' 10 { param($n) if ($n % 20 -eq 0) { Trigger; "  (trigger sent)" } }
 
-"`n--- Restore: max fan off, levels released, no triggers -> firmware curve within 2 min. ---"
-MaxFan $false
+if ($script:aborted) {
+    "ABORTED: max fan stays ON. Let the machine cool, then start Ohman (or OGH) to take the fans back."
+    Row 'end (aborted, max fan on)'
+    exit 2
+}
+"`n--- Restore: a safe level (3000 rpm) replaces the {0,0} the firmware would otherwise replay, mode back to Balanced, then no more triggers. ---"
+Trigger; MaxFan $false; Levels 30 30
+[void](P 'call 1A 0 FF 30 00 00')
 Row 'end'
-"done. Results in $out"
+"done. Results in $out. The firmware resumes its own curve within about 2 minutes."

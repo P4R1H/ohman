@@ -48,11 +48,10 @@ the documented thermal-policy tables (v1: `0x30/0x31/0x50`; v0: `0x00/0x01/0x02`
        Boards = new[] { "<board id>" },
        ThermalPolicy = 1,                       // system data byte 3
        ModeEco = 0x30, ModeBalanced = 0x30, ModePerformance = 0x31, ModeCool = 0x50,
-       FanLevelMax = 57,                        // fan table / OGH slider bound
        TdpBase = 30, TdpGainMax = 15,           // system data byte 8; OGH slider
        GpuBase = new byte[] { 0, 0, 1, 75 }, GpuBoost = new byte[] { 0, 1, 1, 87 }, GpuMax = new byte[] { 1, 1, 1, 87 },
        KeyEventId = 29, KeyEventData = 8613,
-       Curve = new FanCurve { /* only if OGH's profiles.json curve for the model is known; else omit */ },
+       Curve = new FanCurve { Floor = 18, Ceiling = 57 /* CpuTemps/CpuLevels, GpuTemps/GpuLevels, IrTemps/IrLevels from OGH's profiles.json; omitted = the Transcend 14 curve is inherited, say so in Notes */ },
        Notes = "Verified <date> from issue #<n>: <what was verified, what is inferred>."
    }
    ```
@@ -60,13 +59,13 @@ the documented thermal-policy tables (v1: `0x30/0x31/0x50`; v0: `0x00/0x01/0x02`
    Keep the engine and UI untouched. If the model needs something the profile cannot express, stop and
    say what is missing rather than special-casing it elsewhere.
 3. **Build**: `build.cmd preview` must succeed. The real build needs no change.
-4. **Update the README** "Built for" line to list the new model, and the credits if a contributor supplied logs.
+4. **Update the README** "Built for" line to list the new model.
 5. **Commit** on a branch named `platform/<board id>` with a message like
    `Add <model> (<board id>) platform profile` and the issue reference.
 6. **Open the PR** with `gh pr create`. The body must contain:
    - the evidence table from step 1 (value → proving line),
    - a checklist for the issue author to run on the real machine **before merge**:
-     - [ ] `tools\verify.cmd` passes with rc=0 on every query
+     - [ ] `tools\verify.cmd` runs: system data (0x28), fan table (0x2F) and fan levels (0x2D) return rc=0 (other queries may legitimately return rc=5)
      - [ ] mode switch changes fan behaviour as OGH did
      - [ ] Max fan on/off works; fans never read 0 rpm in Auto
      - [ ] power gain applies (rc=0) and `tools\powertest.ps1` shows the expected direction

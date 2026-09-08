@@ -7,6 +7,10 @@ Hub uses, sends the same bytes OGH sends, and nothing it hasn't been verified to
 **Built for the HP OMEN Transcend 14 (2024, board 8C58).** The goal is every OMEN and Victus laptop;
 the method is one verified platform profile at a time. See [Adding your laptop](#adding-your-laptop).
 
+Ohman talks to fan and power firmware directly. It is tested on one machine by one person; use it at your
+own risk and keep an eye on temperatures the first time you run it.
+
+<p align="center"><img src="docs/screenshot.png" width="440" alt="The Ohman panel: mode bar, live temperatures and fan speeds, fan mode, power gain and GPU power controls"></p>
 
 ## What you get
 
@@ -16,26 +20,29 @@ the method is one verified platform profile at a time. See [Adding your laptop](
 | **Fans** | Auto runs OGH's own fan curve for this model (CPU, GPU and chassis sensors, 1800–5700 rpm), or Max, or Manual with a slider per fan. |
 | **Power gain** | OGH's "Smart Performance Gain": +0 … +15 W on the shared CPU+GPU budget that NVIDIA Dynamic Boost draws from. |
 | **GPU power** | Base · Boost · Max (what OGH sets behind the scenes per mode), or Auto to follow the mode. |
+| **Per mode** | Fan, power gain and GPU choices are remembered per mode, like tabs. |
 | **Live** | CPU and GPU temperature, both fan speeds, load, clocks, GPU watts, battery. |
 | **OMEN key** | Fn+F12 becomes yours: cycle modes, open the panel, or toggle max fan. OGH's launcher is stopped and its logon task disabled (reversible). |
-| **Safety** | A thermal guard forces max fan when the CPU is hot, the chassis sensor is hot, or the fans read stalled. Unknown laptops run read-only. |
+| **Safety** | A thermal guard forces max fan when the CPU is hot, the chassis sensor is hot, or the fans read stalled. Fans can never be set below 1800 rpm. Unknown laptops run read-only. |
 | **Extras** | Tray menu, hotkeys, start-with-Windows without a UAC prompt, Eco on battery, on-screen flash on key presses. |
 
 Settings live in `ohman.state` (plain text) and everything the app does goes to `ohman.log`.
 
 ## Install
 
-There is nothing to install. Build with the compiler that ships inside Windows:
+Download `Ohman.exe` from the [Releases](../../releases) page, put it in a folder of its own, run it. It asks
+for administrator rights once because the firmware interface is admin-only. Or build it yourself with the
+compiler that ships inside Windows:
 
 ```
 build.cmd
 ```
 
-You get `Ohman.exe` (the real thing; asks for administrator rights once because the firmware interface is
-admin-only) and `preview\Ohman.exe` (same UI, simulated hardware, no admin, for looking around).
+That gives you `Ohman.exe` (the real thing) and `preview\Ohman.exe` (same UI, simulated hardware, no admin,
+for looking around).
 
-Run `Ohman.exe`, then turn on **Settings → Start with Windows** so it comes back at logon, hidden, without
-prompting. If OMEN Gaming Hub is installed it can stay installed; Ohman only stops its key handler.
+Turn on **Settings → Start with Windows** so it comes back at logon, hidden, without prompting. If OMEN
+Gaming Hub is installed it can stay installed; Ohman only stops its key handler.
 
 From PowerShell:
 
@@ -48,8 +55,8 @@ Start-Process -FilePath ".\Ohman.exe" -Verb RunAs
 HP exposes a BIOS mailbox as the WMI class `hpqBIntM` (`root\wmi`). Every command is a small byte payload
 with a command type. Ohman uses the ones OGH uses: set performance mode (`0x1A`), max fan (`0x27`), fan
 levels (`0x2E`), CPU+GPU power budget (`0x29`), GPU power (`0x22`), plus read-only queries for fan speed,
-the chassis sensor and the fan table. The OMEN key arrives as a WMI event (`hpqBEvnt`). The exact bytes,
-how they were verified, and what went wrong once are in [docs/research.md](docs/research.md).
+the chassis sensor and the fan table. The OMEN key arrives as a WMI event (`hpqBEvnt`). The exact bytes and
+the measured firmware behaviour are in [docs/research.md](docs/research.md).
 
 ## Adding your laptop
 
@@ -64,17 +71,17 @@ Ohman refuses to write to a board it hasn't been verified on. To add yours:
    (`%LOCALAPPDATA%\Packages\AD2F1837.OMENCommandCenter_v10z8vjag6ke6\LocalCache\Local\HPOMEN\`).
    Its `inputData=` lines are the ground truth for the bytes your firmware expects.
 
-A platform is a single entry in `src/Platform.cs`: board ids, mode bytes, fan bounds, power budget and
-GPU payloads. Nothing else in the code is model-specific. The `add-laptop` skill in `.claude/skills/`
+A platform is a single entry in `src/Platform.cs`: board ids, mode bytes, fan curve and bounds, power budget
+and GPU payloads. Nothing else in the code is model-specific. The `add-laptop` skill in `.claude/skills/`
 turns a support issue into that entry and a pull request with the evidence; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Safety notes, read them
+## Safety notes
 
-- Fan control is real. Version 2.0 of this app held the fans at zero and the laptop hit a critical thermal
-  event. The cause was then reproduced and measured; see [docs/research.md](docs/research.md#5-the-incident).
-  Since 2.1 the app drives the fans explicitly in every mode (Auto is OGH's own curve), can never write below
-  1800 rpm, refreshes the firmware keep-alive every 30 s, and runs a thermal guard from the first ten seconds.
-- `tools\fantest.cmd` deliberately reproduces the failure for 60 seconds with an automatic abort, to
+- Fan control is real. The app drives the fans explicitly in every mode (Auto is OGH's own curve), never
+  writes below 1800 rpm, refreshes the firmware keep-alive every 30 s, and runs a thermal guard from the
+  first ten seconds. The firmware semantics behind these rules are documented in
+  [docs/research.md](docs/research.md#4-fan-control).
+- `tools\fantest.cmd` deliberately holds the fans at zero for 60 seconds with an automatic abort, to
   measure firmware behaviour. Run it only cool, idle, and watching.
 - Unsupported laptops run read-only. Don't add your board to the profile list without the issue workflow
   above; the mode bytes differ between firmware generations.
@@ -99,11 +106,12 @@ src\Sensors.cs    perf counters + nvidia-smi
 src\Ui.xaml       layout and styles (embedded)
 src\Ui.cs         window, tray, hotkeys, on-screen flash
 src\Program.cs    entry point
-docs\             research write-up
+docs\             interface documentation
 ```
 
-## Credits
+## Releases
 
-[OmenMon](https://github.com/OmenMon/OmenMon) and the Linux [hp-wmi](https://github.com/torvalds/linux/blob/master/drivers/platform/x86/hp/hp-wmi.c)
-driver documented this interface first; both were used to cross-check every byte. OMEN is a trademark of HP Inc.;
-this project is not affiliated with HP.
+Pushing a tag like `v2.1` builds `Ohman.exe`, `preview\Ohman.exe` and `tools\omenprobe.exe` on a Windows
+runner and attaches them to a GitHub release (`.github/workflows/release.yml`).
+
+OMEN is a trademark of HP Inc. This project is not affiliated with HP.

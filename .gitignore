@@ -12,6 +12,7 @@ preview/
 tools/verify.txt
 tools/powertest.txt
 tools/fantest.txt
+tools/support-info.txt
 
 # editor / OS noise
 .vs/

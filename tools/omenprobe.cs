@@ -67,7 +67,6 @@ static class P {
         try {
             if (a.Length == 0 || a[0] == "read") {
                 byte[] z4 = { 0, 0, 0, 0 };
-                Try("GetFanCount(0x10)", 0x10, z4, 4);
                 Try("GetFanLevel(0x2D)", 0x2D, z4, 128);
                 Try("GetFanTable(0x2F)", 0x2F, z4, 128);
                 Try("GetFanMode?(0x0F)", 0x0F, z4, 4);      // hp-wmi: HPWMI_FAN_SPEED_GET_QUERY? cross-check
@@ -97,7 +96,6 @@ static class P {
                 var d = new List<byte>();
                 for (int i = 3; i < a.Length; i++) d.Add(byte.Parse(a[i], NumberStyles.HexNumber));
                 byte[] data = d.ToArray();
-                if (a.Length > 3 && a[3].StartsWith("pad")) { } // no-op
                 Try("call", type, data, outSize);
                 return 0;
             }

@@ -101,9 +101,11 @@ namespace Ohman {
             return sb.ToString();
         }
 
+        static ManagementObject cached;                       // the hpqBIntM instance; found once, dropped again on any WMI error
         static ManagementObject Interface() {
+            if (cached != null) return cached;
             using (var s = new ManagementObjectSearcher("root\\wmi", "SELECT * FROM hpqBIntM"))
-                foreach (ManagementObject mo in s.Get()) return mo;
+                foreach (ManagementObject mo in s.Get()) { cached = mo; return mo; }
             throw new InvalidOperationException("hpqBIntM WMI class has no instance (not an HP OMEN, or not elevated)");
         }
 
@@ -114,7 +116,13 @@ namespace Ohman {
         public static byte[] Call(uint command, uint commandType, byte[] data, int outSize) {
             if (data == null) data = new byte[0];
             lock (Sync) {
-                using (ManagementObject intf = Interface())
+                try { return CallLocked(command, commandType, data, outSize); }
+                catch (ManagementException) { try { if (cached != null) cached.Dispose(); } catch { } cached = null; throw; }
+            }
+        }
+        static byte[] CallLocked(uint command, uint commandType, byte[] data, int outSize) {
+            {
+                ManagementObject intf = Interface();
                 using (var cls = new ManagementClass("root\\wmi", "hpqBDataIn", null))
                 using (ManagementBaseObject din = cls.CreateInstance()) {
                     din["Sign"] = SIGN; din["Command"] = command; din["CommandType"] = commandType;
@@ -171,10 +179,12 @@ namespace Ohman {
 
         public void SetMaxFan(bool on) { Call(OP_MAX_FAN_SET, new byte[] { (byte)(on ? 1 : 0) }, 0); }
 
+        public const int MinFanLevel = 18;                    // 1800 rpm, the lowest level OGH itself ever writes
         public void SetFanLevels(int fan1, int fan2) {
             // OGH on this machine sends a 128-byte buffer with the two levels in front; mirror it exactly.
             var d = new byte[128];
-            d[0] = (byte)Math.Max(0, Math.Min(255, fan1)); d[1] = (byte)Math.Max(0, Math.Min(255, fan2));
+            // Level 0 switches a fan off on this firmware (measured); the hardware layer refuses anything below the floor.
+            d[0] = (byte)Math.Max(MinFanLevel, Math.Min(255, fan1)); d[1] = (byte)Math.Max(MinFanLevel, Math.Min(255, fan2));
             Call(OP_FAN_LEVEL_SET, d, 0);
         }
 

@@ -1,0 +1,52 @@
+name: Release
+
+# Push a tag like v2.1 and this builds Ohman with the C# compiler that ships inside Windows
+# (the same build.cmd you run locally) and attaches the binaries to a GitHub release.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        shell: cmd
+        run: build.cmd
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $tag = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME } else { 'dev' }
+          New-Item -ItemType Directory dist | Out-Null
+          New-Item -ItemType Directory dist\Ohman-$tag | Out-Null
+          Copy-Item Ohman.exe, README.md, LICENSE dist\Ohman-$tag\
+          Copy-Item preview dist\Ohman-$tag\preview -Recurse
+          New-Item -ItemType Directory dist\Ohman-$tag\tools | Out-Null
+          Copy-Item tools\*.cmd, tools\*.ps1, tools\omenprobe.exe dist\Ohman-$tag\tools\
+          Copy-Item docs dist\Ohman-$tag\docs -Recurse
+          Compress-Archive -Path dist\Ohman-$tag -DestinationPath dist\Ohman-$tag-win-x64.zip
+          Copy-Item Ohman.exe dist\Ohman.exe
+          Get-ChildItem dist
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ohman
+          path: dist/*.zip
+
+      - name: Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/Ohman.exe
+            dist/*.zip
+          generate_release_notes: true

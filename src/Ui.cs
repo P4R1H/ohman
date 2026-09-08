@@ -149,9 +149,9 @@ namespace Ohman {
         HwndSource src; bool hotkeysRegistered;
 
         static readonly string[] ModeSubs = {
-            "Quiet fans · Windows efficiency mode · GPU base power",
-            "Firmware default curve · GPU boost",
-            "Full fan ramp · GPU max · highest sustained power"
+            "Windows efficiency mode · GPU base power",
+            "Default thermal policy · GPU boost",
+            "Performance thermal policy · GPU max"
         };
         const string LEAF = "M4 20 C4 11 10 4 20 4 C20 13 14 20 4 20 Z M4 20 L13 11";
         const string SCALE = "M12 3 L12 21 M8 21 L16 21 M4 7 L20 7 M4 7 L1.5 13 A2.5 2 0 0 0 6.5 13 Z M20 7 L17.5 13 A2.5 2 0 0 0 22.5 13 Z";
@@ -171,6 +171,8 @@ namespace Ohman {
             TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
             root = LoadXaml(); Content = root;
             FindAll(); BuildModeBar(); BuildTiles(); BuildIcons(); BuildTray(); Wire(); Position(); SetSettingsIcon(false);
+            slFan1.Minimum = slFan2.Minimum = E.P.Curve.Floor; slFan1.Maximum = slFan2.Maximum = E.P.Curve.Ceiling;   // bounds belong to the profile
+            slPower.Maximum = E.MaxOffset;
             if (openSettings) ShowSettings(true);
 
             E.StateChanged += delegate { Dispatcher.BeginInvoke((Action)Refresh); };
@@ -183,6 +185,7 @@ namespace Ohman {
             SourceInitialized += OnSourceInit;
             Loaded += OnLoaded;
             Closing += delegate(object o, System.ComponentModel.CancelEventArgs ce) { if (!exiting) { ce.Cancel = true; HideToTray(); } };
+            Application.Current.SessionEnding += delegate { ExitApp(); };        // logoff/shutdown: leave cleanly instead of hiding
             StateChanged += delegate { if (WindowState == WindowState.Minimized) { WindowState = WindowState.Normal; HideToTray(); } };
             IsVisibleChanged += delegate { sensors.SetInterval(IsVisible ? 2000 : 15000); if (IsVisible) ReadHardwareAsync(); };
             LocationChanged += delegate { if (IsVisible && WindowState == WindowState.Normal && Left > -30000) { E.S.WinX = (int)Left; E.S.WinY = (int)Top; } };
@@ -191,6 +194,8 @@ namespace Ohman {
             uiTimer.Tick += delegate { if (IsVisible) ReadHardwareAsync(); UpdateFooter(); };
             uiTimer.Start();
             Refresh();
+            if (!E.BiosOk && !E.Hw.IsDemo) ShowToast("BIOS interface unavailable: " + E.LastError, true);
+            else if (E.LastError.Length > 0) ShowToast(E.LastError, true);      // a write already failed during Init, before this handler existed
             QueryAutostartAsync();
             StartShowListener();
         }
@@ -460,7 +465,7 @@ namespace Ohman {
         static string FanText(int level) { return (Math.Max(18, level) * 100).ToString(CultureInfo.InvariantCulture) + " rpm"; }
         static string KeyActionText(KeyAction a) { return a == KeyAction.Cycle ? "cycles mode" : a == KeyAction.Show ? "opens panel" : a == KeyAction.MaxFan ? "toggles max fan" : "off"; }
         string KeyInfoText() {
-            string s = "Event " + E.S.KeyId + " / " + E.S.KeyData;
+            string s = "Event " + E.KeyId + " / " + E.KeyData;
             if (E.LastEventTime != DateTime.MinValue) s += " · last seen " + E.LastEventId + "/" + E.LastEventData + " at " + E.LastEventTime.ToString("HH:mm:ss");
             return s;
         }
@@ -495,7 +500,7 @@ namespace Ohman {
                 if (!E.Learning) txtKeyInfo.Text = KeyInfoText();
                 tgSuppress.IsChecked = S.SuppressOgh; tgHotkeys.IsChecked = S.Hotkeys; tgEcoBattery.IsChecked = S.EcoOnBattery; tgSyncPower.IsChecked = S.SyncWinPower; tgAutostart.IsChecked = autostart; tgEcoCool.IsChecked = S.EcoCool;
                 txtKeyFoot.Text = "Fn+F12 " + KeyActionText(S.Key);
-                demoBadge.Visibility = E.Hw.IsDemo ? Visibility.Visible : Visibility.Collapsed;
+                demoBadge.Visibility = E.Hw.IsDemo && screenshotPath == null ? Visibility.Visible : Visibility.Collapsed;
                 bool err = (!E.BiosOk || E.ReadOnly) && !E.Hw.IsDemo;
                 errBanner.Visibility = err ? Visibility.Visible : Visibility.Collapsed;
                 if (err) txtErr.Text = !E.BiosOk ? "BIOS interface unavailable: " + E.LastError
@@ -514,7 +519,7 @@ namespace Ohman {
         void UpdateFooter() {
             if (footerMessage) return;
             txtFoot.Foreground = Ui.Muted;
-            if (E.Hw.IsDemo) { dotHb.Fill = Ui.Brush(Ui.Warn); txtFoot.Text = "Demo · run as administrator for real control"; return; }
+            if (E.Hw.IsDemo && screenshotPath == null) { dotHb.Fill = Ui.Brush(Ui.Warn); txtFoot.Text = "Demo · run as administrator for real control"; return; }
             if (!E.BiosOk) { dotHb.Fill = Ui.Brush(Ui.Danger); txtFoot.Text = "BIOS unavailable"; return; }
             if (E.GuardActive) { dotHb.Fill = Ui.Brush(Ui.Danger); txtFoot.Foreground = Ui.Brush(Ui.Danger); txtFoot.Text = "Thermal guard: max fan until cool · chassis " + E.GuardChassis + "°"; return; }
             double age = (DateTime.Now - E.LastHeartbeat).TotalSeconds;
@@ -524,8 +529,10 @@ namespace Ohman {
             txtFoot.ToolTip = fresh ? "Firmware settings refreshed " + E.LastHeartbeat.ToString("HH:mm:ss") : "Firmware refresh overdue";
         }
 
+        bool sensorsSeen;
         void OnSensors(SensorSnapshot s) {
             E.CpuTemp = s.CpuTemp; E.GpuTemp = s.GpuTemp;
+            if (!double.IsNaN(s.CpuTemp)) sensorsSeen = true;
             tiles[0].Set(s.CpuTemp, TempColor(s.CpuTemp));
             tiles[1].Set(s.GpuTemp, TempColor(s.GpuTemp));
             var parts = new List<string>();
@@ -613,8 +620,12 @@ namespace Ohman {
         void OnLoaded(object o, RoutedEventArgs e) {
             if (Program.FlashTest) Flash("Performance mode", ModeSubs[2], 2);
             if (screenshotPath == null) return;
-            var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(Program.FlashTest ? 600 : 2800) };
+            var started = DateTime.Now;
+            var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(Program.FlashTest ? 600 : 500) };
             t.Tick += delegate {
+                double age = (DateTime.Now - started).TotalMilliseconds;
+                if (!Program.FlashTest && !sensorsSeen && age < 9000) return;       // wait for real temperatures unless they never come
+                if (!Program.FlashTest && age < 2800) return;                        // let the first layout settle
                 t.Stop();
                 try {
                     Snapshot(screenshotPath); Log.Write("screenshot saved " + screenshotPath);
@@ -644,7 +655,8 @@ namespace Ohman {
 
         void Position() {
             var S = E.S;
-            if (S.WinX >= 0 && S.WinY >= 0 && S.WinX < SystemParameters.VirtualScreenWidth - 100 && S.WinY < SystemParameters.VirtualScreenHeight - 100) {
+            double vl = SystemParameters.VirtualScreenLeft, vt = SystemParameters.VirtualScreenTop;   // monitors left of/above the primary have negative coordinates
+            if (S.WinX != -1 && S.WinY != -1 && S.WinX >= vl && S.WinY >= vt && S.WinX < vl + SystemParameters.VirtualScreenWidth - 100 && S.WinY < vt + SystemParameters.VirtualScreenHeight - 100) {
                 WindowStartupLocation = WindowStartupLocation.Manual; Left = S.WinX; Top = S.WinY;
             } else WindowStartupLocation = WindowStartupLocation.CenterScreen;
         }
@@ -687,6 +699,7 @@ namespace Ohman {
 
         // ---------- transient status: shown in the footer line so nothing is covered ----------
         void ShowToast(string msg, bool err) {
+            if (E.GuardActive && !err) return;                                   // the guard line owns the footer while it is active
             footerMessage = true;
             txtFoot.Text = msg;
             txtFoot.Foreground = Ui.Brush(err ? Ui.Danger : Ui.Col("#C9D1E0"));

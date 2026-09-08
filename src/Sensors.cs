@@ -22,7 +22,10 @@ namespace Ohman {
         Thread worker; volatile bool stop; volatile int intervalMs = 2000;
         public event Action<SensorSnapshot> Updated;
 
-        public Sensors() {
+        public Sensors() { }
+
+        /// <summary>Counter setup takes seconds the first time; it runs on the worker so the window is not held back.</summary>
+        void InitCounters() {
             try {
                 var cat = new PerformanceCounterCategory("Thermal Zone Information");
                 string[] inst = cat.GetInstanceNames();
@@ -50,6 +53,8 @@ namespace Ohman {
         }
 
         void Loop() {
+            InitCounters();
+            int tick = 0;
             while (!stop) {
                 var s = new SensorSnapshot();
                 try { if (thermal != null) { double k = thermal.NextValue(); if (k > 200) s.CpuTemp = Math.Round(k - 273.15, 1); } } catch { }
@@ -60,7 +65,8 @@ namespace Ohman {
                     s.OnBattery = ps.PowerLineStatus == System.Windows.Forms.PowerLineStatus.Offline;
                     s.BatteryPercent = (int)Math.Round(ps.BatteryLifePercent * 100);
                 } catch { }
-                if (nvsmi != null && nvFail < 5) ReadNvidia(s);
+                // nvidia-smi wakes the discrete GPU; ask it every other tick and keep the previous numbers in between
+                if (nvsmi != null && nvFail < 5) { if (tick++ % 2 == 0) ReadNvidia(s); else lock (sync) { s.GpuTemp = last.GpuTemp; s.GpuLoad = last.GpuLoad; s.GpuWatts = last.GpuWatts; s.GpuMhz = last.GpuMhz; } }
                 lock (sync) last = s;
                 var h = Updated; if (h != null) { try { h(s); } catch { } }
                 int waited = 0; while (!stop && waited < intervalMs) { Thread.Sleep(100); waited += 100; }

@@ -13,7 +13,7 @@ namespace Ohman {
         // To rename the app: change AppName here and the /out: names in build.cmd. Everything else follows
         // (window title, tray, scheduled task, single-instance names, log/state file names).
         public const string AppName = "Ohman";                 // internal id: file names, mutex, scheduled task
-        public static string DisplayName = AppName;           // what the UI shows; override with Name=... in vane.state
+        public static string DisplayName = AppName;           // what the UI shows; override with Name=... in ohman.state
         public const string Version = "2.1";
         public static string FileStem { get { return AppName.ToLowerInvariant(); } }
         public static EventWaitHandle ShowEvent, ExitEvent;   // named events: another instance can ask us to show or exit
@@ -29,7 +29,7 @@ namespace Ohman {
                 else if (a == "--hidden") hidden = true;
                 else if (a == "--settings") settings = true;
                 else if (a == "--screenshot" && i + 1 < args.Length) shot = args[++i];
-                else if (a == "--set" && i + 1 < args.Length) overrides.Add(args[++i]);   // --set Key=Value (not persisted; for previews)
+                else if (a == "--set" && i + 1 < args.Length) overrides.Add(args[++i]);   // --set Key=Value: override for this run only (nothing is written back)
                 else if (a == "--flash") FlashTest = true;
             }
             for (int i = 0; i + 1 < args.Length; i++)
@@ -38,6 +38,7 @@ namespace Ohman {
             foreach (string a0 in args) if (a0.ToLowerInvariant() == "--exit") wantExit = true;   // Ohman.exe --exit: stop the running instance (used when updating)
             bool created;
             var mutex = new Mutex(true, AppName + "_SingleInstance", out created);
+            if (shot != null) demo = true;                                         // screenshots never touch firmware and may run beside a live instance
             if (!created && shot == null) {
                 try { EventWaitHandle.OpenExisting(AppName + (wantExit ? "_Exit" : "_ShowPanel")).Set(); } catch { }
                 return 0;
@@ -53,6 +54,8 @@ namespace Ohman {
 
             var settingsObj = Settings.Load();
             foreach (string o in overrides) { int eq = o.IndexOf('='); if (eq > 0) settingsObj.Apply(o.Substring(0, eq), o.Substring(eq + 1)); }
+            if (overrides.Count > 0 || shot != null) settingsObj.NoPersist = true;
+            if (settingsObj.StartHidden) hidden = true;
             if (!string.IsNullOrEmpty(settingsObj.Name)) DisplayName = settingsObj.Name.Trim();
             var engine = new Engine(hw, settingsObj);
             engine.Init();

@@ -14,9 +14,8 @@ Everything model-specific lives in `src/Platform.cs`. Please don't special-case 
 ## Code
 
 - C# 5 only: the project builds with the compiler that ships inside Windows (`build.cmd`), no SDK.
-- Every firmware write must be backed by a primary source (OGH's own log or code, `hp-wmi.c`, OmenMon)
-  and, for anything touching fans, a measurement on the device. See `docs/research.md` for the standard
-  and for what went wrong once.
+- Every firmware write must be backed by a primary source (OGH's own log or code) and, for anything
+  touching fans, a measurement on the device. `docs/research.md` documents the interface.
 - Keep the UI free of prose; short labels with a subscript for context.
 
 ## Reporting a problem

@@ -28,7 +28,7 @@ namespace Ohman {
                 case "Fan": if (Settings.TryInt(v, out n)) Fan = (FanMode)Math.Max(0, Math.Min(2, n)); break;
                 case "Fan1": if (Settings.TryInt(v, out n)) Fan1 = n; break;
                 case "Fan2": if (Settings.TryInt(v, out n)) Fan2 = n; break;
-                case "TdpOffset": if (Settings.TryInt(v, out n)) TdpOffset = n; break;
+                case "TdpOffset": if (Settings.TryInt(v, out n)) TdpOffset = Math.Max(0, Math.Min(30, n)); break;   // the engine clamps again to the profile's range
                 case "Gpu": if (Settings.TryInt(v, out n)) Gpu = (GpuLevel)Math.Max(0, Math.Min(2, n)); break;
                 case "GpuAuto": if (bool.TryParse(v, out b)) GpuAuto = b; break;
             }
@@ -51,7 +51,7 @@ namespace Ohman {
         public GpuLevel Gpu { get { return Cur.Gpu; } set { Cur.Gpu = value; } }
         public bool GpuAuto { get { return Cur.GpuAuto; } set { Cur.GpuAuto = value; } }
         public KeyAction Key = KeyAction.Cycle;
-        public uint KeyId = 29, KeyData = 8613;     // hpqBEvnt EventID / EventData of the OMEN key on this machine
+        public uint KeyId = 0, KeyData = 0;         // hpqBEvnt EventID / EventData of the OMEN key; 0 = use the platform profile's values
         public bool SuppressOgh = true;
         public bool Hotkeys = true;
         public bool EcoOnBattery = false;
@@ -61,6 +61,8 @@ namespace Ohman {
         public int WinX = -1, WinY = -1;
         public bool StartHidden = false;
         public string Name = "";                    // display name shown in the window/tray (empty = "Ohman")
+        public bool NoPersist;                      // set when --set overrides are in effect: never write them back to the file
+        public int SavedModeOverride = -1;          // while battery forces Eco, the file keeps the user's own mode
 
         static readonly string File_ = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Program.FileStem + ".state");
 
@@ -113,10 +115,11 @@ namespace Ohman {
         }
 
         public void Save() {
+            if (NoPersist) return;
             try {
                 var sb = new StringBuilder();
                 sb.AppendLine("# " + Program.AppName + " settings (edited by the app; safe to hand-edit while it is closed)");
-                sb.AppendLine("ModeIndex=" + ModeIndex); sb.AppendLine("EcoCool=" + EcoCool);
+                sb.AppendLine("ModeIndex=" + (SavedModeOverride >= 0 ? SavedModeOverride : ModeIndex)); sb.AppendLine("EcoCool=" + EcoCool);
                 sb.AppendLine("# per-mode profiles: M0 = Eco, M1 = Balanced, M2 = Performance");
                 for (int i = 0; i < 3; i++) Modes[i].Write(sb, "M" + i + ".");
                 sb.AppendLine("Key=" + (int)Key); sb.AppendLine("KeyId=" + KeyId); sb.AppendLine("KeyData=" + KeyData);
@@ -171,7 +174,9 @@ namespace Ohman {
         public string ModeName { get { return ModeNames[ModeIndex]; } }
         public int BaseTdp { get { return Info.Valid && Info.DefaultConcurrentTdp > 0 ? Info.DefaultConcurrentTdp : P.TdpBase; } }
         public int MaxOffset { get { return P.TdpGainMax; } }
-        public int CurrentTdp { get { return BaseTdp + S.TdpOffset; } }
+        public int CurrentTdp { get { return BaseTdp + Math.Max(0, Math.Min(MaxOffset, S.TdpOffset)); } }   // clamped here too: the file is hand-editable
+        public uint KeyId { get { return S.KeyId != 0 ? S.KeyId : P.KeyEventId; } }       // learned value wins, else the profile's
+        public uint KeyData { get { return S.KeyId != 0 ? S.KeyData : P.KeyEventData; } }
         public GpuLevel EffectiveGpu { get { return S.GpuAuto ? GpuForMode(ModeIndex) : S.Gpu; } }
         public static GpuLevel GpuForMode(int modeIndex) { return modeIndex == 0 ? GpuLevel.Base : modeIndex == 1 ? GpuLevel.Boost : GpuLevel.Max; }
 
@@ -192,7 +197,9 @@ namespace Ohman {
                 }
                 Log.Write("BIOS ok: fans=" + FanCount + " policy=v" + Info.ThermalPolicy + " swFan=" + Info.SwFanControl + " defPL4=" + Info.DefaultPl4 + "W baseTdp=" + Info.DefaultConcurrentTdp + "W raw=" + Info.Hex + (Hw.IsDemo ? " (DEMO)" : ""));
             } catch (Exception ex) { BiosOk = false; LastError = ex.Message; Log.Write("BIOS self-test FAILED: " + ex.Message); }
-            if (S.SuppressOgh && !Hw.IsDemo) { KillOgh(); new Thread(delegate() { SetOghTasks(true); }) { IsBackground = true }.Start(); }
+            // take the key over only where we can also take over the fans; on an unknown board OGH stays in charge
+            if (S.SuppressOgh && !Hw.IsDemo && Supported) { KillOgh(); new Thread(delegate() { SetOghTasks(true); }) { IsBackground = true }.Start(); }
+            if (S.EcoOnBattery && OnBattery && ModeIndex != 0) { ecoForcedByBattery = true; modeBeforeBattery = ModeIndex; S.SavedModeOverride = modeBeforeBattery; S.ModeIndex = 0; Log.Write("on battery at start: Eco (user mode " + ModeNames[modeBeforeBattery] + " kept)"); }
             ApplyAll(false);
             StartKeyWatcher();
             heartbeat = new System.Threading.Timer(delegate { Heartbeat(); }, null, S.HeartbeatSec * 1000, S.HeartbeatSec * 1000);
@@ -259,27 +266,31 @@ namespace Ohman {
         public double GpuTemp = double.NaN, IrTemp = double.NaN;   // GpuTemp fed by the UI sensor loop; IrTemp read here
         int fanWriteFailures;
 
-        void WriteLevels(int l1, int l2, string what) {
+        bool WriteLevels(int l1, int l2, string what) {
             l1 = P.Curve.Clamp(l1); l2 = P.Curve.Clamp(l2);
-            if (Try(delegate { Hw.GetFanCount(); Hw.SetFanLevels(l1, l2); }, what)) { curLevel1 = l1; curLevel2 = l2; fanWriteFailures = 0; }
-            else fanWriteFailures++;
+            if (Try(delegate { Hw.GetFanCount(); Hw.SetFanLevels(l1, l2); }, what)) { curLevel1 = l1; curLevel2 = l2; fanWriteFailures = 0; fanFailureShown = false; return true; }
+            fanWriteFailures++;
+            if (fanWriteFailures >= 3 && !fanFailureShown) { fanFailureShown = true; Fire(Toast, "Fan writes failing; firmware curve will take over", true); }
+            return false;
         }
+        bool fanFailureShown;
+
+        /// <summary>Max-fan flag with the keep-alive trigger in front of it, the pair every fan path uses.</summary>
+        void MaxFan(bool on, string what) { Try(delegate { Hw.GetFanCount(); Hw.SetMaxFan(on); }, what); }
 
         void ApplyFanCore() {
+            if (GuardActive) { MaxFan(true, "Guard max fan"); return; }      // the guard owns the fans until it releases
             switch (S.Fan) {
-                case FanMode.Max: Try(delegate { Hw.GetFanCount(); Hw.SetMaxFan(true); }, "Max fan"); break;
-                case FanMode.Manual:
-                    Try(delegate { Hw.GetFanCount(); Hw.SetMaxFan(false); }, "Max fan off");
-                    WriteLevels(S.Fan1, S.Fan2, "Fan level"); break;
-                default:
-                    Try(delegate { Hw.GetFanCount(); Hw.SetMaxFan(false); }, "Max fan off");
-                    AutoTick(true); break;
+                case FanMode.Max: MaxFan(true, "Max fan"); break;
+                case FanMode.Manual: MaxFan(false, "Max fan off"); WriteLevels(S.Fan1, S.Fan2, "Fan level"); break;
+                default: MaxFan(false, "Max fan off"); AutoTick(true); break;
             }
         }
 
         /// <summary>Auto mode: one step of the software curve. Called every 5 s and on every mode change.</summary>
         void AutoTick(bool immediate) {
-            if (S.Fan != FanMode.Auto || GuardActive) return;
+            if (S.Fan != FanMode.Auto || GuardActive || ReadOnly) return;
+            if (fanWriteFailures >= 3 && (DateTime.Now - lastFanWrite).TotalSeconds < 60) return;   // back off; retry once a minute
             try { IrTemp = Hw.GetTemperature(); } catch { IrTemp = double.NaN; }
             int[] target = P.Curve.Target(CpuTemp, GpuTemp, IrTemp);
             int n1 = immediate ? target[0] : P.Curve.Step(curLevel1, target[0]);
@@ -287,10 +298,9 @@ namespace Ohman {
             bool changed = n1 != curLevel1 || n2 != curLevel2;
             bool refresh = (DateTime.Now - lastFanWrite).TotalSeconds >= 30;     // keep-alive even when steady
             if (!changed && !refresh) return;
-            WriteLevels(n1, n2, "Fan curve");
+            bool ok = WriteLevels(n1, n2, "Fan curve");
             lastFanWrite = DateTime.Now;
-            if (changed) Log.Write("curve " + n1 + "/" + n2 + " (target " + target[0] + ", cpu " + Fmt(CpuTemp) + " gpu " + Fmt(GpuTemp) + " ir " + Fmt(IrTemp) + ")");
-            if (fanWriteFailures >= 3) { Fire(Toast, "Fan writes failing; firmware curve will take over", true); }
+            if (changed && ok) Log.Write("curve " + n1 + "/" + n2 + " (target " + target[0] + ", cpu " + Fmt(CpuTemp) + " gpu " + Fmt(GpuTemp) + " ir " + Fmt(IrTemp) + ")");
         }
         DateTime lastFanWrite = DateTime.MinValue;
         static string Fmt(double v) { return double.IsNaN(v) ? "?" : v.ToString("0"); }
@@ -302,6 +312,10 @@ namespace Ohman {
         }
 
         public void SetMode(int index, bool announce) {
+            if (ecoForcedByBattery) { ecoForcedByBattery = false; S.SavedModeOverride = -1; }   // an explicit choice ends the battery override
+            SetModeCore(index, announce);
+        }
+        void SetModeCore(int index, bool announce) {
             index = Math.Max(0, Math.Min(2, index));
             S.ModeIndex = index; S.Save();
             lock (applySync) {
@@ -320,11 +334,9 @@ namespace Ohman {
             if (ModeIndex == 0) lock (applySync) Try(delegate { Hw.SetMode(ModeByte, OnBattery); }, "Set mode");
             Changed();
         }
-        public void CycleMode() { SetMode((ModeIndex + 1) % 3, true); }
-
         public void SetFan(FanMode mode, int f1, int f2, bool announce) {
             S.Fan = mode; S.Fan1 = P.Curve.Clamp(f1); S.Fan2 = P.Curve.Clamp(f2); S.Save();
-            if (GuardActive && mode != FanMode.Max) { guardPrevFan = mode; Say("Thermal guard is holding max fan; " + mode + " resumes when cool"); Changed(); return; }
+            if (GuardActive && mode != FanMode.Max) { Say("Thermal guard is holding max fan; " + mode + " resumes when cool"); Changed(); return; }
             lock (applySync) { ApplyFanCore(); lastFanWrite = DateTime.Now; }
             if (announce) Say(mode == FanMode.Max ? "Max fan" : mode == FanMode.Manual ? "Fans " + (S.Fan1 * 100) + " / " + (S.Fan2 * 100) + " RPM" : "Fans auto");
             Changed();
@@ -352,12 +364,12 @@ namespace Ohman {
             try {
                 if (!BiosOk && !Hw.IsDemo) return;
                 lock (applySync) {
-                    if (GuardActive) Try(delegate { Hw.GetFanCount(); Hw.SetMaxFan(true); }, "Guard max fan");
-                    Hw.SetMode(ModeByte, OnBattery);        // fans are handled by FanTick; this only pins mode and power
-                    Hw.SetConcurrentTdp(CurrentTdp);
+                    if (GuardActive) MaxFan(true, "Guard max fan");
+                    Try(delegate { Hw.SetMode(ModeByte, OnBattery); }, "Set mode");   // fans are handled by FanTick; this only pins mode and power
+                    Try(delegate { Hw.SetConcurrentTdp(CurrentTdp); }, "Set power");
                     LastHeartbeat = DateTime.Now;
                 }
-                if (S.SuppressOgh && !Hw.IsDemo) KillOgh();
+                if (S.SuppressOgh && !Hw.IsDemo && Supported) KillOgh();
             } catch (Exception ex) { Log.Write("heartbeat: " + ex.Message); }
         }
 
@@ -368,11 +380,11 @@ namespace Ohman {
         public volatile bool GuardActive;
         public double CpuTemp = double.NaN;               // set by the UI sensor loop
         public int GuardFan1 = -1, GuardFan2 = -1, GuardChassis = -1;
-        FanMode guardPrevFan; DateTime guardSafeSince = DateTime.MinValue;
+        DateTime guardSafeSince = DateTime.MinValue;
         System.Threading.Timer guard;
 
         void GuardTick() {
-            if (!BiosOk || Hw.IsDemo) return;
+            if (!BiosOk || Hw.IsDemo || ReadOnly) return;      // read-only boards: nothing to force, the firmware's own limits apply
             try {
                 int[] f; int c;
                 lock (applySync) { f = Hw.GetFanLevels(); c = Hw.GetTemperature(); }
@@ -382,21 +394,22 @@ namespace Ohman {
                 bool hot = (cpuKnown && t >= 90) || c >= 56;
                 bool stalled = cpuKnown && t >= 70 && f[0] >= 0 && f[1] >= 0 && (f[0] + f[1]) < 10;   // both fans under 500 rpm while warm
                 if ((hot || stalled) && !GuardActive) {
-                    GuardActive = true; guardPrevFan = S.Fan; guardSafeSince = DateTime.MinValue;
+                    GuardActive = true; guardSafeSince = DateTime.MinValue;
                     Log.Write("THERMAL GUARD engaged: cpu=" + (cpuKnown ? t.ToString("0") : "?") + " chassis=" + c + " fans=" + f[0] + "/" + f[1] + (stalled ? " (stalled)" : ""));
                     Fire(Toast, "Thermal guard: fans to max (CPU " + (cpuKnown ? t.ToString("0") + "°" : "?") + ", chassis " + c + "°)", true);
-                    lock (applySync) Try(delegate { Hw.GetFanCount(); Hw.SetMaxFan(true); }, "Guard max fan");
+                    lock (applySync) MaxFan(true, "Guard max fan");
                     Changed();
                 } else if (GuardActive) {
                     bool safe = (!cpuKnown || t < 78) && c < 48;
-                    if (!safe) { guardSafeSince = DateTime.MinValue; lock (applySync) Try(delegate { Hw.GetFanCount(); Hw.SetMaxFan(true); }, "Guard max fan"); }
+                    if (!safe) { guardSafeSince = DateTime.MinValue; lock (applySync) MaxFan(true, "Guard max fan"); }
                     else if (guardSafeSince == DateTime.MinValue) guardSafeSince = DateTime.Now;
                     else if ((DateTime.Now - guardSafeSince).TotalSeconds >= 60) {
                         GuardActive = false;
-                        Log.Write("thermal guard released; fan mode back to " + guardPrevFan);
+                        Log.Write("thermal guard released; fan mode back to " + S.Fan);
                         Fire(Toast, "Thermal guard released", false);
                         curLevel1 = curLevel2 = -1;         // unknown after max fan; the curve starts again from its floor
-                        SetFan(guardPrevFan, S.Fan1, S.Fan2, false);
+                        lock (applySync) { ApplyFanCore(); lastFanWrite = DateTime.Now; }   // the current mode's own fan setting, nothing saved
+                        Changed();
                     }
                 }
             } catch (Exception ex) { Log.Write("guard: " + ex.Message); }
@@ -410,8 +423,9 @@ namespace Ohman {
         public void OnPowerSource(bool onBattery) {
             bool changed = OnBattery != onBattery; OnBattery = onBattery;
             if (S.EcoOnBattery) {
-                if (onBattery && !ecoForcedByBattery) { ecoForcedByBattery = true; modeBeforeBattery = ModeIndex; Say("On battery → Eco"); SetMode(0, false); return; }
-                if (!onBattery && ecoForcedByBattery) { ecoForcedByBattery = false; SetMode(modeBeforeBattery, false); Say("Plugged in → " + ModeName); return; }
+                // forced Eco is temporary: the file keeps the user's own mode (SavedModeOverride) and it comes back when plugged in
+                if (onBattery && !ecoForcedByBattery && ModeIndex != 0) { ecoForcedByBattery = true; modeBeforeBattery = ModeIndex; S.SavedModeOverride = modeBeforeBattery; Say("On battery → Eco"); SetModeCore(0, false); return; }
+                if (!onBattery && ecoForcedByBattery) { ecoForcedByBattery = false; S.SavedModeOverride = -1; SetModeCore(modeBeforeBattery, false); Say("Plugged in → " + ModeName); return; }
             }
             if (changed) lock (applySync) Try(delegate { Hw.SetMode(ModeByte, OnBattery); }, "Set mode");   // re-send with the DC flag like OGH
         }
@@ -424,7 +438,7 @@ namespace Ohman {
             foreach (string name in new string[] { "OmenCommandCenterBackground", "OmenInstallMonitor" }) {
                 try {
                     foreach (var p in Process.GetProcessesByName(name)) {
-                        try { p.Kill(); Log.Write("stopped " + name + " (pid " + p.Id + ")"); } catch (Exception ex) { Log.Write("kill " + name + ": " + ex.Message); }
+                        using (p) { try { p.Kill(); Log.Write("stopped " + name + " (pid " + p.Id + ")"); } catch (Exception ex) { Log.Write("kill " + name + ": " + ex.Message); } }
                     }
                 } catch { }
             }
@@ -448,6 +462,8 @@ namespace Ohman {
 
         public void SetOghSuppression(bool on) {
             S.SuppressOgh = on; S.Save();
+            if (Hw.IsDemo) { Say("Simulated hardware: OMEN Gaming Hub is left alone"); Changed(); return; }
+            if (ReadOnly) { Say("Unsupported board: OMEN Gaming Hub keeps the key"); Changed(); return; }
             if (on) { KillOgh(); SetOghTasks(true); Say("Fn+F12 now belongs to " + Program.DisplayName); }
             else { SetOghTasks(false); Say("OMEN Gaming Hub's launcher restored at next logon"); }
         }
@@ -472,10 +488,10 @@ namespace Ohman {
                 Learning = false; S.KeyId = id; S.KeyData = data; S.Save();
                 Say("OMEN key bound to event " + id + "/" + data); Changed(); return;
             }
-            if (id != S.KeyId || data != S.KeyData) return;
+            if (id != KeyId || data != KeyData) return;
             if ((DateTime.Now - lastKey).TotalMilliseconds < 400) return;   // the key fires twice per press
             lastKey = DateTime.Now;
-            if (S.SuppressOgh && !Hw.IsDemo) KillOgh();
+            if (S.SuppressOgh && !Hw.IsDemo && Supported) KillOgh();
             if (S.Key == KeyAction.Off) return;
             var h = KeyPressed; if (h != null) { try { h(S.Key); } catch { } }
         }
@@ -505,7 +521,7 @@ namespace Ohman {
             try { sb.AppendLine("bios temp sensor: " + Hw.GetTemperature() + " C"); } catch (Exception ex) { sb.AppendLine("temp: " + ex.Message); }
             try { sb.AppendLine("max fan: " + Hw.GetMaxFan()); } catch (Exception ex) { sb.AppendLine("max fan: " + ex.Message); }
             try { sb.AppendLine("gpu power: " + Hw.GetGpuPower()); } catch (Exception ex) { sb.AppendLine("gpu power: " + ex.Message); }
-            sb.AppendLine("settings: mode=" + ModeName + " (BIOS 0x" + ModeByte.ToString("X2") + (OnBattery ? ", DC" : ", AC") + ") fan=" + S.Fan + " " + S.Fan1 + "/" + S.Fan2 + " tdp=" + CurrentTdp + "W gpu=" + EffectiveGpu + (S.GpuAuto ? "(auto)" : "") + " key=" + S.KeyId + "/" + S.KeyData + "→" + S.Key + " ecoCool=" + S.EcoCool);
+            sb.AppendLine("settings: mode=" + ModeName + " (BIOS 0x" + ModeByte.ToString("X2") + (OnBattery ? ", DC" : ", AC") + ") fan=" + S.Fan + " " + S.Fan1 + "/" + S.Fan2 + " tdp=" + CurrentTdp + "W gpu=" + EffectiveGpu + (S.GpuAuto ? "(auto)" : "") + " key=" + KeyId + "/" + KeyData + "→" + S.Key + " ecoCool=" + S.EcoCool);
             sb.AppendLine("fan drive: written " + curLevel1 + "/" + curLevel2 + "  cpu " + Fmt(CpuTemp) + "  gpu " + Fmt(GpuTemp) + "  ir " + Fmt(IrTemp) + "  guard=" + GuardActive + "  writeFailures=" + fanWriteFailures);
             sb.AppendLine("last heartbeat: " + (LastHeartbeat == DateTime.MinValue ? "never" : LastHeartbeat.ToString("HH:mm:ss")) + "   last key event: " + (LastEventTime == DateTime.MinValue ? "none" : LastEventId + "/" + LastEventData + " at " + LastEventTime.ToString("HH:mm:ss")));
             return sb.ToString();

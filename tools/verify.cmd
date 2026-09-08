@@ -1,5 +1,5 @@
 @echo off
-:: OmenLite hardware verification. Right-click -> "Run as administrator" (or accept the UAC prompt).
+:: Ohman hardware verification. Right-click -> "Run as administrator" (or accept the UAC prompt).
 :: Runs READ-ONLY BIOS queries through the HP WMI interface and writes the raw results to verify.txt
 :: next to this file, then prints them. Nothing is changed on the machine.
 setlocal
@@ -10,7 +10,7 @@ if %errorlevel% neq 0 (
   powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
   exit /b
 )
-echo OmenLite verification  %date% %time% > verify.txt
+echo Ohman verification  %date% %time% > verify.txt
 echo ---- machine ---- >> verify.txt
 powershell -NoProfile -Command "$cs=Get-CimInstance Win32_ComputerSystem; $bb=Get-CimInstance Win32_BaseBoard; $b=Get-CimInstance Win32_BIOS; 'Model: '+$cs.Model+'  Board: '+$bb.Product+'  BIOS: '+$b.SMBIOSBIOSVersion" >> verify.txt
 echo ---- BIOS read-only queries ---- >> verify.txt

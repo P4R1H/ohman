@@ -14,7 +14,7 @@ for ($i = 0; $i -lt $Seconds; $i++) {
     Start-Sleep -Seconds 1
     $g = (& $nv --query-gpu=power.draw,clocks.gr,clocks.mem,temperature.gpu,utilization.gpu --format=csv,noheader,nounits) -split ','
     $rows += [pscustomobject]@{
-        gpuW = [double]$g[0].Trim(); gpuMHz = [double]$g[1].Trim(); gpuTemp = [double]$g[2 + 1].Trim(); gpuUtil = [double]$g[4].Trim()
+        gpuW = (Num $g[0]); gpuMHz = (Num $g[1]); gpuTemp = (Num $g[3]); gpuUtil = (Num $g[4])
         cpuUtil = [Math]::Min(100, $cpuUtil.NextValue()); cpuMHz = $cpuFreq.NextValue()
     }
     if ($i % 10 -eq 9) { "  {0,3}s  GPU {1,5:N1} W  {2,4:N0} MHz  {3,3:N0} %   CPU {4,3:N0} %  {5,4:N0} MHz" -f ($i + 1), $rows[-1].gpuW, $rows[-1].gpuMHz, $rows[-1].gpuUtil, $rows[-1].cpuUtil, $rows[-1].cpuMHz }

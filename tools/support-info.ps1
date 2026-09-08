@@ -33,12 +33,13 @@ if ($elevated) {
         function Q($type, $data, $outSize) {
             $in = ([wmiclass]"root\wmi:hpqBDataIn").CreateInstance()
             $in.Sign = [byte[]](0x53,0x45,0x43,0x55); $in.Command = 0x20008; $in.CommandType = $type; $in.Size = $data.Length; $in.hpqBData = [byte[]]$data
-            $r = $intf.InvokeMethod("hpqBIOSInt$outSize", @($in))   # positional: InData; OutData comes back in the result
+            $p = $intf.GetMethodParameters("hpqBIOSInt$outSize"); $p.InData = $in
+            $r = $intf.InvokeMethod("hpqBIOSInt$outSize", $p, $null)   # the parameter-object form is the one that returns OutData
             $od = $r.OutData
             $bytes = @(); if ($od -and $od.Data) { $bytes = @($od.Data) }
             "rc=" + $(if ($od) { $od.rwReturnCode } else { "?" }) + " data=" + (($bytes | Select-Object -First 24 | ForEach-Object { $_.ToString('X2') }) -join ' ')
         }
-        L ("  0x10 fan count:      " + (Q 0x10 @(0,0,0,0) 4))
+        # no 0x10 here: that query is the firmware's user-defined-fan trigger, not a plain read. Fan count = byte 0 of the fan table.
         L ("  0x28 system data:    " + (Q 0x28 @(0,0,0,0) 128))
         L ("  0x2D fan levels:     " + (Q 0x2D @(0,0,0,0) 128))
         L ("  0x2F fan table:      " + (Q 0x2F @(0,0,0,0) 128))

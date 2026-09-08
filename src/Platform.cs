@@ -12,8 +12,6 @@ namespace Ohman {
         public string[] Boards;             // DMI baseboard product ids this profile applies to (Win32_BaseBoard.Product)
         public int ThermalPolicy = 1;       // expected byte 3 of system-design data (1 = modes 0x30/0x31/0x50)
         public byte ModeEco = 0x30, ModeBalanced = 0x30, ModePerformance = 0x31, ModeCool = 0x50;
-        public int FanCount = 2;
-        public int FanLevelMax = 57;        // OGH's slider bound on this model (levels are RPM/100)
         public int TdpBase = 30, TdpGainMax = 15;   // concurrent CPU+GPU budget: base and the "Smart Performance Gain" range
         public byte[] GpuBase = { 0, 0, 1, 75 }, GpuBoost = { 0, 1, 1, 87 }, GpuMax = { 1, 1, 1, 87 };
         public uint KeyEventId = 29, KeyEventData = 8613;   // hpqBEvnt of the OMEN key
