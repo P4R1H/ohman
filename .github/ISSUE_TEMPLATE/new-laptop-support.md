@@ -24,7 +24,7 @@ tools\support-info.cmd
 
 - Performance modes offered (e.g. Eco / Balanced / Performance, or Quiet / Default / Performance):
 - Fan options (Auto / Max / Manual sliders?):
-- Any power slider (name and range, e.g. "Smart Performance Gain 0–15 W"):
+- Any power slider (name and range, e.g. "Smart Performance Gain 0 to 15 W"):
 - GPU options (Discrete/Hybrid switch, GPU power/boost toggles):
 
 **4. Optional, very helpful:** the OGH background log from a session where you switched every mode once:

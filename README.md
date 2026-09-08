@@ -18,8 +18,8 @@ Fan control is real. Tested on one machine by one person. Use at your own risk.
 | | |
 |---|---|
 | **Modes** | Eco · Balanced · Performance, one tap or Fn+F12. Eco also sets the Windows power mode and GPU base power, as OGH does. |
-| **Fans** | Auto (OGH's own curve for this model, 1800–5700 rpm), Max, or Manual per fan. |
-| **Power gain** | OGH's "Smart Performance Gain": +0 … +15 W on the CPU+GPU budget that NVIDIA Dynamic Boost draws from. |
+| **Fans** | Auto (OGH's own curve for this model, 1800 to 5700 rpm), Max, or Manual per fan. |
+| **Power gain** | OGH's "Smart Performance Gain": +0 to +15 W on the CPU+GPU budget that NVIDIA Dynamic Boost draws from. |
 | **GPU power** | Base · Boost · Max, or follow the mode. |
 | **Per mode** | Fan, power gain and GPU choices are remembered per mode. |
 | **Live** | CPU and GPU temperature, fan speeds, load, clocks, GPU watts, battery. |
@@ -43,7 +43,7 @@ build.cmd
 ```
 
 Run it (it asks for administrator rights once, the firmware interface needs them), then turn on
-**Settings → Start with Windows**. `preview\Ohman.exe` is the same UI on simulated hardware, no admin needed.
+**Settings > Start with Windows**. `preview\Ohman.exe` is the same UI on simulated hardware, no admin needed.
 
 ## How it works
 
