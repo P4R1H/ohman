@@ -30,8 +30,8 @@ namespace Ohman {
         public static readonly Color EcoColor = Col("#2FB984"), BalColor = Col("#5B8DEF"), PerfColor = Col("#F0603F"), FanColor = Col("#A78BFA");
         public static readonly Color Warn = Col("#FFB84D"), Danger = Col("#FF5C5C"), Ok = Col("#3DDC84");
         public static Color ModeColor(int i) { return i == 0 ? EcoColor : i == 2 ? PerfColor : BalColor; }
-        public static readonly FontFamily UiFont = new FontFamily("Segoe UI");
-        public static readonly FontFamily SmallFont = new FontFamily("Segoe UI Variable Small, Segoe UI");   // heavier strokes at 10-12 px
+        public static readonly FontFamily UiFont = new FontFamily("Segoe UI Variable Text, Segoe UI");
+        public static readonly FontFamily SmallFont = new FontFamily("Segoe UI Variable Text, Segoe UI");
         public static readonly FontFamily HeadFont = new FontFamily("Segoe UI Variable Display, Segoe UI");
         public static readonly FontFamily MonoFont = new FontFamily("Cascadia Mono, Consolas");
         public static readonly Brush Surface = Brush("#161920"), SurfaceHi = Brush("#1E222B"), TextB = Brush("#ECEFF4"), Muted = Brush("#A4ADBF"), Track = Brush("#22262E");
@@ -367,7 +367,7 @@ namespace Ohman {
             powerDebounce.Tick += delegate { powerDebounce.Stop(); int off = (int)slPower.Value; Bg(delegate { E.SetTdpOffset(off, true); }); };
             slPower.ValueChanged += delegate {
                 txtPower.Text = "+" + (int)slPower.Value + " W";
-                txtPowerSub.Text = "Dynamic Boost budget · " + (E.BaseTdp + (int)slPower.Value) + " W";
+                txtPowerSub.Text = "Dynamic Boost · " + (E.BaseTdp + (int)slPower.Value) + " W";
                 if (!syncing) { powerDebounce.Stop(); powerDebounce.Start(); }
             };
 
@@ -483,7 +483,7 @@ namespace Ohman {
                 var S = E.S; int mi = E.ModeIndex;
                 SelectMode(mi);
                 slPower.Value = S.TdpOffset; txtPower.Text = "+" + S.TdpOffset + " W";
-                txtPowerSub.Text = "Dynamic Boost budget · " + E.CurrentTdp + " W";
+                txtPowerSub.Text = "Dynamic Boost · " + E.CurrentTdp + " W";
                 fanAuto.IsChecked = S.Fan == FanMode.Auto; fanMax.IsChecked = S.Fan == FanMode.Max; fanManual.IsChecked = S.Fan == FanMode.Manual;
                 fanPanel.Visibility = S.Fan == FanMode.Manual ? Visibility.Visible : Visibility.Collapsed;
                 slFan1.Value = S.Fan1; slFan2.Value = S.Fan2; txtFan1.Text = FanText(S.Fan1); txtFan2.Text = FanText(S.Fan2);

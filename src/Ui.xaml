@@ -7,27 +7,26 @@
     <SolidColorBrush x:Key="Text" Color="#ECEFF4"/>
     <SolidColorBrush x:Key="Muted" Color="#A4ADBF"/>
     <SolidColorBrush x:Key="Accent" Color="#5B8DEF"/>
-    <FontFamily x:Key="UiFont">Segoe UI</FontFamily>
-    <FontFamily x:Key="SmallFont">Segoe UI Variable Small, Segoe UI</FontFamily>
+    <FontFamily x:Key="UiFont">Segoe UI Variable Text, Segoe UI</FontFamily>
+    <FontFamily x:Key="SmallFont">Segoe UI Variable Text, Segoe UI</FontFamily>
     <FontFamily x:Key="HeadFont">Segoe UI Variable Display, Segoe UI</FontFamily>
     <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas</FontFamily>
 
     <Style x:Key="Lbl" TargetType="TextBlock">
       <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
       <Setter Property="FontSize" Value="13.5"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
       <Setter Property="Foreground" Value="{StaticResource Text}"/>
       <Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
     <Style x:Key="Sub" TargetType="TextBlock">
-      <Setter Property="FontFamily" Value="{StaticResource SmallFont}"/>
-      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
+      <Setter Property="FontSize" Value="11.5"/>
       <Setter Property="Foreground" Value="{StaticResource Muted}"/>
       <Setter Property="TextWrapping" Value="Wrap"/>
       <Setter Property="Margin" Value="0,1,0,0"/>
     </Style>
     <Style x:Key="SubSm" TargetType="TextBlock" BasedOn="{StaticResource Sub}">
-      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontSize" Value="10.5"/>
       <Setter Property="Opacity" Value="0.9"/>
     </Style>
     <Style x:Key="Mono" TargetType="TextBlock">
@@ -59,7 +58,7 @@
             <Border x:Name="B" CornerRadius="7" Background="Transparent" Padding="12,6">
               <ContentPresenter x:Name="CP" HorizontalAlignment="Center" VerticalAlignment="Center"
                                 TextElement.Foreground="#A4ADBF" TextElement.FontSize="12.5" TextElement.FontWeight="SemiBold"
-                                TextElement.FontFamily="Segoe UI"/>
+                                TextElement.FontFamily="Segoe UI Variable Text, Segoe UI"/>
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
@@ -133,7 +132,7 @@
           <ControlTemplate TargetType="ToggleButton">
             <Border x:Name="B" CornerRadius="8" Background="{StaticResource Surface}" Padding="9,6">
               <ContentPresenter x:Name="CP" TextElement.Foreground="#A4ADBF" TextElement.FontSize="10.5" TextElement.FontWeight="Bold"
-                                TextElement.FontFamily="Segoe UI"/>
+                                TextElement.FontFamily="Segoe UI Variable Text, Segoe UI"/>
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsChecked" Value="True">
@@ -413,13 +412,13 @@
         <!-- cpu power -->
         <Grid>
           <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="188"/>
+            <ColumnDefinition Width="172"/>
             <ColumnDefinition Width="*"/>
             <ColumnDefinition Width="62"/>
           </Grid.ColumnDefinitions>
           <StackPanel VerticalAlignment="Center">
             <TextBlock Text="Power gain" Style="{StaticResource Lbl}"/>
-            <TextBlock x:Name="TxtPowerSub" Style="{StaticResource Sub}" Text="Dynamic Boost budget · 30 W"/>
+            <TextBlock x:Name="TxtPowerSub" Style="{StaticResource Sub}" Text="Dynamic Boost · 30 W"/>
           </StackPanel>
           <Slider x:Name="SlPower" Grid.Column="1" Style="{StaticResource Sl}" Minimum="0" Maximum="15" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="6,0"
                   ToolTip="What OMEN Gaming Hub calls Smart Performance Gain: raises the shared CPU + GPU power budget so NVIDIA Dynamic Boost has more headroom. Affects the GPU more than the CPU."/>
