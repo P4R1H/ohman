@@ -2,16 +2,14 @@
 <h1 align="center">Ohman</h1>
 <p align="center">OMEN Gaming Hub's performance controls, without OMEN Gaming Hub.</p>
 
-Don't you love paying $2,500 for a laptop and still getting ads pushed at you by the one app you can't
-skip, because it is the only thing that talks to the fans? Same. So here is that app minus the app: one
-executable, no services, no drivers, no account, no ads. It speaks to the firmware through the same WMI
-interface OMEN Gaming Hub uses and sends only bytes OGH has been seen sending.
+Don't you love paying $2,500 for a laptop and still having ads pushed down your throat by mandatory
+software with no alternative? Ohman is the alternative. One executable, no services, no drivers, no account,
+no ads. Same firmware interface as OMEN Gaming Hub, same bytes, nothing else.
 
 **Built for the HP OMEN Transcend 14 (2024, board 8C58).** Other OMEN and Victus laptops get added one
 verified profile at a time, see [Adding your laptop](#adding-your-laptop). Unknown boards run read-only.
 
-Fan control is real. Tested on one machine by one person, so use it at your own risk and glance at the
-temperatures the first time.
+Fan control is real. Tested on one machine by one person. Use at your own risk.
 
 <p align="center"><img src="docs/screenshot.png" width="440" alt="The Ohman panel"></p>
 
