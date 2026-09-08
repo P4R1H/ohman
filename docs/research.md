@@ -86,7 +86,9 @@ query is never sent without a fan write behind it.
 ## 5. The OMEN key
 
 Fn+F12 raises `hpqBEvnt` EventID 29 / EventData 8613 (sometimes twice per press; the app debounces 400 ms).
-A second key produces 29/8615. `131073/0` is a power-source notification. OGH's key handler
+A second key produces 29/8615. `131073/0` is a power-source notification. Modifier keys are not reported while
+Fn is held (Shift+Fn+F12 arrives as a plain event), and Windows reserves F12 for the debugger
+(`AeDebug\UserDebuggerHotKey` = 0), so `RegisterHotKey` accepts Shift+F12 but the press never arrives. OGH's key handler
 (`OmenCommandCenterBackground`) is launched at logon by HP's `OmenInstallMonitor` scheduled tasks, not by its
 own (disabled) startup task; the OGH main app also starts it. Ohman stops the process and disables those
 tasks while it owns the key, and re-enables them when told.

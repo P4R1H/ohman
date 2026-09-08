@@ -157,7 +157,7 @@ namespace Ohman {
         const string SCALE = "M12 3 L12 21 M8 21 L16 21 M4 7 L20 7 M4 7 L1.5 13 A2.5 2 0 0 0 6.5 13 Z M20 7 L17.5 13 A2.5 2 0 0 0 22.5 13 Z";
         const string BOLT = "M13 2 L4 14 L11 14 L10 22 L20 9 L13 9 Z";
 
-        const int WM_HOTKEY = 0x0312; const uint MOD_ALT = 1, MOD_CONTROL = 2, MOD_SHIFT = 4, VK_F12 = 0x7B;
+        const int WM_HOTKEY = 0x0312; const uint MOD_ALT = 1, MOD_CONTROL = 2, MOD_SHIFT = 4, VK_F11 = 0x7A;   // not F12: Windows reserves it for the debugger
         [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr h, int id, uint mod, uint vk);
         [DllImport("user32.dll")] static extern bool UnregisterHotKey(IntPtr h, int id);
         [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int val, int size);
@@ -442,7 +442,7 @@ namespace Ohman {
             Refit();
             if (on) {
                 txtKeyInfo.Text = KeyInfoText();
-                txtMachine.Text = E.Hw.IsDemo ? "simulated hardware" : (E.BiosOk ? "BIOS " + E.FanCount + " fans · policy v" + E.Info.ThermalPolicy : "BIOS unavailable");
+                txtMachine.Text = E.Hw.IsDemo && screenshotPath == null ? "simulated hardware" : (E.BiosOk ? "BIOS " + E.FanCount + " fans · policy v" + E.Info.ThermalPolicy : "BIOS unavailable");
             }
         }
         /// <summary>A size-to-content window does not always grow when a panel is swapped in until the next layout pass;
@@ -499,7 +499,7 @@ namespace Ohman {
                 keyCycle.IsChecked = S.Key == KeyAction.Cycle; keyShow.IsChecked = S.Key == KeyAction.Show; keyMax.IsChecked = S.Key == KeyAction.MaxFan; keyOff.IsChecked = S.Key == KeyAction.Off;
                 if (!E.Learning) txtKeyInfo.Text = KeyInfoText();
                 tgSuppress.IsChecked = S.SuppressOgh; tgHotkeys.IsChecked = S.Hotkeys; tgEcoBattery.IsChecked = S.EcoOnBattery; tgSyncPower.IsChecked = S.SyncWinPower; tgAutostart.IsChecked = autostart; tgEcoCool.IsChecked = S.EcoCool;
-                txtKeyFoot.Text = "Fn+F12 " + KeyActionText(S.Key) + (S.Hotkeys && S.Key != KeyAction.Cycle ? " · Shift+F12 cycles" : "");
+                txtKeyFoot.Text = "Fn+F12 " + KeyActionText(S.Key) + (S.Hotkeys && S.Key != KeyAction.Cycle ? " · Shift+F11 cycles" : "");
                 demoBadge.Visibility = E.Hw.IsDemo && screenshotPath == null ? Visibility.Visible : Visibility.Collapsed;
                 bool err = (!E.BiosOk || E.ReadOnly) && !E.Hw.IsDemo;
                 errBanner.Visibility = err ? Visibility.Visible : Visibility.Collapsed;
@@ -598,7 +598,7 @@ namespace Ohman {
             var hwnd = new WindowInteropHelper(this).Handle; if (hwnd == IntPtr.Zero) return;
             RegisterHotKey(hwnd, 1, MOD_CONTROL | MOD_ALT, (uint)'E'); RegisterHotKey(hwnd, 2, MOD_CONTROL | MOD_ALT, (uint)'B'); RegisterHotKey(hwnd, 3, MOD_CONTROL | MOD_ALT, (uint)'P');
             RegisterHotKey(hwnd, 4, MOD_CONTROL | MOD_ALT, (uint)'M'); RegisterHotKey(hwnd, 5, MOD_CONTROL | MOD_ALT, (uint)'O');
-            RegisterHotKey(hwnd, 6, MOD_SHIFT, VK_F12);                       // next to the OMEN key: Shift+F12 cycles modes
+            if (!RegisterHotKey(hwnd, 6, MOD_SHIFT, VK_F11)) Log.Write("hotkey Shift+F11 not available");   // next to the OMEN key: cycles modes
             hotkeysRegistered = true;
         }
         void UnregisterHotkeys() {

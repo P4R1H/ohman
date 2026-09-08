@@ -488,7 +488,7 @@
         <ToggleButton x:Name="TgHotkeys" Style="{StaticResource Switch}">
           <StackPanel>
             <TextBlock Text="Hotkeys" Style="{StaticResource Lbl}"/>
-            <TextBlock Text="Shift+F12 cycles modes · Ctrl+Alt+E / B / P modes · Ctrl+Alt+M max fan · Ctrl+Alt+O panel" Style="{StaticResource SubSm}"/>
+            <TextBlock Text="Shift+F11 cycles modes · Ctrl+Alt+E / B / P modes · Ctrl+Alt+M max fan · Ctrl+Alt+O panel" Style="{StaticResource SubSm}"/>
           </StackPanel>
         </ToggleButton>
         <ToggleButton x:Name="TgEcoBattery" Style="{StaticResource Switch}">

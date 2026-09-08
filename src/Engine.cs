@@ -50,7 +50,7 @@ namespace Ohman {
         public int TdpOffset { get { return Cur.TdpOffset; } set { Cur.TdpOffset = value; } }
         public GpuLevel Gpu { get { return Cur.Gpu; } set { Cur.Gpu = value; } }
         public bool GpuAuto { get { return Cur.GpuAuto; } set { Cur.GpuAuto = value; } }
-        public KeyAction Key = KeyAction.Show;      // what the OMEN key does; Shift+F12 (a normal hotkey) cycles modes
+        public KeyAction Key = KeyAction.Show;      // what the OMEN key does; Shift+F11 (a normal hotkey) cycles modes
         public uint KeyId = 0, KeyData = 0;         // hpqBEvnt EventID / EventData of the OMEN key; 0 = use the platform profile's values
         public bool SuppressOgh = true;
         public bool Hotkeys = true;
