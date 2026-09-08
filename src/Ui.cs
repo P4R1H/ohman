@@ -632,7 +632,7 @@ namespace Ohman {
                 try {
                     Snapshot(screenshotPath); Log.Write("screenshot saved " + screenshotPath);
                     if (osd != null && osd.IsVisible) { var f = (FrameworkElement)osd.Content; osd.Opacity = 1; SnapshotElement(f, screenshotPath + ".osd.png"); }
-                    try { using (var bmp = DrawMark(SD.Color.FromArgb(Ui.PerfColor.R, Ui.PerfColor.G, Ui.PerfColor.B), 256)) bmp.Save(screenshotPath + ".icon.png", System.Drawing.Imaging.ImageFormat.Png); } catch { }
+                    try { using (var bmp = DrawMark(SD.Color.FromArgb(Ui.BalColor.R, Ui.BalColor.G, Ui.BalColor.B), 256)) bmp.Save(screenshotPath + ".icon.png", System.Drawing.Imaging.ImageFormat.Png); } catch { }
                 } catch (Exception ex) { Log.Write("screenshot failed: " + ex); }
                 ExitApp();
             };
