@@ -7,7 +7,6 @@ Hub uses, sends the same bytes OGH sends, and nothing it hasn't been verified to
 **Built for the HP OMEN Transcend 14 (2024, board 8C58).** The goal is every OMEN and Victus laptop;
 the method is one verified platform profile at a time. See [Adding your laptop](#adding-your-laptop).
 
-![Ohman](docs/ui-main.png)
 
 ## What you get
 
