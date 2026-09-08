@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/mark.png" width="64" alt=""></p>
+<p align="center"><img src="docs/logo.webp" width="120" alt=""></p>
 <h1 align="center">Ohman</h1>
 <p align="center">OMEN Gaming Hub's performance controls, without OMEN Gaming Hub.</p>
 
