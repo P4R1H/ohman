@@ -8,17 +8,19 @@
     <SolidColorBrush x:Key="Muted" Color="#A4ADBF"/>
     <SolidColorBrush x:Key="Accent" Color="#5B8DEF"/>
     <FontFamily x:Key="UiFont">Segoe UI</FontFamily>
+    <FontFamily x:Key="SmallFont">Segoe UI Variable Small, Segoe UI</FontFamily>
     <FontFamily x:Key="HeadFont">Segoe UI Variable Display, Segoe UI</FontFamily>
     <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas</FontFamily>
 
     <Style x:Key="Lbl" TargetType="TextBlock">
       <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
       <Setter Property="FontSize" Value="13.5"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
       <Setter Property="Foreground" Value="{StaticResource Text}"/>
       <Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
     <Style x:Key="Sub" TargetType="TextBlock">
-      <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
+      <Setter Property="FontFamily" Value="{StaticResource SmallFont}"/>
       <Setter Property="FontSize" Value="12"/>
       <Setter Property="Foreground" Value="{StaticResource Muted}"/>
       <Setter Property="TextWrapping" Value="Wrap"/>
@@ -411,7 +413,7 @@
         <!-- cpu power -->
         <Grid>
           <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="162"/>
+            <ColumnDefinition Width="188"/>
             <ColumnDefinition Width="*"/>
             <ColumnDefinition Width="62"/>
           </Grid.ColumnDefinitions>

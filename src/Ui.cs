@@ -31,6 +31,7 @@ namespace Ohman {
         public static readonly Color Warn = Col("#FFB84D"), Danger = Col("#FF5C5C"), Ok = Col("#3DDC84");
         public static Color ModeColor(int i) { return i == 0 ? EcoColor : i == 2 ? PerfColor : BalColor; }
         public static readonly FontFamily UiFont = new FontFamily("Segoe UI");
+        public static readonly FontFamily SmallFont = new FontFamily("Segoe UI Variable Small, Segoe UI");   // heavier strokes at 10-12 px
         public static readonly FontFamily HeadFont = new FontFamily("Segoe UI Variable Display, Segoe UI");
         public static readonly FontFamily MonoFont = new FontFamily("Cascadia Mono, Consolas");
         public static readonly Brush Surface = Brush("#161920"), SurfaceHi = Brush("#1E222B"), TextB = Brush("#ECEFF4"), Muted = Brush("#A4ADBF"), Track = Brush("#22262E");
@@ -70,9 +71,9 @@ namespace Ohman {
             var sp = new StackPanel();
             var line = new StackPanel { Orientation = Orientation.Horizontal };
             val = new TextBlock { Text = "--", FontFamily = Ui.MonoFont, FontSize = 20, FontWeight = FontWeights.SemiBold, Foreground = Ui.TextB };
-            unit = new TextBlock { Text = unitText, FontFamily = Ui.UiFont, FontSize = 11, Foreground = Ui.Muted, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(3, 0, 0, 4) };
+            unit = new TextBlock { Text = unitText, FontFamily = Ui.SmallFont, FontSize = 11, Foreground = Ui.Muted, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(3, 0, 0, 4) };
             line.Children.Add(val); line.Children.Add(unit);
-            var lbl = new TextBlock { Text = label, FontFamily = Ui.UiFont, FontSize = 11, Foreground = Ui.Muted, Margin = new Thickness(0, 1, 0, 9) };
+            var lbl = new TextBlock { Text = label, FontFamily = Ui.SmallFont, FontSize = 11, Foreground = Ui.Muted, Margin = new Thickness(0, 1, 0, 9) };
             barHost = new Grid { Height = 3 };
             barHost.Children.Add(new Border { Background = Ui.Track, CornerRadius = new CornerRadius(1.5) });
             fill = new Border { Background = Ui.Brush(Ui.BalColor), CornerRadius = new CornerRadius(1.5), HorizontalAlignment = HorizontalAlignment.Left, Width = 0 };
@@ -103,7 +104,7 @@ namespace Ohman {
             icon = new WPath { StrokeThickness = 1.8, StrokeLineJoin = PenLineJoin.Round, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, Width = 18, Height = 18, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
             var col = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             txt = new TextBlock { FontFamily = Ui.HeadFont, FontSize = 15, FontWeight = FontWeights.SemiBold, Foreground = Ui.TextB };
-            sub = new TextBlock { FontFamily = Ui.UiFont, FontSize = 11.5, Foreground = Ui.Muted, Margin = new Thickness(0, 1, 0, 0) };
+            sub = new TextBlock { FontFamily = Ui.SmallFont, FontSize = 11.5, Foreground = Ui.Muted, Margin = new Thickness(0, 1, 0, 0) };
             col.Children.Add(txt); col.Children.Add(sub); sp.Children.Add(icon); sp.Children.Add(col); box.Child = sp; Content = box;
             hide = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1400) };
             hide.Tick += delegate { hide.Stop(); var a = new DoubleAnimation(0, TimeSpan.FromMilliseconds(260)); a.Completed += delegate { if (Opacity < 0.05) Hide(); }; BeginAnimation(OpacityProperty, a); };
