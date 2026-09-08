@@ -65,7 +65,8 @@ Ohman refuses to write to a board it hasn't been verified on. To add yours:
    Its `inputData=` lines are the ground truth for the bytes your firmware expects.
 
 A platform is a single entry in `src/Platform.cs`: board ids, mode bytes, fan bounds, power budget and
-GPU payloads. Nothing else in the code is model-specific.
+GPU payloads. Nothing else in the code is model-specific. The `add-laptop` skill in `.claude/skills/`
+turns a support issue into that entry and a pull request with the evidence; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Safety notes, read them
 
