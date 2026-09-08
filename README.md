@@ -9,7 +9,7 @@ no ads. Same firmware interface as OMEN Gaming Hub, same bytes, nothing else.
 **Built for the HP OMEN Transcend 14 (2024, board 8C58).** Other OMEN and Victus laptops get added one
 verified profile at a time, see [Adding your laptop](#adding-your-laptop). Unknown boards run read-only.
 
-Fan control is real. Tested on one machine by one person. Use at your own risk.
+Ohman interacts with the BIOS through the same commands OGH uses. Use at your own risk.
 
 <p align="center"><img src="docs/screenshot.png" width="440" alt="The Ohman panel"></p>
 
