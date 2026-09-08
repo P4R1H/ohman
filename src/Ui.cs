@@ -499,7 +499,7 @@ namespace Ohman {
                 keyCycle.IsChecked = S.Key == KeyAction.Cycle; keyShow.IsChecked = S.Key == KeyAction.Show; keyMax.IsChecked = S.Key == KeyAction.MaxFan; keyOff.IsChecked = S.Key == KeyAction.Off;
                 if (!E.Learning) txtKeyInfo.Text = KeyInfoText();
                 tgSuppress.IsChecked = S.SuppressOgh; tgHotkeys.IsChecked = S.Hotkeys; tgEcoBattery.IsChecked = S.EcoOnBattery; tgSyncPower.IsChecked = S.SyncWinPower; tgAutostart.IsChecked = autostart; tgEcoCool.IsChecked = S.EcoCool;
-                txtKeyFoot.Text = "Fn+F12 " + KeyActionText(S.Key);
+                txtKeyFoot.Text = "Fn+F12 " + KeyActionText(S.Key) + (S.Key == KeyAction.Cycle ? "" : " · Shift cycles");
                 demoBadge.Visibility = E.Hw.IsDemo && screenshotPath == null ? Visibility.Visible : Visibility.Collapsed;
                 bool err = (!E.BiosOk || E.ReadOnly) && !E.Hw.IsDemo;
                 errBanner.Visibility = err ? Visibility.Visible : Visibility.Collapsed;

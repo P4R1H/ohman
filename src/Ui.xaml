@@ -466,6 +466,7 @@
               <TextBlock x:Name="TxtKeyInfo" Style="{StaticResource SubSm}" VerticalAlignment="Center"/>
               <Button x:Name="BtnLearn" Style="{StaticResource LinkBtn}" Content="Learn" Margin="4,1,0,0" ToolTip="Click, then press the key you want to bind"/>
             </StackPanel>
+            <TextBlock Text="Shift+Fn+F12 cycles modes · Ctrl+Fn+F12 toggles max fan" Style="{StaticResource SubSm}" Margin="0,2,0,0"/>
           </StackPanel>
           <Border Grid.Column="1" Style="{StaticResource SegBox}" VerticalAlignment="Center">
             <UniformGrid Rows="1">

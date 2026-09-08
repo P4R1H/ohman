@@ -50,7 +50,7 @@ namespace Ohman {
         public int TdpOffset { get { return Cur.TdpOffset; } set { Cur.TdpOffset = value; } }
         public GpuLevel Gpu { get { return Cur.Gpu; } set { Cur.Gpu = value; } }
         public bool GpuAuto { get { return Cur.GpuAuto; } set { Cur.GpuAuto = value; } }
-        public KeyAction Key = KeyAction.Cycle;
+        public KeyAction Key = KeyAction.Show;      // plain OMEN key; Shift+key always cycles modes, Ctrl+key toggles max fan
         public uint KeyId = 0, KeyData = 0;         // hpqBEvnt EventID / EventData of the OMEN key; 0 = use the platform profile's values
         public bool SuppressOgh = true;
         public bool Hotkeys = true;
@@ -481,7 +481,9 @@ namespace Ohman {
             uint id = 0, data = 0;
             try { id = Convert.ToUInt32(e.NewEvent["EventID"]); data = Convert.ToUInt32(e.NewEvent["EventData"]); } catch { return; }
             LastEventId = id; LastEventData = data; LastEventTime = DateTime.Now;
-            Log.Write("hpqBEvnt id=" + id + " data=" + data);
+            // the OMEN key is a firmware event, not a keystroke, so chords are read from the modifier state at arrival
+            bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0, ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+            Log.Write("hpqBEvnt id=" + id + " data=" + data + (shift ? " +shift" : "") + (ctrl ? " +ctrl" : ""));
             var any = AnyKeyEvent; if (any != null) { try { any(id, data); } catch { } }
             if (Learning) {
                 if (id == 131073) return;               // power/AC notification, not a key
@@ -492,9 +494,12 @@ namespace Ohman {
             if ((DateTime.Now - lastKey).TotalMilliseconds < 400) return;   // the key fires twice per press
             lastKey = DateTime.Now;
             if (S.SuppressOgh && !Hw.IsDemo && Supported) KillOgh();
-            if (S.Key == KeyAction.Off) return;
-            var h = KeyPressed; if (h != null) { try { h(S.Key); } catch { } }
+            KeyAction act = shift ? KeyAction.Cycle : ctrl ? KeyAction.MaxFan : S.Key;
+            if (act == KeyAction.Off) return;
+            var h = KeyPressed; if (h != null) { try { h(act); } catch { } }
         }
+        const int VK_SHIFT = 0x10, VK_CONTROL = 0x11;
+        [DllImport("user32.dll")] static extern short GetAsyncKeyState(int vKey);
 
         // ---------- Windows power-mode overlay ----------
         static readonly Guid OverlayEfficiency = new Guid("961cc777-2547-4f9d-8174-7d86181b8a7a");
