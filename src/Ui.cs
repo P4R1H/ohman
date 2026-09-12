@@ -519,26 +519,44 @@ namespace Ohman {
         /// <summary>The editor opens to the left of the panel. The content is anchored to the window's right edge, so
         /// growing the window leftwards reveals the editor while the panel stays exactly where it was.</summary>
         const double BaseWidth = 440;
-        DispatcherTimer slide;
+        [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+        const uint SWP_NOZORDER = 0x0004, SWP_NOACTIVATE = 0x0010;
+        bool sliding;
+        double MeasuredHeight(double width) {
+            root.Measure(new Size(width, double.PositiveInfinity));
+            double max = Math.Max(420, SystemParameters.WorkArea.Height - 24);
+            return Math.Min(Math.Ceiling(root.DesiredSize.Height), max);
+        }
         public void ShowKeyboard(bool on) {
-            if (kbdMini == null || on == kbdOpen) return;
+            if (kbdMini == null || on == kbdOpen || sliding) return;
             kbdOpen = on;
             var wa = SystemParameters.WorkArea;
             double targetW = on ? BaseWidth + KbdWidth : BaseWidth;
             double targetL = on ? Math.Max(wa.Left, Left - KbdWidth) : Math.Min(Left + KbdWidth, wa.Right - BaseWidth);
             SizeToContent = SizeToContent.Manual;
-            if (on) { kbdPanel.Visibility = Visibility.Visible; root.Width = targetW; SyncPickerFromSelection(); }
-            Action finish = delegate { if (!on) { kbdPanel.Visibility = Visibility.Collapsed; root.Width = BaseWidth; } Refit(); Log.Write("keyboard editor " + (on ? "open" : "closed")); };
-            if (screenshotPath != null) { Width = targetW; Left = targetL; finish(); return; }
-            double w0 = ActualWidth, l0 = Left; DateTime t0 = DateTime.Now;
-            if (slide != null) slide.Stop();
-            slide = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(12) };
-            slide.Tick += delegate {
-                double t = Math.Min(1, (DateTime.Now - t0).TotalMilliseconds / 220.0), e = 1 - Math.Pow(1 - t, 3);   // ease-out
-                Width = w0 + (targetW - w0) * e; Left = l0 + (targetL - l0) * e;
-                if (t >= 1) { slide.Stop(); Width = targetW; Left = targetL; finish(); }
+            // the height the window wants at the end, measured before anything moves, so height, width and position travel together
+            kbdPanel.Visibility = on ? Visibility.Visible : Visibility.Collapsed; root.Width = targetW;
+            double targetH = MeasuredHeight(targetW);
+            kbdPanel.Visibility = Visibility.Visible;                          // stays visible while sliding either way
+            if (on) SyncPickerFromSelection(); else root.Width = BaseWidth + KbdWidth;
+            Action finish = delegate {
+                if (!on) { kbdPanel.Visibility = Visibility.Collapsed; root.Width = BaseWidth; }
+                Width = targetW; Height = targetH; Left = targetL; Top = Math.Max(wa.Top, Math.Min(Top, wa.Bottom - targetH));
+                sliding = false; Log.Write("keyboard editor " + (on ? "open" : "closed"));
             };
-            slide.Start();
+            if (screenshotPath != null) { finish(); return; }
+            // one window move-and-size per rendered frame: width, left and height together, so nothing jumps
+            var hwnd = new WindowInteropHelper(this).Handle; var dpi = VisualTreeHelper.GetDpi(this);
+            double w0 = ActualWidth, l0 = Left, h0 = ActualHeight, top = Top; DateTime t0 = DateTime.Now;
+            sliding = true;
+            EventHandler tick = null;
+            tick = delegate {
+                double t = Math.Min(1, (DateTime.Now - t0).TotalMilliseconds / 260.0), e = 1 - Math.Pow(1 - t, 3);   // ease-out
+                double w = w0 + (targetW - w0) * e, l = l0 + (targetL - l0) * e, hh = h0 + (targetH - h0) * e;
+                SetWindowPos(hwnd, IntPtr.Zero, (int)Math.Round(l * dpi.DpiScaleX), (int)Math.Round(top * dpi.DpiScaleY), (int)Math.Round(w * dpi.DpiScaleX), (int)Math.Round(hh * dpi.DpiScaleY), SWP_NOZORDER | SWP_NOACTIVATE);
+                if (t >= 1) { CompositionTarget.Rendering -= tick; finish(); }
+            };
+            CompositionTarget.Rendering += tick;
         }
         void RefreshLighting() {
             if (E.Light == null || kbdMini == null) return;
