@@ -873,6 +873,14 @@ namespace Ohman {
         void QueryAutostartAsync() {
             Bg(delegate {
                 bool on = RunSchtasks("/Query /TN " + Program.AppName) == 0;
+                if (on && !E.Hw.IsDemo) {
+                    // tasks made by 1.1 stop the app when the laptop goes on battery; re-register those once
+                    string xml = SchtasksOut("/Query /TN " + Program.AppName + " /XML");
+                    if (xml.IndexOf("<StopIfGoingOnBatteries>true", StringComparison.OrdinalIgnoreCase) >= 0 || xml.IndexOf("<DisallowStartIfOnBatteries>true", StringComparison.OrdinalIgnoreCase) >= 0) {
+                        Log.Write("logon task has battery restrictions; re-registering it");
+                        SetAutostart(true); on = autostart;
+                    }
+                }
                 if (!on && E.S.FirstRun && !E.Hw.IsDemo) {              // first launch: start with Windows like every vendor app does; the switch turns it off
                     SetAutostart(true); on = autostart;
                     if (on) Dispatcher.BeginInvoke((Action)delegate { ShowToast("Starts with Windows from now on (Settings to change)", false); });
@@ -883,10 +891,39 @@ namespace Ohman {
         void SetAutostart(bool on) {
             if (E.Hw.IsDemo) { Dispatcher.BeginInvoke((Action)delegate { ShowToast("Autostart needs the administrator build", true); }); return; }
             string exe = Process.GetCurrentProcess().MainModule.FileName;
-            int rc = on ? RunSchtasks("/Create /TN " + Program.AppName + " /TR \"\\\"" + exe + "\\\" --hidden\" /SC ONLOGON /RL HIGHEST /F") : RunSchtasks("/Delete /TN " + Program.AppName + " /F");
+            int rc;
+            if (on) {
+                // registered from XML: a task made with plain "schtasks /Create" stops the app when the laptop goes on battery and refuses to start it on battery
+                string tmp = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Program.FileStem + "-task.xml");
+                try { System.IO.File.WriteAllText(tmp, TaskXml(exe), new System.Text.UTF8Encoding(false)); } catch (Exception ex) { Log.Write("task xml: " + ex.Message); }
+                rc = RunSchtasks("/Create /TN " + Program.AppName + " /XML \"" + tmp + "\" /F");
+                try { System.IO.File.Delete(tmp); } catch { }
+            } else rc = RunSchtasks("/Delete /TN " + Program.AppName + " /F");
             Log.Write("autostart " + on + " rc=" + rc);
             autostart = on && rc == 0;
             if (!E.S.FirstRun) Dispatcher.BeginInvoke((Action)delegate { ShowToast(rc == 0 ? (on ? "Starts with Windows" : "Autostart removed") : "schtasks failed (" + rc + ")", rc != 0); });
+        }
+        /// <summary>Logon task for this user: highest privileges (no UAC prompt), starts and keeps running on battery, no time limit.</summary>
+        static string TaskXml(string exe) {
+            string sid = System.Security.Principal.WindowsIdentity.GetCurrent().User.Value;
+            return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+                "<Task version=\"1.4\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\n" +
+                "  <RegistrationInfo><Description>" + Program.AppName + " starts with Windows</Description></RegistrationInfo>\n" +
+                "  <Triggers><LogonTrigger><Enabled>true</Enabled><UserId>" + sid + "</UserId></LogonTrigger></Triggers>\n" +
+                "  <Principals><Principal id=\"Author\"><UserId>" + sid + "</UserId><LogonType>InteractiveToken</LogonType><RunLevel>HighestAvailable</RunLevel></Principal></Principals>\n" +
+                "  <Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>" +
+                "<StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><AllowHardTerminate>false</AllowHardTerminate><StartWhenAvailable>true</StartWhenAvailable>" +
+                "<RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable><IdleSettings><StopOnIdleEnd>false</StopOnIdleEnd><RestartOnIdle>false</RestartOnIdle></IdleSettings>" +
+                "<AllowStartOnDemand>true</AllowStartOnDemand><Enabled>true</Enabled><Hidden>false</Hidden><RunOnlyIfIdle>false</RunOnlyIfIdle><WakeToRun>false</WakeToRun>" +
+                "<ExecutionTimeLimit>PT0S</ExecutionTimeLimit><Priority>7</Priority></Settings>\n" +
+                "  <Actions Context=\"Author\"><Exec><Command>" + System.Security.SecurityElement.Escape(exe) + "</Command><Arguments>--hidden</Arguments></Exec></Actions>\n" +
+                "</Task>\n";
+        }
+        static string SchtasksOut(string args) {
+            try {
+                var psi = new ProcessStartInfo("schtasks.exe", args) { CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true };
+                using (var p = Process.Start(psi)) { string o = p.StandardOutput.ReadToEnd(); p.WaitForExit(5000); return o; }
+            } catch (Exception ex) { Log.Write("schtasks: " + ex.Message); return ""; }
         }
         static int RunSchtasks(string args) {
             try {
