@@ -140,7 +140,7 @@ namespace Ohman {
         RadioButton fanAuto, fanMax, fanManual, gpuBase, gpuBoost, gpuMax, keyCycle, keyShow, keyMax, keyOff;
         Slider slFan1, slFan2, slPower, slHue, slLevel;
         // keyboard lighting
-        FrameworkElement lightRow, lightDivider, kbdPanel, svBox; Border miniHost, kbdHost; StackPanel presets; TextBlock txtLightSub, txtKbdKind, txtKbdSel, txtLevel;
+        FrameworkElement lightRow, lightDivider, kbdPanel, svBox; Border miniHost, kbdHost; TextBlock txtLightSub, txtKbdKind, txtKbdSel, txtLevel;
         RadioButton kOff, kStatic, kBreathe, kCycle, kWave, kWin; Button btnAllZones, btnKbdClose; TextBox txtHex; Rectangle svHue; Ellipse svMarker; Canvas svCanvas;
         KeyboardView kbdMini, kbdBig; bool kbdOpen; double curH, curS = 1, curV = 1; DispatcherTimer colorDebounce, levelDebounce, speedDebounce, previewTimer; const double KbdWidth = 540;
         FrameworkElement colourBlock, infoBlock, speedRow, levelRow; TextBlock txtKbdInfo, txtSpeed; Slider slSpeed; Button btnWinLighting; double previewPhase;
@@ -234,7 +234,7 @@ namespace Ohman {
             kbdPanel = F<FrameworkElement>("KbdPanel"); kbdHost = F<Border>("KbdHost"); txtKbdKind = F<TextBlock>("TxtKbdKind"); txtKbdSel = F<TextBlock>("TxtKbdSel"); btnKbdClose = F<Button>("BtnKbdClose");
             kOff = F<RadioButton>("KOff"); kStatic = F<RadioButton>("KStatic"); kBreathe = F<RadioButton>("KBreathe"); kCycle = F<RadioButton>("KCycle"); kWave = F<RadioButton>("KWave"); kWin = F<RadioButton>("KWin");
             svBox = F<FrameworkElement>("SvBox"); svHue = F<Rectangle>("SvHue"); svMarker = F<Ellipse>("SvMarker"); svCanvas = F<Canvas>("SvCanvas");
-            slHue = F<Slider>("SlHue"); slLevel = F<Slider>("SlLevel"); txtLevel = F<TextBlock>("TxtLevel"); txtHex = F<TextBox>("TxtHex"); btnAllZones = F<Button>("BtnAllZones"); presets = F<StackPanel>("Presets");
+            slHue = F<Slider>("SlHue"); slLevel = F<Slider>("SlLevel"); txtLevel = F<TextBlock>("TxtLevel"); txtHex = F<TextBox>("TxtHex"); btnAllZones = F<Button>("BtnAllZones");
             colourBlock = F<FrameworkElement>("ColourBlock"); infoBlock = F<FrameworkElement>("InfoBlock"); speedRow = F<FrameworkElement>("SpeedRow"); levelRow = F<FrameworkElement>("LevelRow");
             txtKbdInfo = F<TextBlock>("TxtKbdInfo"); txtSpeed = F<TextBlock>("TxtSpeed"); slSpeed = F<Slider>("SlSpeed"); btnWinLighting = F<Button>("BtnWinLighting");
             settingsPanel = F<FrameworkElement>("SettingsPanel"); txtMachine = F<TextBlock>("TxtMachine");
@@ -438,7 +438,6 @@ namespace Ohman {
         }
 
         // ---------- keyboard lighting ----------
-        static readonly string[] PresetHex = { "FFFFFF", "FF3B30", "FF9500", "FFD60A", "34C759", "00C7BE", "0A84FF", "5E5CE6", "FF2D55" };
         int[] SelectedZones() { var l = new List<int>(kbdBig.Selected); l.Sort(); return l.ToArray(); }
         void BuildLighting() {
             if (E.Light == null) { lightRow.Visibility = Visibility.Collapsed; lightDivider.Visibility = Visibility.Collapsed; return; }
@@ -458,12 +457,6 @@ namespace Ohman {
             btnAllZones.Click += delegate { kbdBig.Selected.Clear(); for (int i = 0; i < E.Light.Zones; i++) kbdBig.Selected.Add(i); kbdBig.Repaint(); SyncPickerFromSelection(); };
             if (E.Light.Zones == 1) btnAllZones.Visibility = Visibility.Collapsed;
             if (!WinLighting.Present && !E.Hw.IsDemo) kWin.Visibility = Visibility.Collapsed;    // no Dynamic Lighting device for this keyboard
-            foreach (string hex in PresetHex) {
-                Rgb c; Rgb.TryParse(hex, out c); Rgb cc = c;
-                var d = new Button { Style = (Style)root.FindResource("Dot"), Background = Ui.Brush("#" + hex), ToolTip = "#" + hex };
-                d.Click += delegate { cc.ToHsv(out curH, out curS, out curV); SyncPickerControls(); PushColor(true); };
-                presets.Children.Add(d);
-            }
             RoutedEventHandler mode = delegate {
                 if (syncing) return;
                 int m = kWin.IsChecked == true ? 2 : kOff.IsChecked == true ? 0 : 1;
@@ -520,7 +513,7 @@ namespace Ohman {
                 : m == 2 ? "Windows Dynamic Lighting is painting the keyboard; its colours and effects come from Windows settings. Pick a mode above to take it back."
                 : fx == 2 ? "Cycle runs every zone through the spectrum together." : "Wave runs the spectrum across the zones, left to right.";
             kbdBig.Selectable = pick; kbdBig.Off = m == 0 || m == 2; kbdMini.Off = m == 0 || m == 2;
-            speedRow.Margin = new Thickness(0, pick ? 12 : 14, 0, 0);
+            speedRow.Margin = new Thickness(0, pick ? 10 : 14, 0, 0);
             if (effect) { if (!previewTimer.IsEnabled) previewTimer.Start(); } else previewTimer.Stop();
         }
         void ApplyHex() {
@@ -541,7 +534,7 @@ namespace Ohman {
             int[] z = SelectedZones();
             if (z.Length > 0 && E.LightColors.Length > z[0]) E.LightColors[z[0]].ToHsv(out curH, out curS, out curV);
             SyncPickerControls();
-            txtKbdSel.Text = E.Light.Zones == 1 ? "whole keyboard" : z.Length == E.Light.Zones ? "all zones · click a key to pick one" : "zone " + string.Join(", ", Array.ConvertAll(z, delegate(int i) { return (i + 1).ToString(); })) + " · Ctrl-click adds";
+            txtKbdSel.Text = E.Light.Zones == 1 ? "whole keyboard" : z.Length == E.Light.Zones ? "all zones" : "zone " + string.Join(", ", Array.ConvertAll(z, delegate(int i) { return (i + 1).ToString(); })) + " · Ctrl-click adds";
         }
         /// <summary>Paint the selection in the drawings immediately, then send the colour to the firmware (debounced).</summary>
         void PushColor(bool now) {
@@ -561,7 +554,7 @@ namespace Ohman {
             border.Visibility = Visibility.Visible; border.BorderThickness = new Thickness(0); border.Background = Ui.Brush("#0E1014"); border.CornerRadius = new CornerRadius(8);
             kbdWin = new Window {
                 Title = Program.DisplayName + " keyboard", WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize, ShowInTaskbar = false,
-                Background = Brushes.Transparent, AllowsTransparency = false, Width = 540, SizeToContent = SizeToContent.Height, Content = kbdPanel,
+                Background = Brushes.Transparent, AllowsTransparency = false, Width = 754, SizeToContent = SizeToContent.Height, Content = kbdPanel,
                 ShowActivated = true, Icon = Icon
             };
             kbdWin.Background = Ui.Brush("#0E1014");
