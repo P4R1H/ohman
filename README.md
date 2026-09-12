@@ -60,6 +60,32 @@ HP exposes a BIOS mailbox as the WMI class `hpqBIntM`. Ohman uses the commands O
 lighting (`0x20009`), plus read-only queries. The OMEN key arrives as a WMI event (`hpqBEvnt`). The bytes and the measured firmware
 behaviour are in [docs/research.md](docs/research.md).
 
+## Laptops
+
+Three tiers. Verified means somebody ran the checklist on that machine. Listed means the board id is in the Linux
+HP driver's tables, so the mode bytes for its firmware generation are known and generic mode uses them. Anything
+else gets generic mode when the firmware reports a known thermal-policy version, and read-only when it does not.
+
+| Model | Board ids | Status |
+|---|---|---|
+| OMEN Transcend 14 (2024) | `8C58` | Verified on the machine |
+| OMEN Transcend 14 (2024, other SKU) | `8E41` | Generic, board known to the Linux HP driver |
+| OMEN 15 (2019, 15-dc / 15-dh) | `8574, 8600` | Generic, board known to the Linux HP driver |
+| OMEN 17 (2019, 17-cb0) | `8603` | Generic, board known to the Linux HP driver |
+| OMEN 15 (2020) | `8A15` | Generic, board known to the Linux HP driver |
+| OMEN 15 / 17 (2021) | `8BAD` | Generic, board known to the Linux HP driver |
+| OMEN 16 / 17 (2021 to 2022) | `8A42, 8A43` | Generic, board known to the Linux HP driver |
+| Victus 16 (2021 to 2023) | `88F8, 8A25` | Generic, board known to the Linux HP driver |
+| Victus 16 S / R (2023 to 2024) | `8A3D, 8B2F, 8BBE, 8BD4, 8BD5, 8C99, 8C9C` | Generic, board known to the Linux HP driver |
+| Other OMEN 15 / 17 boards in the driver's table (2018 to 2021 generations) | `84DA to 84DC, 8572 to 8575, 8601 to 860A, 8746 to 874A, 8786 to 878C, 87B5, 886B, 886C, 88C8 to 88D2, 88F4 to 88F7, 88FD to 8902, 8912, 8917, 8918, 8949, 894A, 89EB` | Generic, board known to the Linux HP driver |
+| OMEN 16 (2023 to 2025) | `8BAA, 8BAB, 8BCA, 8BCD, 8C76 to 8C78, 8D24, 8D26, 8D2F, 8E35` | Generic, from the firmware's own answers |
+| OMEN MAX 16 (2025) | `8D41, 8D87` | Generic, from the firmware's own answers |
+| OMEN Transcend 16, OMEN 17 (2025) | `8BB3, 8C3B, 8C4D, 8E10` | Generic, from the firmware's own answers |
+| Victus 15 | `88D9, 88DA, 8A3E, 8C2F, 8C30, 8C3F, 8D07, 8DCD, 8E5E` | Generic, from the firmware's own answers |
+
+Board id: `Settings > Diagnostics` in Ohman, or `wmic baseboard get product`. Not listed is not unsupported; open a
+support issue with `tools\support-info.cmd` and it moves up a tier.
+
 ## Adding your laptop
 
 1. Run `tools\support-info.cmd` and press the OMEN key when it asks. It writes `tools\support-info.txt`:

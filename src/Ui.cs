@@ -505,7 +505,7 @@ namespace Ohman {
             int[] z = SelectedZones();
             if (z.Length > 0 && E.LightColors.Length > z[0]) E.LightColors[z[0]].ToHsv(out curH, out curS, out curV);
             SyncPickerControls();
-            txtKbdSel.Text = E.Light.Zones == 1 ? "The whole keyboard" : z.Length == E.Light.Zones ? "All zones selected · click a key to pick one, Ctrl-click to add" : "Zone " + string.Join(", ", Array.ConvertAll(z, delegate(int i) { return (i + 1).ToString(); })) + " selected · Ctrl-click to add zones";
+            txtKbdSel.Text = E.Light.Zones == 1 ? "whole keyboard" : z.Length == E.Light.Zones ? "all zones · click a key to pick one" : "zone " + string.Join(", ", Array.ConvertAll(z, delegate(int i) { return (i + 1).ToString(); })) + " · Ctrl-click adds";
         }
         /// <summary>Paint the selection in the drawings immediately, then send the colour to the firmware (debounced).</summary>
         void PushColor(bool now) {

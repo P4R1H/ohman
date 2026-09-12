@@ -135,6 +135,17 @@ ol{margin:18px 0 0;padding-left:22px;color:var(--muted)}
 ol li{margin-bottom:16px}
 ol li:last-child{margin-bottom:0}
 
+/* ---------- 7b. laptops table ---------- */
+.tablewrap{overflow-x:auto;margin-top:6px}
+.models{width:100%;border-collapse:collapse;font-size:14px}
+.models th{text-align:left;font-weight:600;padding:8px 10px 8px 0;border-bottom:1px solid var(--border);color:var(--muted);font-size:12.5px;letter-spacing:.02em}
+.models td{padding:9px 10px 9px 0;border-bottom:1px solid var(--border);vertical-align:top}
+.models td.ids{font-family:var(--mono);font-size:12px;color:var(--dim)}
+.tier{display:inline-block;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:600;border:1px solid var(--border);color:var(--muted)}
+.tier.verified{color:#0B0E14;background:var(--accent);border-color:var(--accent)}
+.tier.listed{color:var(--text)}
+.note{margin-top:14px;color:var(--muted);font-size:13px}
+
 /* ---------- 8. footer ---------- */
 footer{
   margin-top:60px;padding:26px 0 60px;
@@ -246,6 +257,34 @@ footer p{margin:0 0 8px}
         <li>Open a <a href="https://github.com/P4R1H/Ohman/issues/new?template=new-laptop-support.md">New laptop support</a> issue with that file, what OGH shows on your model, and ideally OGH's background log (<code class="path">%LOCALAPPDATA%\Packages\AD2F1837.OMENCommandCenter_v10z8vjag6ke6\LocalCache\Local\HPOMEN\</code>) from a session where you clicked every mode.</li>
         <li>A platform is one entry in <a href="https://github.com/P4R1H/Ohman/blob/main/src/Platform.cs">src/Platform.cs</a>; nothing else is model-specific.</li>
       </ol>
+    </section>
+
+    <!-- 7b. laptops -->
+    <section aria-labelledby="models">
+      <h2 id="models">Laptops</h2>
+      <p>Three tiers. <b>Verified</b>: somebody ran the checklist on that machine. <b>Listed</b>: the board id is in the Linux HP driver's tables, so the mode bytes for its firmware generation are known and generic mode uses them. <b>Generic</b>: everything else, driven by what the firmware reports about itself; read-only when it reports nothing usable.</p>
+      <div class="tablewrap">
+      <table class="models">
+        <thead><tr><th>Model</th><th>Board ids</th><th>Status</th></tr></thead>
+        <tbody>
+        <tr><td>OMEN Transcend 14 (2024)</td><td class="ids">8C58</td><td><span class="tier verified">Verified</span></td></tr>
+        <tr><td>OMEN Transcend 14 (2024, other SKU)</td><td class="ids">8E41</td><td><span class="tier listed">Listed</span></td></tr>
+        <tr><td>OMEN 15 (2019, 15-dc / 15-dh)</td><td class="ids">8574, 8600</td><td><span class="tier listed">Listed</span></td></tr>
+        <tr><td>OMEN 17 (2019, 17-cb0)</td><td class="ids">8603</td><td><span class="tier listed">Listed</span></td></tr>
+        <tr><td>OMEN 15 (2020)</td><td class="ids">8A15</td><td><span class="tier listed">Listed</span></td></tr>
+        <tr><td>OMEN 15 / 17 (2021)</td><td class="ids">8BAD</td><td><span class="tier listed">Listed</span></td></tr>
+        <tr><td>OMEN 16 / 17 (2021 to 2022)</td><td class="ids">8A42, 8A43</td><td><span class="tier listed">Listed</span></td></tr>
+        <tr><td>Victus 16 (2021 to 2023)</td><td class="ids">88F8, 8A25</td><td><span class="tier listed">Listed</span></td></tr>
+        <tr><td>Victus 16 S / R (2023 to 2024)</td><td class="ids">8A3D, 8B2F, 8BBE, 8BD4, 8BD5, 8C99, 8C9C</td><td><span class="tier listed">Listed</span></td></tr>
+        <tr><td>Other OMEN 15 / 17 boards in the driver's table (2018 to 2021 generations)</td><td class="ids">84DA to 84DC, 8572 to 8575, 8601 to 860A, 8746 to 874A, 8786 to 878C, 87B5, 886B, 886C, 88C8 to 88D2, 88F4 to 88F7, 88FD to 8902, 8912, 8917, 8918, 8949, 894A, 89EB</td><td><span class="tier listed">Listed</span></td></tr>
+        <tr><td>OMEN 16 (2023 to 2025)</td><td class="ids">8BAA, 8BAB, 8BCA, 8BCD, 8C76 to 8C78, 8D24, 8D26, 8D2F, 8E35</td><td><span class="tier generic">Generic</span></td></tr>
+        <tr><td>OMEN MAX 16 (2025)</td><td class="ids">8D41, 8D87</td><td><span class="tier generic">Generic</span></td></tr>
+        <tr><td>OMEN Transcend 16, OMEN 17 (2025)</td><td class="ids">8BB3, 8C3B, 8C4D, 8E10</td><td><span class="tier generic">Generic</span></td></tr>
+        <tr><td>Victus 15</td><td class="ids">88D9, 88DA, 8A3E, 8C2F, 8C30, 8C3F, 8D07, 8DCD, 8E5E</td><td><span class="tier generic">Generic</span></td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p class="note">Board id: Settings, Diagnostics in Ohman, or <code>wmic baseboard get product</code>. Not listed is not unsupported: open a support issue and it moves up a tier.</p>
     </section>
 
   </main>
