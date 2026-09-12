@@ -137,14 +137,15 @@ namespace Ohman {
         readonly ModeSeg[] segs = new ModeSeg[3];
         readonly MetricTile[] tiles = new MetricTile[4];
         TextBlock txtModeSub, txtSensors, txtFanSub, txtFan1, txtFan2, txtPower, txtPowerSub, txtGpuSub, txtKeyInfo, txtFoot, txtKeyFoot, txtDiag, txtErr, txtMachine;
-        RadioButton fanAuto, fanMax, fanManual, gpuBase, gpuBoost, gpuMax, keyCycle, keyShow, keyMax, keyOff;
+        RadioButton fanAuto, fanMax, fanManual, gpuBase, gpuBoost, gpuMax, keyCycle, keyShow, keyMax, keyOff, keyRun;
+        FrameworkElement hzRow, keyCmdRow; UniformGrid hzGrid; TextBox txtKeyCmd; readonly List<RadioButton> hzRadios = new List<RadioButton>(); readonly List<WF.ToolStripMenuItem> trayHz = new List<WF.ToolStripMenuItem>();
         Slider slFan1, slFan2, slPower, slHue, slLevel;
         // keyboard lighting
         FrameworkElement lightRow, lightDivider, kbdPanel, svBox; Border miniHost, kbdHost; TextBlock txtLightSub, txtKbdKind, txtKbdSel, txtLevel;
         RadioButton kOff, kStatic, kBreathe, kCycle, kWave, kWin; Button btnAllZones, btnKbdClose; TextBox txtHex; Rectangle svHue; Ellipse svMarker; Canvas svCanvas;
         KeyboardView kbdMini, kbdBig; bool kbdOpen; double curH, curS = 1, curV = 1; DispatcherTimer colorDebounce, levelDebounce, speedDebounce;
         FrameworkElement colourHead, infoBlock, speedRow, levelRow, kbdLeft; TextBlock txtKbdInfo, txtSpeed; Slider slSpeed; Button btnWinLighting; bool miniNeedsFrame;
-        ToggleButton tgGpuAuto, tgSuppress, tgHotkeys, tgAutostart, tgEcoBattery, tgSyncPower, tgEcoCool;
+        ToggleButton tgGpuAuto, tgSuppress, tgHotkeys, tgAutostart, tgEcoBattery, tgSyncPower, tgEcoCool, tgLowHzBattery, tgTrayTemp;
         FrameworkElement fanPanel, settingsPanel, mainPanel, demoBadge, errBanner, infoBanner, header; TextBlock txtInfo;
         Border mark; Ellipse dotHb; bool footerMessage;
         Button btnSettings, btnMin, btnClose, btnLearn, btnLog, btnDiag, btnExit;
@@ -196,7 +197,7 @@ namespace Ohman {
             Closing += delegate(object o, System.ComponentModel.CancelEventArgs ce) { if (!exiting) { ce.Cancel = true; HideToTray(); } };
             Application.Current.SessionEnding += delegate { ExitApp(); };        // logoff/shutdown: leave cleanly instead of hiding
             StateChanged += delegate { if (WindowState == WindowState.Minimized) { WindowState = WindowState.Normal; HideToTray(); } };
-            IsVisibleChanged += delegate { sensors.SetInterval(IsVisible ? 2000 : 15000); if (IsVisible) ReadHardwareAsync(); };
+            IsVisibleChanged += delegate { sensors.SetInterval(IsVisible ? 2000 : (E.S.TrayTemp ? 5000 : 15000)); if (IsVisible) ReadHardwareAsync(); };
             LocationChanged += delegate { if (IsVisible && WindowState == WindowState.Normal && Left > -30000) { E.S.WinX = (int)Left; E.S.WinY = (int)Top; } };
 
             uiTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
@@ -238,7 +239,8 @@ namespace Ohman {
             colourHead = F<FrameworkElement>("ColourHead"); infoBlock = F<FrameworkElement>("InfoBlock"); speedRow = F<FrameworkElement>("SpeedRow"); levelRow = F<FrameworkElement>("LevelRow"); kbdLeft = F<FrameworkElement>("KbdLeft");
             txtKbdInfo = F<TextBlock>("TxtKbdInfo"); txtSpeed = F<TextBlock>("TxtSpeed"); slSpeed = F<Slider>("SlSpeed"); btnWinLighting = F<Button>("BtnWinLighting");
             settingsPanel = F<FrameworkElement>("SettingsPanel"); txtMachine = F<TextBlock>("TxtMachine");
-            keyCycle = F<RadioButton>("KeyCycle"); keyShow = F<RadioButton>("KeyShow"); keyMax = F<RadioButton>("KeyMax"); keyOff = F<RadioButton>("KeyOff");
+            keyCycle = F<RadioButton>("KeyCycle"); keyShow = F<RadioButton>("KeyShow"); keyMax = F<RadioButton>("KeyMax"); keyOff = F<RadioButton>("KeyOff"); keyRun = F<RadioButton>("KeyRun");
+            keyCmdRow = F<FrameworkElement>("KeyCmdRow"); txtKeyCmd = F<TextBox>("TxtKeyCmd"); hzRow = F<FrameworkElement>("HzRow"); hzGrid = F<UniformGrid>("HzGrid"); tgLowHzBattery = F<ToggleButton>("TgLowHzBattery"); tgTrayTemp = F<ToggleButton>("TgTrayTemp");
             txtKeyInfo = F<TextBlock>("TxtKeyInfo"); btnLearn = F<Button>("BtnLearn"); tgSuppress = F<ToggleButton>("TgSuppress");
             tgHotkeys = F<ToggleButton>("TgHotkeys"); tgEcoBattery = F<ToggleButton>("TgEcoBattery"); tgEcoCool = F<ToggleButton>("TgEcoCool"); tgSyncPower = F<ToggleButton>("TgSyncPower"); tgAutostart = F<ToggleButton>("TgAutostart");
             btnDiag = F<Button>("BtnDiag"); btnLog = F<Button>("BtnLog"); btnExit = F<Button>("BtnExit"); txtDiag = F<TextBlock>("TxtDiag");
@@ -354,6 +356,15 @@ namespace Ohman {
             trayMax.Click += delegate { Bg(delegate { E.ToggleMaxFan(); }); };
             menu.Items.Add(trayMax);
             menu.Items.Add(new WF.ToolStripSeparator());
+            var hzMenu = new WF.ToolStripMenuItem("Refresh rate");
+            foreach (int hz in Display.Choices()) {
+                int h = hz; var it = new WF.ToolStripMenuItem(hz + " Hz") { Tag = hz };
+                it.Click += delegate { Bg(delegate { E.SetRefreshRate(h); }); };
+                trayHz.Add(it); hzMenu.DropDownItems.Add(it);
+            }
+            if (trayHz.Count >= 2) menu.Items.Add(hzMenu);
+            menu.Items.Add("Turn display off", null, delegate { Display.Off(); });
+            menu.Items.Add(new WF.ToolStripSeparator());
             menu.Items.Add("Exit", null, delegate { ExitApp(); });
             tray = new WF.NotifyIcon { Icon = icons[1], Text = Program.DisplayName, Visible = true, ContextMenuStrip = menu };
             tray.MouseClick += delegate(object o, WF.MouseEventArgs me) { if (me.Button == WF.MouseButtons.Left) TogglePanel(); };
@@ -402,9 +413,14 @@ namespace Ohman {
 
             RoutedEventHandler keyChanged = delegate {
                 if (syncing) return;
-                E.SetKey(keyShow.IsChecked == true ? KeyAction.Show : keyMax.IsChecked == true ? KeyAction.MaxFan : keyOff.IsChecked == true ? KeyAction.Off : KeyAction.Cycle);
+                E.SetKey(keyShow.IsChecked == true ? KeyAction.Show : keyMax.IsChecked == true ? KeyAction.MaxFan : keyOff.IsChecked == true ? KeyAction.Off : keyRun.IsChecked == true ? KeyAction.Run : KeyAction.Cycle);
+                keyCmdRow.Visibility = keyRun.IsChecked == true ? Visibility.Visible : Visibility.Collapsed; Refit();
             };
-            keyCycle.Checked += keyChanged; keyShow.Checked += keyChanged; keyMax.Checked += keyChanged; keyOff.Checked += keyChanged;
+            keyCycle.Checked += keyChanged; keyShow.Checked += keyChanged; keyMax.Checked += keyChanged; keyOff.Checked += keyChanged; keyRun.Checked += keyChanged;
+            txtKeyCmd.LostFocus += delegate { E.S.KeyCommand = txtKeyCmd.Text.Trim(); E.S.Save(); };
+            txtKeyCmd.TextChanged += delegate { F<FrameworkElement>("TxtKeyCmdHint").Visibility = txtKeyCmd.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed; };
+            txtKeyCmd.KeyDown += delegate(object o, KeyEventArgs ke) { if (ke.Key == Key.Enter) { E.S.KeyCommand = txtKeyCmd.Text.Trim(); E.S.Save(); ShowToast("OMEN key runs: " + (E.S.KeyCommand.Length > 0 ? E.S.KeyCommand : "(nothing)"), false); } };
+            BuildRefreshRates();
 
             learnTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
             learnTimer.Tick += delegate { learnTimer.Stop(); E.Learning = false; txtKeyInfo.Text = KeyInfoText(); };
@@ -415,12 +431,15 @@ namespace Ohman {
                 bool hk = tgHotkeys.IsChecked == true;
                 E.S.Hotkeys = hk;
                 E.S.EcoOnBattery = tgEcoBattery.IsChecked == true; E.S.SyncWinPower = tgSyncPower.IsChecked == true;
+                E.S.LowHzOnBattery = tgLowHzBattery.IsChecked == true; E.S.TrayTemp = tgTrayTemp.IsChecked == true;
                 E.S.Save();
+                if (!E.S.TrayTemp) { try { tray.Icon = icons[E.ModeIndex]; } catch { } }
+                sensors.SetInterval(IsVisible ? 2000 : (E.S.TrayTemp ? 5000 : 15000));
                 if (hk) RegisterHotkeys(); else UnregisterHotkeys();
                 if (E.S.SyncWinPower) E.SetWinPowerOverlay(E.ModeIndex);
                 Refresh();
             };
-            foreach (var t in new ToggleButton[] { tgHotkeys, tgEcoBattery, tgSyncPower }) { t.Checked += sw; t.Unchecked += sw; }
+            foreach (var t in new ToggleButton[] { tgHotkeys, tgEcoBattery, tgSyncPower, tgLowHzBattery, tgTrayTemp }) { t.Checked += sw; t.Unchecked += sw; }
             RoutedEventHandler suppress = delegate { if (syncing) return; bool on = tgSuppress.IsChecked == true; Bg(delegate { E.SetOghSuppression(on); }); };
             tgSuppress.Checked += suppress; tgSuppress.Unchecked += suppress;
             RoutedEventHandler ecoCool = delegate { if (syncing) return; bool on = tgEcoCool.IsChecked == true; Bg(delegate { E.SetEcoCool(on); }); };
@@ -621,6 +640,63 @@ namespace Ohman {
             if (!kbdOpen) SyncPickerFromSelection();
         }
 
+        // ---------- refresh rate, key command, tray temperature ----------
+        void BuildRefreshRates() {
+            int[] rates = Display.Choices();
+            if (rates.Length < 2) return;
+            hzRow.Visibility = Visibility.Visible; tgLowHzBattery.Visibility = Visibility.Visible;
+            foreach (int hz in rates) {
+                int h = hz; var r = new RadioButton { Style = (Style)root.FindResource("SegTight"), GroupName = "hz", Content = hz + " Hz", Tag = hz };
+                r.Checked += delegate { if (syncing) return; Bg(delegate { E.SetRefreshRate(h); }); };
+                hzRadios.Add(r); hzGrid.Children.Add(r);
+            }
+        }
+        void RunKeyCommand() {
+            string cmd = E.S.KeyCommand.Trim();
+            if (cmd.Length == 0) { ShowToast("OMEN key: no command set (Settings)", true); return; }
+            try {
+                string file = cmd, args = "";
+                if (cmd.StartsWith("\"")) { int q = cmd.IndexOf('"', 1); if (q > 0) { file = cmd.Substring(1, q - 1); args = cmd.Substring(q + 1).Trim(); } }
+                else { int sp = cmd.IndexOf(' '); if (sp > 0) { file = cmd.Substring(0, sp); args = cmd.Substring(sp + 1); } }
+                Process.Start(new ProcessStartInfo(file, args) { UseShellExecute = true });
+                Flash("OMEN key", cmd, E.ModeIndex);
+            } catch (Exception ex) { ShowToast("OMEN key command failed: " + ex.Message, true); }
+        }
+        [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr h);
+        int trayTempShown = int.MinValue; SD.Icon trayTempIcon;
+        void UpdateTrayTemp(double cpu) {
+            if (tray == null) return;
+            if (!E.S.TrayTemp || double.IsNaN(cpu)) { if (trayTempShown != int.MinValue) { trayTempShown = int.MinValue; try { tray.Icon = icons[E.ModeIndex]; } catch { } } return; }
+            int t = (int)Math.Round(cpu); int key = t * 4 + E.ModeIndex;
+            if (key == trayTempShown) return;
+            trayTempShown = key;
+            try {
+                var old = trayTempIcon;
+                trayTempIcon = TempIcon(t, Ui.ModeColor(E.ModeIndex));
+                tray.Icon = trayTempIcon;
+                if (old != null) { IntPtr h = old.Handle; old.Dispose(); DestroyIcon(h); }
+            } catch (Exception ex) { Log.Write("tray temp icon: " + ex.Message); }
+        }
+        /// <summary>The CPU temperature as the tray icon: the number in the mode colour with a dark edge so it reads on any taskbar.</summary>
+        static SD.Icon TempIcon(int temp, Color c) {
+            using (var bmp = new SD.Bitmap(32, 32, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
+            using (var g = SD.Graphics.FromImage(bmp)) {
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias; g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                g.Clear(SD.Color.Transparent);
+                string text = temp.ToString(CultureInfo.InvariantCulture);
+                float size = text.Length >= 3 ? 15f : 21f;
+                using (var path = new System.Drawing.Drawing2D.GraphicsPath())
+                using (var family = new SD.FontFamily("Segoe UI")) {
+                    path.AddString(text, family, (int)SD.FontStyle.Bold, size * 96f / 72f, new SD.PointF(0, 0), SD.StringFormat.GenericTypographic);
+                    var b = path.GetBounds();
+                    using (var m = new System.Drawing.Drawing2D.Matrix()) { m.Translate(16 - b.X - b.Width / 2, 16 - b.Y - b.Height / 2); path.Transform(m); }
+                    using (var pen = new SD.Pen(SD.Color.FromArgb(200, 10, 12, 16), 3f) { LineJoin = System.Drawing.Drawing2D.LineJoin.Round }) g.DrawPath(pen, path);
+                    using (var fill = new SD.SolidBrush(SD.Color.FromArgb(c.R, c.G, c.B))) g.FillPath(fill, path);
+                }
+                return SD.Icon.FromHandle(bmp.GetHicon());
+            }
+        }
+
         // ---------- helpers ----------
         // header icon:        // ---------- helpers ----------
         // header icon: three "tune" sliders for Settings, a chevron for Back
@@ -664,7 +740,7 @@ namespace Ohman {
         }
         static void Bg(Action a) { ThreadPool.QueueUserWorkItem(delegate { try { a(); } catch (Exception ex) { Log.Write("bg: " + ex); } }); }
         static string FanText(int level) { return (Math.Max(18, level) * 100).ToString(CultureInfo.InvariantCulture) + " rpm"; }
-        static string KeyActionText(KeyAction a) { return a == KeyAction.Cycle ? "cycles mode" : a == KeyAction.Show ? "opens panel" : a == KeyAction.MaxFan ? "toggles max fan" : "off"; }
+        static string KeyActionText(KeyAction a) { return a == KeyAction.Cycle ? "cycles mode" : a == KeyAction.Show ? "opens panel" : a == KeyAction.MaxFan ? "toggles max fan" : a == KeyAction.Run ? "runs a command" : "off"; }
         string KeyInfoText() {
             string s = "Event " + E.KeyId + " / " + E.KeyData;
             if (E.LastEventTime != DateTime.MinValue) s += " · last seen " + E.LastEventId + "/" + E.LastEventData + " at " + E.LastEventTime.ToString("HH:mm:ss");
@@ -698,7 +774,10 @@ namespace Ohman {
                 tgGpuAuto.IsChecked = S.GpuAuto;
                 txtGpuSub.Text = S.GpuAuto ? "Follows the mode" : g == GpuLevel.Max ? "Custom TGP + PPAB" : g == GpuLevel.Boost ? "PPAB" : "Base TGP";
                 RefreshLighting();
-                keyCycle.IsChecked = S.Key == KeyAction.Cycle; keyShow.IsChecked = S.Key == KeyAction.Show; keyMax.IsChecked = S.Key == KeyAction.MaxFan; keyOff.IsChecked = S.Key == KeyAction.Off;
+                keyCycle.IsChecked = S.Key == KeyAction.Cycle; keyShow.IsChecked = S.Key == KeyAction.Show; keyMax.IsChecked = S.Key == KeyAction.MaxFan; keyOff.IsChecked = S.Key == KeyAction.Off; keyRun.IsChecked = S.Key == KeyAction.Run;
+                keyCmdRow.Visibility = S.Key == KeyAction.Run ? Visibility.Visible : Visibility.Collapsed; if (!txtKeyCmd.IsKeyboardFocused) txtKeyCmd.Text = S.KeyCommand;
+                tgLowHzBattery.IsChecked = S.LowHzOnBattery; tgTrayTemp.IsChecked = S.TrayTemp;
+                int hzNow = Display.CurrentHz(); foreach (var r in hzRadios) r.IsChecked = (int)r.Tag == hzNow; foreach (var m in trayHz) m.Checked = (int)m.Tag == hzNow;
                 if (!E.Learning) txtKeyInfo.Text = KeyInfoText();
                 tgSuppress.IsChecked = S.SuppressOgh; tgHotkeys.IsChecked = S.Hotkeys; tgEcoBattery.IsChecked = S.EcoOnBattery; tgSyncPower.IsChecked = S.SyncWinPower; tgAutostart.IsChecked = autostart; tgEcoCool.IsChecked = S.EcoCool;
                 txtKeyFoot.Text = "Fn+F12 " + KeyActionText(S.Key) + (S.Hotkeys && S.Key != KeyAction.Cycle ? " · Shift+F11 cycles" : "");
@@ -736,6 +815,7 @@ namespace Ohman {
         bool sensorsSeen;
         void OnSensors(SensorSnapshot s) {
             E.CpuTemp = s.CpuTemp; E.GpuTemp = s.GpuTemp;
+            UpdateTrayTemp(s.CpuTemp);
             if (!double.IsNaN(s.CpuTemp)) sensorsSeen = true;
             tiles[0].Set(s.CpuTemp, TempColor(s.CpuTemp));
             tiles[1].Set(s.GpuTemp, TempColor(s.GpuTemp));
@@ -767,6 +847,7 @@ namespace Ohman {
                 case KeyAction.Cycle: CycleWithFlash(); break;
                 case KeyAction.Show: TogglePanel(); break;
                 case KeyAction.MaxFan: ToggleMaxWithFlash(); break;
+                case KeyAction.Run: RunKeyCommand(); break;
             }
         }
         void CycleWithFlash() {

@@ -12,7 +12,7 @@ using System.Threading;
 namespace Ohman {
 
     public enum FanMode { Auto = 0, Max = 1, Manual = 2 }
-    public enum KeyAction { Cycle = 0, Show = 1, MaxFan = 2, Off = 3 }
+    public enum KeyAction { Cycle = 0, Show = 1, MaxFan = 2, Off = 3, Run = 4 }
     public enum GpuLevel { Base = 0, Boost = 1, Max = 2 }   // {cTGP,PPAB} = {0,0} / {0,1} / {1,1} — the three payloads OGH sends
 
     /// <summary>Fan, power-gain and GPU choices are remembered per performance mode (like tabs): switching to a mode applies its own set.</summary>
@@ -66,6 +66,10 @@ namespace Ohman {
         public int LightLevel = 100;                // brightness 0..100, applied by scaling the colours (firmware level byte is unverified)
         public int LightEffect = 0;                 // 0 static, 1 breathe, 2 cycle, 3 wave (software effects, ~8 frames/s)
         public int LightSpeed = 3;                  // 1..5
+        public int RefreshHz = 0;                   // chosen panel refresh rate (0 = leave Windows alone)
+        public bool LowHzOnBattery = false;         // lowest refresh rate on battery, back to RefreshHz (or the highest) on AC
+        public bool TrayTemp = true;                // CPU temperature drawn on the tray icon
+        public string KeyCommand = "";              // KeyAction.Run: command line the OMEN key starts
         public bool NoPersist;                      // set when --set overrides are in effect: never write them back to the file
         public int SavedModeOverride = -1;          // while battery forces Eco, the file keeps the user's own mode
 
@@ -98,7 +102,7 @@ namespace Ohman {
                     switch (k) {
                         case "ModeIndex": if (TryInt(v, out n)) s.ModeIndex = Math.Max(0, Math.Min(2, n)); break;
                         case "EcoCool": if (bool.TryParse(v, out b)) s.EcoCool = b; break;
-                        case "Key": if (TryInt(v, out n)) s.Key = (KeyAction)Math.Max(0, Math.Min(3, n)); break;
+                        case "Key": if (TryInt(v, out n)) s.Key = (KeyAction)Math.Max(0, Math.Min(4, n)); break;
                         case "KeyId": if (TryInt(v, out n)) s.KeyId = (uint)n; break;
                         case "KeyData": if (TryInt(v, out n)) s.KeyData = (uint)n; break;
                         case "SuppressOgh": if (bool.TryParse(v, out b)) s.SuppressOgh = b; break;
@@ -115,6 +119,10 @@ namespace Ohman {
                         case "LightLevel": if (TryInt(v, out n)) s.LightLevel = Math.Max(0, Math.Min(100, n)); break;
                         case "LightEffect": if (TryInt(v, out n)) s.LightEffect = Math.Max(0, Math.Min(3, n)); break;
                         case "LightSpeed": if (TryInt(v, out n)) s.LightSpeed = Math.Max(1, Math.Min(5, n)); break;
+                        case "RefreshHz": if (TryInt(v, out n)) s.RefreshHz = Math.Max(0, Math.Min(500, n)); break;
+                        case "LowHzOnBattery": if (bool.TryParse(v, out b)) s.LowHzOnBattery = b; break;
+                        case "TrayTemp": if (bool.TryParse(v, out b)) s.TrayTemp = b; break;
+                        case "KeyCommand": s.KeyCommand = v; break;
                     }
                 }
             } catch (Exception ex) { Log.Write("settings apply " + k + ": " + ex.Message); }
@@ -138,6 +146,7 @@ namespace Ohman {
                 sb.AppendLine("EcoOnBattery=" + EcoOnBattery); sb.AppendLine("SyncWinPower=" + SyncWinPower);
                 sb.AppendLine("HeartbeatSec=" + HeartbeatSec);
                 sb.AppendLine("Light=" + Light); sb.AppendLine("LightColors=" + LightColors); sb.AppendLine("LightLevel=" + LightLevel); sb.AppendLine("LightEffect=" + LightEffect); sb.AppendLine("LightSpeed=" + LightSpeed);
+                sb.AppendLine("RefreshHz=" + RefreshHz); sb.AppendLine("LowHzOnBattery=" + LowHzOnBattery); sb.AppendLine("TrayTemp=" + TrayTemp); sb.AppendLine("KeyCommand=" + KeyCommand);
                 sb.AppendLine("WinX=" + WinX); sb.AppendLine("WinY=" + WinY); sb.AppendLine("StartHidden=" + StartHidden);
                 sb.AppendLine("# Name=   (optional: a different display name for the window and tray; no rebuild needed)");
                 if (!string.IsNullOrEmpty(Name)) sb.AppendLine("Name=" + Name);
@@ -227,6 +236,7 @@ namespace Ohman {
             if (S.SuppressOgh && !Hw.IsDemo && Supported) { KillOgh(); new Thread(delegate() { SetOghTasks(true); }) { IsBackground = true }.Start(); }
             if (S.EcoOnBattery && OnBattery && ModeIndex != 0) { ecoForcedByBattery = true; modeBeforeBattery = ModeIndex; S.SavedModeOverride = modeBeforeBattery; S.ModeIndex = 0; Log.Write("on battery at start: Eco (user mode " + ModeNames[modeBeforeBattery] + " kept)"); }
             InitLight();
+            ApplyRefreshRate(OnBattery);
             ApplyAll(false);
             StartKeyWatcher();
             heartbeat = new System.Threading.Timer(delegate { Heartbeat(); }, null, S.HeartbeatSec * 1000, S.HeartbeatSec * 1000);
@@ -453,6 +463,7 @@ namespace Ohman {
 
         public void OnPowerSource(bool onBattery) {
             bool changed = OnBattery != onBattery; OnBattery = onBattery;
+            ApplyRefreshRate(onBattery);
             if (S.EcoOnBattery) {
                 // forced Eco is temporary: the file keeps the user's own mode (SavedModeOverride) and it comes back when plugged in
                 if (onBattery && !ecoForcedByBattery && ModeIndex != 0) { ecoForcedByBattery = true; modeBeforeBattery = ModeIndex; S.SavedModeOverride = modeBeforeBattery; Say("On battery → Eco"); SetModeCore(0, false); return; }
@@ -528,6 +539,21 @@ namespace Ohman {
             if (S.SuppressOgh && !Hw.IsDemo && Supported) KillOgh();
             if (S.Key == KeyAction.Off) return;
             var h = KeyPressed; if (h != null) { try { h(S.Key); } catch { } }
+        }
+
+        // ---------- display refresh rate ----------
+        void ApplyRefreshRate(bool onBattery) {
+            try {
+                int[] rates = Display.Rates(); if (rates.Length < 2) return;
+                int want = S.LowHzOnBattery && onBattery ? Display.BatteryHz() : (S.RefreshHz > 0 ? S.RefreshHz : 0);
+                if (want > 0 && Display.CurrentHz() != want) Display.SetHz(want);
+            } catch (Exception ex) { Log.Write("refresh rate: " + ex.Message); }
+        }
+        public void SetRefreshRate(int hz) {
+            Log.Write("SetRefreshRate " + hz + Environment.NewLine + Environment.StackTrace);
+            S.RefreshHz = hz; S.Save();
+            if (Display.SetHz(hz)) Say(hz + " Hz"); else Fire(Toast, "Could not switch to " + hz + " Hz", true);
+            Changed();
         }
 
         // ---------- keyboard lighting ----------

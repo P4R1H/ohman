@@ -709,12 +709,17 @@
           </StackPanel>
           <Border Grid.Column="1" Style="{StaticResource SegBox}" VerticalAlignment="Center">
             <UniformGrid Rows="1">
-              <RadioButton x:Name="KeyCycle" Style="{StaticResource Seg}" GroupName="key" Content="Cycle"/>
-              <RadioButton x:Name="KeyShow" Style="{StaticResource Seg}" GroupName="key" Content="Panel"/>
-              <RadioButton x:Name="KeyMax" Style="{StaticResource Seg}" GroupName="key" Content="Max fan"/>
-              <RadioButton x:Name="KeyOff" Style="{StaticResource Seg}" GroupName="key" Content="Off"/>
+              <RadioButton x:Name="KeyCycle" Style="{StaticResource SegTight}" GroupName="key" Content="Cycle"/>
+              <RadioButton x:Name="KeyShow" Style="{StaticResource SegTight}" GroupName="key" Content="Panel"/>
+              <RadioButton x:Name="KeyMax" Style="{StaticResource SegTight}" GroupName="key" Content="Max fan"/>
+              <RadioButton x:Name="KeyRun" Style="{StaticResource SegTight}" GroupName="key" Content="Run" ToolTip="Start a command of your choice"/>
+              <RadioButton x:Name="KeyOff" Style="{StaticResource SegTight}" GroupName="key" Content="Off"/>
             </UniformGrid>
           </Border>
+        </Grid>
+        <Grid x:Name="KeyCmdRow" Visibility="Collapsed" Margin="0,8,0,0">
+          <TextBox x:Name="TxtKeyCmd" Style="{StaticResource Hex}" FontFamily="{StaticResource UiFont}" TextAlignment="Left" MaxLength="500" ToolTip="Command line the OMEN key starts, e.g. a game launcher or a script"/>
+          <TextBlock x:Name="TxtKeyCmdHint" Text="Command line, e.g. steam://open/bigpicture or C:\Games\launcher.exe" Style="{StaticResource SubSm}" Margin="10,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
         </Grid>
 
         <Rectangle Style="{StaticResource Divider}"/>
@@ -737,6 +742,25 @@
             <TextBlock Text="Restores your mode when plugged in" Style="{StaticResource SubSm}"/>
           </StackPanel>
         </ToggleButton>
+        <Grid x:Name="HzRow" Visibility="Collapsed" Margin="0,4,0,4" MinHeight="36">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <StackPanel VerticalAlignment="Center">
+            <TextBlock Text="Refresh rate" Style="{StaticResource Lbl}"/>
+            <TextBlock Text="Built-in display" Style="{StaticResource SubSm}" TextWrapping="NoWrap"/>
+          </StackPanel>
+          <Border Grid.Column="1" Style="{StaticResource SegBox}" VerticalAlignment="Center">
+            <UniformGrid x:Name="HzGrid" Rows="1"/>
+          </Border>
+        </Grid>
+        <ToggleButton x:Name="TgLowHzBattery" Style="{StaticResource Switch}" Visibility="Collapsed">
+          <StackPanel>
+            <TextBlock Text="Lowest refresh rate on battery" Style="{StaticResource Lbl}"/>
+            <TextBlock Text="Back to your choice when plugged in" Style="{StaticResource SubSm}"/>
+          </StackPanel>
+        </ToggleButton>
         <ToggleButton x:Name="TgEcoCool" Style="{StaticResource Switch}">
           <StackPanel>
             <TextBlock Text="Quieter fan policy for Eco" Style="{StaticResource Lbl}"/>
@@ -747,6 +771,12 @@
           <StackPanel>
             <TextBlock Text="Sync Windows power mode" Style="{StaticResource Lbl}"/>
             <TextBlock Text="Efficiency · Balanced · Best performance" Style="{StaticResource SubSm}"/>
+          </StackPanel>
+        </ToggleButton>
+        <ToggleButton x:Name="TgTrayTemp" Style="{StaticResource Switch}">
+          <StackPanel>
+            <TextBlock Text="Temperature in the tray" Style="{StaticResource Lbl}"/>
+            <TextBlock Text="CPU temperature drawn on the tray icon" Style="{StaticResource SubSm}"/>
           </StackPanel>
         </ToggleButton>
         <ToggleButton x:Name="TgAutostart" Style="{StaticResource Switch}">
