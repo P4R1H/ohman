@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Ohman</title>
+<meta name="description" content="Ohman replaces OMEN Gaming Hub's performance controls on Windows: modes, fans, power gain, GPU power. One executable, no services, no drivers, no account, no ads.">
+<link rel="icon" href="logo.webp" type="image/webp">
+<style>
+/* ---------- palette and tokens: dark only, one accent ---------- */
+:root{
+  --bg:#0B0E14;        /* canvas */
+  --surface:#10141B;   /* chips, code, quiet fills */
+  --border:#1E2430;    /* the single 1px hairline */
+  --border-hi:#2C3444; /* hairline on hover */
+  --text:#FFFFFF;      /* primary */
+  --muted:#A4ADBF;     /* secondary, 8.5:1 on --bg */
+  --dim:#C7CEDB;       /* inline code */
+  --accent:#5B8DEF;
+  --accent-hi:#7BA4F3;
+  --r:10px;            /* surface radius */
+  --t:120ms ease;
+  --mono:ui-monospace,"Cascadia Mono","Segoe UI Mono",Consolas,monospace;
+}
+
+/* ---------- base ---------- */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+  font-size:15px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:680px;margin:0 auto;padding:0 24px}
+a{
+  color:var(--accent);
+  text-decoration:underline;
+  text-decoration-color:rgba(91,141,239,.34);
+  text-underline-offset:3px;
+  transition:color var(--t),text-decoration-color var(--t);
+}
+a:hover{color:var(--accent-hi);text-decoration-color:currentColor}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+img{display:block}
+
+/* ---------- 1. header row ---------- */
+.bar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-top:24px}
+.brand{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:600;letter-spacing:-.01em}
+.brand img{width:28px;height:28px}
+.bar .out{padding:6px 0 6px 14px;color:var(--muted);font-size:14px;text-decoration:none}
+.bar .out:hover{color:var(--text)}
+
+/* ---------- 2. hero ---------- */
+.hero{padding-top:72px}
+h1{
+  margin:0 0 20px;
+  font-size:clamp(29px,7.4vw,40px);
+  font-weight:600;
+  line-height:1.14;
+  letter-spacing:-.028em;
+}
+.lede{margin:0;max-width:54ch;color:var(--muted);font-size:16px}
+
+/* ---------- 3. buttons and meta ---------- */
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  height:44px;padding:0 20px;
+  border:1px solid transparent;border-radius:var(--r);
+  font:inherit;font-size:15px;font-weight:600;
+  text-decoration:none;white-space:nowrap;
+  transition:background-color var(--t),border-color var(--t),color var(--t);
+}
+.btn-primary{background:var(--accent);color:#0B0E14}      /* dark label keeps 6.8:1 on the accent */
+.btn-primary:hover{background:var(--accent-hi)}
+.btn-secondary{border-color:var(--border);color:var(--text)}
+.btn-secondary:hover{border-color:var(--border-hi);background:var(--surface)}
+.btn svg{width:14px;height:14px;flex:none}
+.count{color:var(--muted);font-weight:500;font-variant-numeric:tabular-nums}
+.meta{margin:16px 0 0;color:var(--muted);font-size:13px}
+
+/* ---------- 4. screenshot ---------- */
+.shot.wide{max-width:680px;margin-top:34px}
+.shot{
+  width:100%;max-width:440px;height:auto;
+  margin:60px auto 0;
+  border:1px solid var(--border);border-radius:var(--r);
+  box-shadow:0 18px 44px rgba(0,0,0,.55);
+}
+
+/* ---------- sections ---------- */
+section{margin-top:68px}
+h2{margin:0 0 22px;font-size:19px;font-weight:600;letter-spacing:-.015em}
+h3{margin:34px 0 0;font-size:15px;font-weight:600}
+p{margin:0 0 14px}
+p:last-child{margin-bottom:0}
+
+/* ---------- 5. what it does: two columns ---------- */
+.dl{display:grid;grid-template-columns:118px 1fr;column-gap:28px;margin:0}
+.dl dt{padding:11px 0;font-weight:600}
+.dl dd{margin:0;padding:11px 0;color:var(--muted)}
+.dl dt:not(:first-of-type),.dl dd:not(:first-of-type){border-top:1px solid var(--border)}
+
+/* ---------- 6. command chips: real opcodes ---------- */
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin:22px 0 0;padding:0;list-style:none}
+.chips li{
+  display:flex;align-items:baseline;gap:6px;
+  padding:5px 9px;
+  background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  font-family:var(--mono);font-size:12px;color:var(--muted);
+}
+.chips b{color:var(--accent);font-weight:400}
+
+/* ---------- 7. code ---------- */
+pre{
+  margin:14px 0;padding:12px 14px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  overflow-x:auto;
+}
+pre code{font-size:13px;color:var(--dim)}
+code{font-family:var(--mono)}
+p code,li code{
+  padding:1px 5px;
+  background:var(--surface);border:1px solid var(--border);border-radius:6px;
+  font-size:12.5px;color:var(--dim);
+}
+/* long paths wrap mid-word, so they get no box to break across lines */
+code.path{padding:0;background:none;border:0;overflow-wrap:anywhere}
+ol{margin:18px 0 0;padding-left:22px;color:var(--muted)}
+ol li{margin-bottom:16px}
+ol li:last-child{margin-bottom:0}
+
+/* ---------- 8. footer ---------- */
+footer{
+  margin-top:60px;padding:26px 0 60px;
+  border-top:1px solid var(--border);
+  color:var(--muted);font-size:13px;
+}
+footer p{margin:0 0 8px}
+
+/* ---------- responsive: 360px up, no horizontal scroll ---------- */
+@media (max-width:560px){
+  .dl{grid-template-columns:1fr}
+  .dl dt{padding:14px 0 0;border-top:1px solid var(--border)}
+  .dl dt:first-of-type{border-top:0;padding-top:0}
+  .dl dd{padding:2px 0 0;border-top:0}
+}
+@media (max-width:420px){
+  .wrap{padding:0 18px}
+  .cta{flex-direction:column;align-items:stretch}
+  .btn{width:100%}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <!-- 1. header -->
+  <header class="bar">
+    <span class="brand"><img src="logo.webp" width="28" height="28" alt="">Ohman</span>
+    <a class="out" href="https://github.com/P4R1H/Ohman">GitHub</a>
+  </header>
+
+  <main>
+
+    <!-- 2. hero -->
+    <div class="hero">
+      <h1>OMEN Gaming Hub's controls. Without OMEN Gaming Hub.</h1>
+      <p class="lede">One executable, no services, no drivers, no account, no ads. Same firmware interface as OMEN Gaming Hub, same bytes, nothing else.</p>
+
+      <!-- 3. actions -->
+      <div class="cta">
+        <a class="btn btn-primary" href="https://github.com/P4R1H/Ohman/releases/latest/download/Ohman.exe">Download for Windows</a>
+        <a class="btn btn-secondary" href="https://github.com/P4R1H/Ohman">
+          <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 .8l2.2 4.5 5 .7-3.6 3.5.9 5L8 12.2 3.5 14.5l.9-5L.8 6l5-.7z"/></svg>
+          Star on GitHub <span class="count" id="stars" hidden></span>
+        </a>
+      </div>
+      <p class="meta"><span id="ver">v1.0</span> &middot; <span id="size">230 KB</span> &middot; Windows 11 &middot; nothing to install</p>
+    </div>
+
+    <!-- 4. the app -->
+    <img class="shot" src="screenshot.png" width="880" height="952"
+         alt="The Ohman panel: Eco, Balanced and Performance buttons, live CPU and GPU temperatures and fan speeds, and rows for fans, power gain, GPU power and keyboard lighting.">
+
+    <!-- 5. what it does -->
+    <section aria-labelledby="what">
+      <h2 id="what">What it does</h2>
+      <dl class="dl">
+        <dt>Modes</dt>
+        <dd>Eco &middot; Balanced &middot; Performance, one tap or Fn+F12. Eco also sets the Windows power mode and GPU base power, as OGH does.</dd>
+        <dt>Fans</dt>
+        <dd>Auto (OGH's own curve for this model, 1800 to 5700 rpm), Max, or Manual per fan.</dd>
+        <dt>Power gain</dt>
+        <dd>OGH's "Smart Performance Gain": +0 to +15 W on the CPU+GPU budget that NVIDIA Dynamic Boost draws from.</dd>
+        <dt>GPU power</dt>
+        <dd>Base &middot; Boost &middot; Max, or follow the mode.</dd>
+        <dt>Per mode</dt>
+        <dd>Fan, power gain and GPU choices are remembered per mode.</dd>
+        <dt>Live</dt>
+        <dd>CPU and GPU temperature, fan speeds, load, clocks, GPU watts, battery.</dd>
+        <dt>OMEN key</dt>
+        <dd>Fn+F12 opens the panel (or cycles modes, or toggles max fan). Shift+F11 cycles modes. OGH's key handler is stopped, reversibly.</dd>
+        <dt>Safety</dt>
+        <dd>A thermal guard forces max fan on a hot CPU, a hot chassis or stalled fans. Fans are never set below 1800 rpm.</dd>
+        <dt>Lighting</dt>
+        <dd>A live keyboard in the panel; click it and an editor slides open beside it: zones, a real colour picker, presets, brightness, Breathe / Cycle / Wave, or hand the keyboard to Windows Dynamic Lighting.</dd>
+        <dt>Extras</dt>
+        <dd>Tray, hotkeys, start with Windows without a UAC prompt, Eco on battery, on-screen flash on key presses.</dd>
+      </dl>
+      <img class="shot wide" src="keyboard.png" width="1960" height="1180" alt="The keyboard editor open beside the panel: zones on a drawn keyboard, effects, colour picker, presets and level.">
+    </section>
+
+    <!-- 6. how it works -->
+    <section aria-labelledby="how">
+      <h2 id="how">How it works</h2>
+      <p>HP exposes a BIOS mailbox as the WMI class <code>hpqBIntM</code>. Ohman uses the commands OGH uses: performance mode, max fan, fan levels, CPU+GPU power budget, GPU power, plus read-only queries. The OMEN key arrives as a WMI event (<code>hpqBEvnt</code>). The bytes and the measured firmware behaviour are in <a href="https://github.com/P4R1H/Ohman/blob/main/docs/research.md">docs/research.md</a>.</p>
+      <ul class="chips">
+        <li><b>0x1A</b> mode</li>
+        <li><b>0x27</b> max fan</li>
+        <li><b>0x2E</b> fan levels</li>
+        <li><b>0x29</b> power budget</li>
+        <li><b>0x22</b> GPU power</li>
+        <li><b>0x20009</b> lighting</li>
+      </ul>
+    </section>
+
+    <!-- 7. your laptop -->
+    <section aria-labelledby="laptop">
+      <h2 id="laptop">Your laptop</h2>
+      <p>Verified on the HP OMEN Transcend 14 (2024, board 8C58). Every other OMEN and Victus laptop runs in generic mode: the mode bytes the Linux driver documents for its firmware generation, fan control with the same floor and thermal guard, and power or GPU controls only where the firmware answers. A banner asks you to report back so the board can be marked verified.</p>
+      <h3>Adding your laptop</h3>
+      <ol>
+        <li>Run the support-info tool and press the OMEN key when it asks.
+          <pre><code>tools\support-info.cmd</code></pre>
+          It writes <code>tools\support-info.txt</code>: model, board id, BIOS, system-design data, fan table, key event. No personal data.</li>
+        <li>Open a <a href="https://github.com/P4R1H/Ohman/issues/new?template=new-laptop-support.md">New laptop support</a> issue with that file, what OGH shows on your model, and ideally OGH's background log (<code class="path">%LOCALAPPDATA%\Packages\AD2F1837.OMENCommandCenter_v10z8vjag6ke6\LocalCache\Local\HPOMEN\</code>) from a session where you clicked every mode.</li>
+        <li>A platform is one entry in <a href="https://github.com/P4R1H/Ohman/blob/main/src/Platform.cs">src/Platform.cs</a>; nothing else is model-specific.</li>
+      </ol>
+    </section>
+
+  </main>
+
+  <!-- 8. footer -->
+  <footer>
+    <p>Ohman interacts with the BIOS through the same commands OGH uses. Use at your own risk.</p>
+    <p>OMEN is a trademark of HP Inc. This project is not affiliated with HP.</p>
+    <p><a href="https://github.com/P4R1H/Ohman">Source on GitHub</a></p>
+  </footer>
+
+</div>
+
+<script>
+/* Fill in the real version, asset size and star count. Static text stays if anything fails. */
+(function () {
+  if (!window.fetch) return;
+  var api = 'https://api.github.com/repos/P4R1H/Ohman';
+  var get = function (url) {
+    return fetch(url, { headers: { Accept: 'application/vnd.github+json' } })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); });
+  };
+  var set = function (id, text) {
+    var el = document.getElementById(id);
+    if (el && text) { el.textContent = text; }
+  };
+  get(api + '/releases/latest').then(function (d) {
+    var tag = (d.tag_name || '').trim();
+    if (tag) set('ver', tag.charAt(0) === 'v' ? tag : 'v' + tag);
+    var exe = (d.assets || []).filter(function (a) { return /\.exe$/i.test(a.name || ''); })[0];
+    if (exe && exe.size) set('size', Math.round(exe.size / 1024) + ' KB');
+  })['catch'](function () {});
+  get(api).then(function (d) {
+    var n = d.stargazers_count;
+    if (typeof n === 'number' && n > 0) {
+      var el = document.getElementById('stars');
+      el.textContent = n.toLocaleString('en-US');
+      el.hidden = false;
+    }
+  })['catch'](function () {});
+})();
+</script>
+
+</body>
+</html>

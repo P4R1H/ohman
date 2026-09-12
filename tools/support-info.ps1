@@ -47,6 +47,17 @@ if ($elevated) {
         L ("  0x23 thermal sensor: " + (Q 0x23 @(1,0,0,0) 4))
         L ("  0x21 gpu power:      " + (Q 0x21 @(0,0,0,0) 4))
         L ("  0x26 max fan:        " + (Q 0x26 @(0,0,0,0) 4))
+        L ("  0x2B keyboard type:  " + (Q 0x2B @() 4))
+        function K($type, $data, $outSize) {
+            $in = ([wmiclass]"root\wmi:hpqBDataIn").CreateInstance()
+            $in.Sign = [byte[]](0x53,0x45,0x43,0x55); $in.Command = 0x20009; $in.CommandType = $type; $in.Size = $data.Length; $in.hpqBData = [byte[]]$data
+            $p = $intf.GetMethodParameters("hpqBIOSInt$outSize"); $p.InData = $in
+            $r = $intf.InvokeMethod("hpqBIOSInt$outSize", $p, $null); $od = $r.OutData
+            $bytes = @(); if ($od -and $od.Data) { $bytes = @($od.Data) }
+            "rc=" + $(if ($od) { $od.rwReturnCode } else { "?" }) + " data=" + (($bytes | Select-Object -First 40 | ForEach-Object { $_.ToString('X2') }) -join ' ')
+        }
+        L ("  0x20009/02 colours:  " + (K 0x02 @(0) 128))
+        L ("  0x20009/04 backlight:" + (K 0x04 @(0) 128))
     } catch { L ("  BIOS query failed: " + $_.Exception.Message) }
 }
 

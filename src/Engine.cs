@@ -61,15 +61,20 @@ namespace Ohman {
         public int WinX = -1, WinY = -1;
         public bool StartHidden = false;
         public string Name = "";                    // display name shown in the window/tray (empty = "Ohman")
+        public int Light = -1;                      // keyboard: 0 off, 1 Ohman's colours, 2 Windows Dynamic Lighting; -1 = not chosen yet
+        public string LightColors = "";             // zone colours RRGGBB,RRGGBB,... (seeded from the firmware on first run)
+        public int LightLevel = 100;                // brightness 0..100, applied by scaling the colours (firmware level byte is unverified)
+        public int LightEffect = 0;                 // 0 static, 1 breathe, 2 cycle, 3 wave (software effects, ~8 frames/s)
         public bool NoPersist;                      // set when --set overrides are in effect: never write them back to the file
         public int SavedModeOverride = -1;          // while battery forces Eco, the file keeps the user's own mode
 
         static readonly string File_ = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Program.FileStem + ".state");
 
+        public bool FirstRun;                       // no state file yet: first launch on this machine
         public static Settings Load() {
             var s = new Settings();
             try {
-                if (!File.Exists(File_)) return s;
+                if (!File.Exists(File_)) { s.FirstRun = true; return s; }
                 foreach (string raw in File.ReadAllLines(File_)) {
                     string line = raw.Trim(); int eq = line.IndexOf('=');
                     if (line.Length == 0 || line[0] == '#' || eq < 1) continue;
@@ -104,6 +109,10 @@ namespace Ohman {
                         case "WinY": if (TryInt(v, out n)) s.WinY = n; break;
                         case "StartHidden": if (bool.TryParse(v, out b)) s.StartHidden = b; break;
                         case "Name": s.Name = v.Length > 24 ? v.Substring(0, 24) : v; break;
+                        case "Light": if (TryInt(v, out n)) s.Light = Math.Max(-1, Math.Min(2, n)); break;
+                        case "LightColors": s.LightColors = v; break;
+                        case "LightLevel": if (TryInt(v, out n)) s.LightLevel = Math.Max(0, Math.Min(100, n)); break;
+                        case "LightEffect": if (TryInt(v, out n)) s.LightEffect = Math.Max(0, Math.Min(3, n)); break;
                     }
                 }
             } catch (Exception ex) { Log.Write("settings apply " + k + ": " + ex.Message); }
@@ -126,6 +135,7 @@ namespace Ohman {
                 sb.AppendLine("SuppressOgh=" + SuppressOgh); sb.AppendLine("Hotkeys=" + Hotkeys);
                 sb.AppendLine("EcoOnBattery=" + EcoOnBattery); sb.AppendLine("SyncWinPower=" + SyncWinPower);
                 sb.AppendLine("HeartbeatSec=" + HeartbeatSec);
+                sb.AppendLine("Light=" + Light); sb.AppendLine("LightColors=" + LightColors); sb.AppendLine("LightLevel=" + LightLevel); sb.AppendLine("LightEffect=" + LightEffect);
                 sb.AppendLine("WinX=" + WinX); sb.AppendLine("WinY=" + WinY); sb.AppendLine("StartHidden=" + StartHidden);
                 sb.AppendLine("# Name=   (optional: a different display name for the window and tray; no rebuild needed)");
                 if (!string.IsNullOrEmpty(Name)) sb.AppendLine("Name=" + Name);
@@ -158,6 +168,9 @@ namespace Ohman {
         public PlatformProfile P = Platforms.Known[0];     // the profile in use (defaults to the Transcend 14 values until detection runs)
         public string Board = "", Model = "";
         public bool Supported;                              // false = unknown board: read-only, no BIOS writes
+        public bool Generic;                                // true = profile built at run time from the firmware (unverified model)
+        public ILighting Light;                             // null = this keyboard has no controllable lighting (or read-only board)
+        public Rgb[] LightColors = new Rgb[0];              // what the app believes the zones show
         public bool ReadOnly { get { return !Supported && !Hw.IsDemo; } }
 
         ManagementEventWatcher watcher;
@@ -195,11 +208,22 @@ namespace Ohman {
                 if (Supported && !Hw.IsDemo && Info.Valid && Info.ThermalPolicy != P.ThermalPolicy) {
                     Supported = false; Log.Write("thermal policy v" + Info.ThermalPolicy + " does not match the profile (v" + P.ThermalPolicy + "); switching to read-only");
                 }
+                if (prof == null && !Hw.IsDemo) {
+                    // no verified profile: build one from what the firmware says about itself, the way the Linux driver does
+                    var g = Platforms.Generic(Board, Info);
+                    if (g != null) {
+                        try { Hw.GetGpuPower(); g.HasGpuPower = true; } catch (Exception ex) { Log.Write("generic: no GPU power control (" + ex.Message + ")"); }
+                        try { int top = Hw.GetFanTableMax(); if (top > g.Curve.Ceiling) g.Curve.Rescale(top); } catch { }
+                        P = g; Supported = true; Generic = true;
+                        Log.Write("generic profile: " + g.Notes + " · modes " + g.ModeEco.ToString("X2") + "/" + g.ModeBalanced.ToString("X2") + "/" + g.ModePerformance.ToString("X2") + " · powerGain=" + g.HasPowerGain + " (base " + g.TdpBase + " W) · gpuPower=" + g.HasGpuPower + " · fan ceiling " + g.Curve.Ceiling);
+                    } else Log.Write("generic profile not possible (thermal policy v" + Info.ThermalPolicy + "); read-only");
+                }
                 Log.Write("BIOS ok: fans=" + FanCount + " policy=v" + Info.ThermalPolicy + " swFan=" + Info.SwFanControl + " defPL4=" + Info.DefaultPl4 + "W baseTdp=" + Info.DefaultConcurrentTdp + "W raw=" + Info.Hex + (Hw.IsDemo ? " (DEMO)" : ""));
             } catch (Exception ex) { BiosOk = false; LastError = ex.Message; Log.Write("BIOS self-test FAILED: " + ex.Message); }
             // take the key over only where we can also take over the fans; on an unknown board OGH stays in charge
             if (S.SuppressOgh && !Hw.IsDemo && Supported) { KillOgh(); new Thread(delegate() { SetOghTasks(true); }) { IsBackground = true }.Start(); }
             if (S.EcoOnBattery && OnBattery && ModeIndex != 0) { ecoForcedByBattery = true; modeBeforeBattery = ModeIndex; S.SavedModeOverride = modeBeforeBattery; S.ModeIndex = 0; Log.Write("on battery at start: Eco (user mode " + ModeNames[modeBeforeBattery] + " kept)"); }
+            InitLight();
             ApplyAll(false);
             StartKeyWatcher();
             heartbeat = new System.Threading.Timer(delegate { Heartbeat(); }, null, S.HeartbeatSec * 1000, S.HeartbeatSec * 1000);
@@ -223,6 +247,7 @@ namespace Ohman {
         }
 
         public void Dispose() {
+            try { if (fx != null) fx.Dispose(); } catch { }
             try { if (fanTimer != null) fanTimer.Dispose(); } catch { }
             try { if (heartbeat != null) heartbeat.Dispose(); } catch { }
             try { if (guard != null) guard.Dispose(); } catch { }
@@ -244,10 +269,11 @@ namespace Ohman {
                 if (!BiosOk && !Hw.IsDemo) return;
                 Try(delegate { Hw.SetMode(ModeByte, OnBattery); }, "Set mode");
                 ApplyFanCore();
-                Try(delegate { Hw.SetConcurrentTdp(CurrentTdp); }, "Set power");
+                ApplyPowerCore();
                 ApplyGpuCore();
                 if (S.SyncWinPower) SetWinPowerOverlay(ModeIndex);
                 LastHeartbeat = DateTime.Now;
+                ApplyLightCore();
             }
             if (announce) Say("Applied " + ModeName + " · +" + S.TdpOffset + " W");
             Changed();
@@ -304,7 +330,9 @@ namespace Ohman {
         }
         DateTime lastFanWrite = DateTime.MinValue;
         static string Fmt(double v) { return double.IsNaN(v) ? "?" : v.ToString("0"); }
+        void ApplyPowerCore() { if (P.HasPowerGain) Try(delegate { Hw.SetConcurrentTdp(CurrentTdp); }, "Set power"); }
         void ApplyGpuCore() {
+            if (!P.HasGpuPower) return;
             // payloads come from the platform profile (Transcend 14: Base {0,0,1,75}, Boost {0,1,1,87}, Max {1,1,1,87} as OGH sends them)
             GpuLevel g = EffectiveGpu;
             byte[] p = g == GpuLevel.Max ? P.GpuMax : g == GpuLevel.Boost ? P.GpuBoost : P.GpuBase;
@@ -322,7 +350,7 @@ namespace Ohman {
                 // the mode's own profile comes with it: fans, power gain and GPU power are remembered per mode
                 if (Try(delegate { Hw.SetMode(ModeByte, OnBattery); }, "Set mode")) { if (announce) Say(ModeName + " mode"); }
                 if (!GuardActive) { ApplyFanCore(); lastFanWrite = DateTime.Now; }
-                Try(delegate { Hw.SetConcurrentTdp(CurrentTdp); }, "Set power");
+                ApplyPowerCore();
                 ApplyGpuCore();
                 if (S.SyncWinPower) SetWinPowerOverlay(index);
             }
@@ -345,7 +373,7 @@ namespace Ohman {
 
         public void SetTdpOffset(int off, bool announce) {
             S.TdpOffset = Math.Max(0, Math.Min(MaxOffset, off)); S.Save();
-            lock (applySync) Try(delegate { Hw.SetConcurrentTdp(CurrentTdp); }, "Set power");
+            lock (applySync) ApplyPowerCore();
             if (announce) Say("Power gain +" + S.TdpOffset + " W · " + CurrentTdp + " W budget");
             Changed();
         }
@@ -366,7 +394,7 @@ namespace Ohman {
                 lock (applySync) {
                     if (GuardActive) MaxFan(true, "Guard max fan");
                     Try(delegate { Hw.SetMode(ModeByte, OnBattery); }, "Set mode");   // fans are handled by FanTick; this only pins mode and power
-                    Try(delegate { Hw.SetConcurrentTdp(CurrentTdp); }, "Set power");
+                    ApplyPowerCore();
                     LastHeartbeat = DateTime.Now;
                 }
                 if (S.SuppressOgh && !Hw.IsDemo && Supported) KillOgh();
@@ -488,6 +516,9 @@ namespace Ohman {
                 Learning = false; S.KeyId = id; S.KeyData = data; S.Save();
                 Say("OMEN key bound to event " + id + "/" + data); Changed(); return;
             }
+            if (id == 13 && Light != null && S.Light != 2) {      // Fn backlight key: the firmware already toggled, mirror it (OGH: EventID 13)
+                S.Light = data == 0 ? 0 : 1; S.Save(); Changed(); return;
+            }
             if (id != KeyId || data != KeyData) return;
             if ((DateTime.Now - lastKey).TotalMilliseconds < 400) return;   // the key fires twice per press
             lastKey = DateTime.Now;
@@ -496,7 +527,81 @@ namespace Ohman {
             var h = KeyPressed; if (h != null) { try { h(S.Key); } catch { } }
         }
 
-        // ---------- Windows power-mode overlay ----------
+        // ---------- keyboard lighting ----------
+        void InitLight() {
+            try {
+                Light = Hw.IsDemo ? (ILighting)new DemoLighting() : (BiosOk && !ReadOnly ? BiosLighting.Detect() : null);
+                if (Light == null) return;
+                var fw = Light.GetColors();
+                LightColors = ParseColors(S.LightColors, Light.Zones);
+                if (LightColors == null) { LightColors = fw; S.LightColors = JoinColors(fw); }    // first run: keep what the keyboard shows now
+                if (S.Light < 0) S.Light = (WinLighting.Present && WinLighting.HasControl) ? 2 : ((Light.GetBacklight() & BiosLighting.ON_FLAG) != 0 ? 1 : 0);
+                Log.Write("lighting: " + Light.Describe + ", mode " + S.Light + ", effect " + S.LightEffect + ", level " + S.LightLevel + (WinLighting.Present ? ", Windows Dynamic Lighting present" + (WinLighting.HasControl ? " (in control)" : "") : ""));
+            } catch (Exception ex) { Log.Write("lighting init: " + ex.Message); Light = null; }
+        }
+        static Rgb[] ParseColors(string s, int n) {
+            if (string.IsNullOrEmpty(s)) return null;
+            var parts = s.Split(','); var r = new Rgb[n];
+            for (int i = 0; i < n; i++) { Rgb c; if (i < parts.Length && Rgb.TryParse(parts[i].Trim(), out c)) r[i] = c; else return null; }
+            return r;
+        }
+        static string JoinColors(Rgb[] c) { var s = new List<string>(); foreach (var x in c) s.Add(x.Hex); return string.Join(",", s.ToArray()); }
+        Rgb[] Scaled(Rgb[] c) { var r = new Rgb[c.Length]; double f = Math.Max(0.05, S.LightLevel / 100.0); for (int i = 0; i < c.Length; i++) r[i] = c[i].Scale(f); return r; }
+
+        /// <summary>Push the chosen lighting state to the keyboard. Caller holds applySync.</summary>
+        void ApplyLightCore() {
+            if (Light == null) return;
+            StopEffect();
+            if (S.Light == 2) { if (WinLighting.Present) WinLighting.SetControl(true); return; }      // Windows paints; we stay out of it
+            if (WinLighting.Present && WinLighting.HasControl) WinLighting.SetControl(false);        // take the keyboard first or Windows overwrites us
+            Try(delegate {
+                if (S.Light == 1) Light.SetColors(Scaled(LightColors));
+                Light.SetBacklight(S.Light == 1, 100);                                              // the level byte OGH writes; brightness is in the colours
+            }, "Keyboard lighting");
+            if (S.Light == 1 && S.LightEffect != 0) StartEffect();
+        }
+        public void SetLight(int mode, int effect, bool announce) {
+            S.Light = Math.Max(0, Math.Min(2, mode)); S.LightEffect = Math.Max(0, Math.Min(3, effect)); S.Save();
+            lock (applySync) ApplyLightCore();
+            if (announce) Say(S.Light == 2 ? "Keyboard: Windows Dynamic Lighting" : S.Light == 0 ? "Keyboard off" : new[] { "Keyboard static", "Keyboard breathe", "Keyboard cycle", "Keyboard wave" }[S.LightEffect]);
+            Changed();
+        }
+        /// <summary>zones = null: every zone.</summary>
+        public void SetLightColor(int[] zones, Rgb c) {
+            if (Light == null) return;
+            for (int i = 0; i < LightColors.Length; i++) if (zones == null || Array.IndexOf(zones, i) >= 0) LightColors[i] = c;
+            S.LightColors = JoinColors(LightColors); if (S.Light != 1) S.Light = 1; S.Save();
+            lock (applySync) ApplyLightCore();
+            Changed();
+        }
+        public void SetLightLevel(int level) {
+            S.LightLevel = Math.Max(0, Math.Min(100, level)); S.Save();
+            lock (applySync) { if (S.Light == 1 && Light != null && S.LightEffect == 0) Try(delegate { Light.SetColors(Scaled(LightColors)); }, "Keyboard brightness"); }
+            Changed();
+        }
+
+        // software effects: a frame every 120 ms through the same colour-table write (OGH animates the same way, ~15 fps)
+        System.Threading.Timer fx; double fxPhase; int fxFailures;
+        void StartEffect() { fxFailures = 0; if (fx == null) fx = new System.Threading.Timer(delegate { EffectTick(); }, null, 120, 120); else fx.Change(120, 120); }
+        void StopEffect() { if (fx != null) fx.Change(Timeout.Infinite, Timeout.Infinite); }
+        void EffectTick() {
+            if (Light == null || S.Light != 1 || S.LightEffect == 0) return;
+            if (!Monitor.TryEnter(applySync, 50)) return;
+            try {
+                fxPhase += 0.12; var frame = new Rgb[LightColors.Length];
+                for (int i = 0; i < frame.Length; i++) {
+                    switch (S.LightEffect) {
+                        case 1: frame[i] = LightColors[i].Scale(0.15 + 0.85 * (0.5 + 0.5 * Math.Sin(fxPhase * 1.6))); break;                 // breathe: 4 s cycle
+                        case 2: frame[i] = Rgb.FromHue(fxPhase * 25); break;                                                                  // cycle: all zones through the spectrum
+                        default: frame[i] = Rgb.FromHue(fxPhase * 25 + i * (360.0 / Math.Max(1, frame.Length))); break;                       // wave: zones offset
+                    }
+                }
+                try { Light.SetColors(Scaled(frame)); fxFailures = 0; }
+                catch (Exception ex) { if (++fxFailures >= 5) { Log.Write("effect stopped: " + ex.Message); StopEffect(); } }
+            } finally { Monitor.Exit(applySync); }
+        }
+
+                // ---------- Windows power-mode overlay ----------
         static readonly Guid OverlayEfficiency = new Guid("961cc777-2547-4f9d-8174-7d86181b8a7a");
         static readonly Guid OverlayBalanced = Guid.Empty;
         static readonly Guid OverlayPerformance = new Guid("ded574b5-45a0-4f42-8737-46345c09c238");
@@ -514,7 +619,7 @@ namespace Ohman {
             var sb = new StringBuilder();
             sb.AppendLine(Program.AppName + " diagnostics " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
             sb.AppendLine("hardware: " + (Hw.IsDemo ? "DEMO (simulated)" : "BIOS via root\\wmi hpqBIntM"));
-            sb.AppendLine("platform: " + Model + " board " + Board + " -> " + (Supported ? P.Name : "UNSUPPORTED (read-only)"));
+            sb.AppendLine("platform: " + Model + " board " + Board + " -> " + (Supported ? P.Name + (Generic ? " [generic, unverified]" : "") : "UNSUPPORTED (read-only)"));
             sb.AppendLine("bios ok: " + BiosOk + (LastError.Length > 0 ? "  last error: " + LastError : ""));
             sb.AppendLine("fans: " + FanCount + "   system data: " + Info.Hex + "   policy v" + Info.ThermalPolicy + "  swFan=" + Info.SwFanControl + "  PL4=" + Info.DefaultPl4 + "W  baseTdp=" + Info.DefaultConcurrentTdp + "W");
             try { var f = Hw.GetFanLevels(); sb.AppendLine("fan levels: " + f[0] + " / " + f[1] + "  (x100 RPM)"); } catch (Exception ex) { sb.AppendLine("fan levels: " + ex.Message); }
@@ -522,6 +627,7 @@ namespace Ohman {
             try { sb.AppendLine("max fan: " + Hw.GetMaxFan()); } catch (Exception ex) { sb.AppendLine("max fan: " + ex.Message); }
             try { sb.AppendLine("gpu power: " + Hw.GetGpuPower()); } catch (Exception ex) { sb.AppendLine("gpu power: " + ex.Message); }
             sb.AppendLine("settings: mode=" + ModeName + " (BIOS 0x" + ModeByte.ToString("X2") + (OnBattery ? ", DC" : ", AC") + ") fan=" + S.Fan + " " + S.Fan1 + "/" + S.Fan2 + " tdp=" + CurrentTdp + "W gpu=" + EffectiveGpu + (S.GpuAuto ? "(auto)" : "") + " key=" + KeyId + "/" + KeyData + "→" + S.Key + " ecoCool=" + S.EcoCool);
+            sb.AppendLine("lighting: " + (Light == null ? "none" : Light.Describe + " mode=" + S.Light + " level=" + S.LightLevel + " colours=" + S.LightColors + " windowsControl=" + WinLighting.HasControl));
             sb.AppendLine("fan drive: written " + curLevel1 + "/" + curLevel2 + "  cpu " + Fmt(CpuTemp) + "  gpu " + Fmt(GpuTemp) + "  ir " + Fmt(IrTemp) + "  guard=" + GuardActive + "  writeFailures=" + fanWriteFailures);
             sb.AppendLine("last heartbeat: " + (LastHeartbeat == DateTime.MinValue ? "never" : LastHeartbeat.ToString("HH:mm:ss")) + "   last key event: " + (LastEventTime == DateTime.MinValue ? "none" : LastEventId + "/" + LastEventData + " at " + LastEventTime.ToString("HH:mm:ss")));
             return sb.ToString();

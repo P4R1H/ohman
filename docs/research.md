@@ -93,7 +93,43 @@ Fn is held (Shift+Fn+F12 arrives as a plain event), and Windows reserves F12 for
 own (disabled) startup task; the OGH main app also starts it. Ohman stops the process and disables those
 tasks while it owns the key, and re-enables them when told.
 
-## 6. Where the OGH internals live
+## 6. Keyboard lighting
+
+Same mailbox, second command id. Layout from OGH's own lighting module (`HP.Omen.Background.FourZone`,
+`HP.Omen.Core.Model.Device`), matched against OmenMon and read back on this machine.
+
+| Command / type | Payload | Meaning |
+|---|---|---|
+| `0x20008` / `0x2B` | in size 0, out4 `[0]` | Keyboard type: 0 none, 1 four zones with numpad, 2 four zones without, 3 per-key RGB, 4 one zone with numpad, 5 one zone without |
+| `0x20009` / `0x01` | out128 `[0]` bit 0 | Lighting supported (legacy models only; OGH uses it for Pirates/Marlins/Gamora/Milos/Santorini) |
+| `0x20009` / `0x02` | out128 | Colour table. Zone i = bytes `25+3i .. 27+3i` (R, G, B). Bytes 0..24 are left as read |
+| `0x20009` / `0x03` | 128 bytes in, out4 | Write the colour table (read-modify-write, as OGH does) |
+| `0x20009` / `0x04` | out128 `[0]` | Backlight byte: bit 7 = on, low bits = level. OGH writes `0xE4` (on) / `0x64` (off) and nothing else |
+| `0x20009` / `0x05` | `{byte,0,0,0}`, out4 | Set the backlight byte |
+| `0x20009` / `0x06` / `0x07` | out128 / in | LED animation table (OmenMon: writing it "takes no effect") |
+
+- `hpqBEvnt` EventID 13 is the Fn backlight key; data 0 = off. OGH mirrors it into its own state.
+- OGH factory colours: `0F84FA`, `710FFA`, `F9350F`, `FAAC0F` (zones 0..3); NvStudio SKUs white.
+- Transcend 14 (8C58): four zones. HP's `OMENLighting.sys` (a KMDF lower filter on the virtual HID framework, talking to
+  `ACPI\PNP0C14`, i.e. the same WMI mailbox) publishes the keyboard to Windows as a LampArray with four lamps
+  (VID 0x0461 PID 0 = "FourZone" in OGH's own device table) so Windows 11 Dynamic Lighting can paint it.
+- Arbitration: Windows owns the keyboard while `HKCU\Software\Microsoft\Lighting\Devices\<VHF id>\AmbientLightingEnabled`
+  is 1 (and the global value). OGH flips that value to take or return control; Ohman does the same and only for HP's
+  virtual device, never for external LampArray peripherals.
+- The WinRT `LampArray` path reported `IsAvailable = false` for a background desktop app even with ambient off, so
+  the app writes the firmware table directly. Brightness is applied by scaling the colours; effects are frames
+  written every 120 ms (OGH animates the same way, on the CPU, at about 15 frames per second).
+
+## 7. Generic support for other boards
+
+A board without a verified profile gets one built at run time, the way the Linux driver decides: the thermal-policy
+version from system-design byte 3 selects the mode bytes (v1 `0x30/0x31/0x50`, v0 `0x00/0x01/0x02`), the Victus
+board lists from `hp-wmi.c` override them (`88F8`, `8A25`: `0x00/0x01/0x03`; the Victus S boards: `0x00/0x01`), the
+`force_v0` boards (`8607`, `8746`..`874A`) keep v0 bytes, power gain is offered only when system-design byte 8 is
+non-zero, GPU power only when `0x21` answers, and the fan ceiling is raised to the highest level in the firmware's
+own fan table when that is above 57. The fan floor, the keep-alive rule and the thermal guard are unchanged.
+
+## 8. Where the OGH internals live
 
 - Logs: `%LOCALAPPDATA%\Packages\AD2F1837.OMENCommandCenter_v10z8vjag6ke6\LocalCache\Local\HPOMEN\HPOMENBG_<date>.log`
   record `[ExecuteBiosWmiCommandThruDriver] inputData=…` for every call, with the helper names around them.
@@ -101,7 +137,7 @@ tasks while it owns the key, and re-enables them when told.
   `Assembly.LoadFrom` in PowerShell for reflection (enums, resource strings, embedded per-model JSON under
   `HP.Omen.Core.Common.PowerControl.JSON.*`); method IL can be read with `GetMethodBody().GetILAsByteArray()`.
 
-## 7. Open questions
+## 9. Open questions
 
 - Whether the mode command `0x1A` alone (without `0x10`) keeps the firmware in user-defined state, and whether
   performance mode reverts after 120 s without the query (`fantest` phase D).

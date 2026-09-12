@@ -1,13 +1,16 @@
 <p align="center"><img src="docs/logo.webp" width="120" alt=""></p>
 <h1 align="center">Ohman</h1>
 <p align="center">OMEN Gaming Hub's performance controls, without OMEN Gaming Hub.</p>
+<p align="center"><a href="https://github.com/P4R1H/Ohman/releases/latest/download/Ohman.exe"><img src="https://img.shields.io/badge/Download%20for%20Windows-Ohman.exe-5B8DEF?style=for-the-badge" alt="Download Ohman.exe"></a></p>
 
 Don't you love paying $2,500 for a laptop and still having ads pushed down your throat by mandatory
 software with no alternative? Ohman is the alternative. One executable, no services, no drivers, no account,
 no ads. Same firmware interface as OMEN Gaming Hub, same bytes, nothing else.
 
-**Built for the HP OMEN Transcend 14 (2024, board 8C58).** Other OMEN and Victus laptops get added one
-verified profile at a time, see [Adding your laptop](#adding-your-laptop). Unknown boards run read-only.
+**Verified on the HP OMEN Transcend 14 (2024, board 8C58).** Every other OMEN and Victus laptop runs in generic
+mode: the mode bytes the Linux driver documents for its firmware generation, fan control with the same floor
+and thermal guard, and power or GPU controls only where the firmware answers. A banner asks you to report
+back so the board can be marked verified; see [Adding your laptop](#adding-your-laptop).
 
 Ohman interacts with the BIOS through the same commands OGH uses. Use at your own risk.
 
@@ -30,6 +33,10 @@ Ohman interacts with the BIOS through the same commands OGH uses. Use at your ow
 Settings live in `ohman.state`, everything the app does goes to `ohman.log`.
 
 <details>
+<summary>Keyboard editor</summary>
+<p align="center"><img src="docs/keyboard.png" width="720" alt="The keyboard editor open beside the panel"></p>
+</details>
+<details>
 <summary>Settings panel</summary>
 <p align="center"><img src="docs/settings.png" width="440" alt="Settings panel"></p>
 </details>
@@ -48,8 +55,8 @@ Run it (it asks for administrator rights once, the firmware interface needs them
 ## How it works
 
 HP exposes a BIOS mailbox as the WMI class `hpqBIntM`. Ohman uses the commands OGH uses: performance mode
-(`0x1A`), max fan (`0x27`), fan levels (`0x2E`), CPU+GPU power budget (`0x29`), GPU power (`0x22`), plus
-read-only queries. The OMEN key arrives as a WMI event (`hpqBEvnt`). The bytes and the measured firmware
+(`0x1A`), max fan (`0x27`), fan levels (`0x2E`), CPU+GPU power budget (`0x29`), GPU power (`0x22`), keyboard
+lighting (`0x20009`), plus read-only queries. The OMEN key arrives as a WMI event (`hpqBEvnt`). The bytes and the measured firmware
 behaviour are in [docs/research.md](docs/research.md).
 
 ## Adding your laptop
@@ -60,7 +67,8 @@ behaviour are in [docs/research.md](docs/research.md).
    background log (`%LOCALAPPDATA%\Packages\AD2F1837.OMENCommandCenter_v10z8vjag6ke6\LocalCache\Local\HPOMEN\`)
    from a session where you clicked every mode.
 
-A platform is one entry in `src/Platform.cs`; nothing else is model-specific. The `add-laptop` skill in
+A verified platform is one entry in `src/Platform.cs`; the board families and firmware probes behind generic
+mode live in the same file. Nothing else is model-specific. The `add-laptop` skill in
 `.claude/skills/` turns an issue into that entry and a pull request, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Tools
@@ -78,6 +86,7 @@ A platform is one entry in `src/Platform.cs`; nothing else is model-specific. Th
 ```
 src\Platform.cs   platform profiles (the only model-specific file)
 src\Hardware.cs   WMI/BIOS layer + simulated hardware
+src\Lighting.cs   keyboard lighting (BIOS 0x20009) + Windows Dynamic Lighting hand-over
 src\Engine.cs     apply logic, keep-alive, thermal guard, OMEN key, OGH takeover
 src\Sensors.cs    perf counters + nvidia-smi
 src\Ui.xaml, .cs  window, tray, hotkeys, on-screen flash

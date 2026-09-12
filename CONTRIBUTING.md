@@ -9,7 +9,8 @@
    whose body lists the proving log line for every byte.
 3. The PR is merged only after the checklist in it has been run on the real machine by the issue author.
 
-Everything model-specific lives in `src/Platform.cs`. Please don't special-case a model anywhere else.
+Everything model-specific lives in `src/Platform.cs`: verified profiles, the board families generic mode uses,
+and the firmware probes. Please don't special-case a model anywhere else.
 
 ## Code
 

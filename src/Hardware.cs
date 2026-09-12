@@ -54,6 +54,7 @@ namespace Ohman {
         int GetFanCount();
         /// <summary>Fan count from the fan table (0x2F) — a plain read with no side effects.</summary>
         int GetFanCountPassive();
+        int GetFanTableMax();                       // highest level in the firmware's own fan table (0x2F); -1 when unavailable
         int[] GetFanLevels();                       // {fan1, fan2} in units of 100 RPM (0..57 on this machine)
         int GetTemperature();                       // BIOS thermal sensor (0x23), degrees C
         bool GetMaxFan();
@@ -147,6 +148,12 @@ namespace Ohman {
 
         public int GetFanCount() { var d = Call(OP_FAN_COUNT, Z4, 4); return d.Length > 0 ? d[0] : -1; }
         public int GetFanCountPassive() { var d = Call(OP_FAN_TABLE_GET, Z4, 128); return d.Length > 0 ? d[0] : -1; }
+        public int GetFanTableMax() {
+            var d = Call(OP_FAN_TABLE_GET, Z4, 128); if (d.Length < 2) return -1;
+            int n = Math.Min((int)d[1], 40), top = -1;
+            for (int i = 0; i < n; i++) { int o = 2 + 3 * i; if (o + 1 >= d.Length) break; top = Math.Max(top, Math.Max(d[o], d[o + 1])); }
+            return top;
+        }
 
         public int[] GetFanLevels() {
             var d = Call(OP_FAN_LEVEL_GET, Z4, 128);
@@ -210,6 +217,7 @@ namespace Ohman {
         public bool IsDemo { get { return true; } }
         public int GetFanCount() { return 2; }
         public int GetFanCountPassive() { return 2; }
+        public int GetFanTableMax() { return 46; }
         public int[] GetFanLevels() {
             int t1 = max ? 57 : (m1 >= 0 ? m1 : (mode == 0x31 ? 36 : mode == 0x30 ? 28 : 22));
             int t2 = max ? 57 : (m2 >= 0 ? m2 : (mode == 0x31 ? 34 : mode == 0x30 ? 26 : 20));

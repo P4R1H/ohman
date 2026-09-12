@@ -26,6 +26,7 @@ namespace Ohman {
     static class Ui {
         public static SolidColorBrush Brush(string hex) { var b = new SolidColorBrush(Col(hex)); b.Freeze(); return b; }
         public static SolidColorBrush Brush(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
+        public static SolidColorBrush Brush(Rgb c) { return Brush(Color.FromRgb(c.R, c.G, c.B)); }
         public static Color Col(string hex) { return (Color)ColorConverter.ConvertFromString(hex); }
         public static readonly Color EcoColor = Col("#2FB984"), BalColor = Col("#5B8DEF"), PerfColor = Col("#F0603F"), FanColor = Col("#A78BFA");
         public static readonly Color Warn = Col("#FFB84D"), Danger = Col("#FF5C5C"), Ok = Col("#3DDC84");
@@ -137,9 +138,13 @@ namespace Ohman {
         readonly MetricTile[] tiles = new MetricTile[4];
         TextBlock txtModeSub, txtSensors, txtFanSub, txtFan1, txtFan2, txtPower, txtPowerSub, txtGpuSub, txtKeyInfo, txtFoot, txtKeyFoot, txtDiag, txtErr, txtMachine;
         RadioButton fanAuto, fanMax, fanManual, gpuBase, gpuBoost, gpuMax, keyCycle, keyShow, keyMax, keyOff;
-        Slider slFan1, slFan2, slPower;
+        Slider slFan1, slFan2, slPower, slHue, slLevel;
+        // keyboard lighting
+        FrameworkElement lightRow, lightDivider, kbdPanel, svBox; Border miniHost, kbdHost; StackPanel presets; TextBlock txtLightSub, txtKbdKind, txtKbdSel, txtLevel;
+        RadioButton kOff, kStatic, kBreathe, kCycle, kWave, kWin; Button btnAllZones, btnKbdClose; TextBox txtHex; Rectangle svHue; Ellipse svMarker; Canvas svCanvas;
+        KeyboardView kbdMini, kbdBig; bool kbdOpen; double curH, curS = 1, curV = 1; DispatcherTimer colorDebounce, levelDebounce; const double KbdWidth = 540;
         ToggleButton tgGpuAuto, tgSuppress, tgHotkeys, tgAutostart, tgEcoBattery, tgSyncPower, tgEcoCool;
-        FrameworkElement fanPanel, settingsPanel, mainPanel, demoBadge, errBanner, header;
+        FrameworkElement fanPanel, settingsPanel, mainPanel, demoBadge, errBanner, infoBanner, header; TextBlock txtInfo;
         Border mark; Ellipse dotHb; bool footerMessage;
         Button btnSettings, btnMin, btnClose, btnLearn, btnLog, btnDiag, btnExit;
         WF.NotifyIcon tray; readonly WF.ToolStripMenuItem[] trayModes = new WF.ToolStripMenuItem[3]; WF.ToolStripMenuItem trayMax;
@@ -170,9 +175,12 @@ namespace Ohman {
             ShowInTaskbar = true; SnapsToDevicePixels = true; UseLayoutRounding = true;
             TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
             root = LoadXaml(); Content = root;
-            FindAll(); BuildModeBar(); BuildTiles(); BuildIcons(); BuildTray(); Wire(); Position(); SetSettingsIcon(false);
+            root.HorizontalAlignment = HorizontalAlignment.Right; root.Width = BaseWidth;   // anchored right: the keyboard editor grows the window leftwards
+            FindAll(); BuildModeBar(); BuildTiles(); BuildLighting(); BuildIcons(); BuildTray(); Wire(); Position(); SetSettingsIcon(false);
             slFan1.Minimum = slFan2.Minimum = E.P.Curve.Floor; slFan1.Maximum = slFan2.Maximum = E.P.Curve.Ceiling;   // bounds belong to the profile
             slPower.Maximum = E.MaxOffset;
+            if (!E.P.HasPowerGain) { F<FrameworkElement>("PowerRow").Visibility = Visibility.Collapsed; F<FrameworkElement>("PowerDivider").Visibility = Visibility.Collapsed; }
+            if (!E.P.HasGpuPower) { F<FrameworkElement>("GpuRow").Visibility = Visibility.Collapsed; F<FrameworkElement>("GpuDivider").Visibility = Visibility.Collapsed; }
             if (openSettings) ShowSettings(true);
 
             E.StateChanged += delegate { Dispatcher.BeginInvoke((Action)Refresh); };
@@ -188,7 +196,7 @@ namespace Ohman {
             Application.Current.SessionEnding += delegate { ExitApp(); };        // logoff/shutdown: leave cleanly instead of hiding
             StateChanged += delegate { if (WindowState == WindowState.Minimized) { WindowState = WindowState.Normal; HideToTray(); } };
             IsVisibleChanged += delegate { sensors.SetInterval(IsVisible ? 2000 : 15000); if (IsVisible) ReadHardwareAsync(); };
-            LocationChanged += delegate { if (IsVisible && WindowState == WindowState.Normal && Left > -30000) { E.S.WinX = (int)Left; E.S.WinY = (int)Top; } };
+            LocationChanged += delegate { if (IsVisible && WindowState == WindowState.Normal && Left > -30000 && !kbdOpen) { E.S.WinX = (int)Left; E.S.WinY = (int)Top; } };
 
             uiTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
             uiTimer.Tick += delegate { if (IsVisible) ReadHardwareAsync(); UpdateFooter(); };
@@ -214,13 +222,18 @@ namespace Ohman {
         }
         void FindAll() {
             header = F<FrameworkElement>("Header"); mark = F<Border>("Mark");
-            demoBadge = F<FrameworkElement>("DemoBadge"); errBanner = F<FrameworkElement>("ErrBanner"); txtErr = F<TextBlock>("TxtErr");
+            demoBadge = F<FrameworkElement>("DemoBadge"); errBanner = F<FrameworkElement>("ErrBanner"); txtErr = F<TextBlock>("TxtErr"); infoBanner = F<FrameworkElement>("InfoBanner"); txtInfo = F<TextBlock>("TxtInfo");
             btnSettings = F<Button>("BtnSettings"); btnMin = F<Button>("BtnMin"); btnClose = F<Button>("BtnClose");
             mainPanel = F<FrameworkElement>("MainPanel"); txtModeSub = F<TextBlock>("TxtModeSub"); txtSensors = F<TextBlock>("TxtSensors");
             txtFanSub = F<TextBlock>("TxtFanSub"); fanAuto = F<RadioButton>("FanAuto"); fanMax = F<RadioButton>("FanMax"); fanManual = F<RadioButton>("FanManual");
             fanPanel = F<FrameworkElement>("FanPanel"); slFan1 = F<Slider>("SlFan1"); slFan2 = F<Slider>("SlFan2"); txtFan1 = F<TextBlock>("TxtFan1"); txtFan2 = F<TextBlock>("TxtFan2");
             txtPower = F<TextBlock>("TxtPower"); txtPowerSub = F<TextBlock>("TxtPowerSub"); slPower = F<Slider>("SlPower");
             gpuBase = F<RadioButton>("GpuBase"); gpuBoost = F<RadioButton>("GpuBoost"); gpuMax = F<RadioButton>("GpuMax"); tgGpuAuto = F<ToggleButton>("TgGpuAuto"); txtGpuSub = F<TextBlock>("TxtGpuSub");
+            lightRow = F<FrameworkElement>("LightRow"); lightDivider = F<FrameworkElement>("LightDivider"); txtLightSub = F<TextBlock>("TxtLightSub"); miniHost = F<Border>("MiniHost");
+            kbdPanel = F<FrameworkElement>("KbdPanel"); kbdHost = F<Border>("KbdHost"); txtKbdKind = F<TextBlock>("TxtKbdKind"); txtKbdSel = F<TextBlock>("TxtKbdSel"); btnKbdClose = F<Button>("BtnKbdClose");
+            kOff = F<RadioButton>("KOff"); kStatic = F<RadioButton>("KStatic"); kBreathe = F<RadioButton>("KBreathe"); kCycle = F<RadioButton>("KCycle"); kWave = F<RadioButton>("KWave"); kWin = F<RadioButton>("KWin");
+            svBox = F<FrameworkElement>("SvBox"); svHue = F<Rectangle>("SvHue"); svMarker = F<Ellipse>("SvMarker"); svCanvas = F<Canvas>("SvCanvas");
+            slHue = F<Slider>("SlHue"); slLevel = F<Slider>("SlLevel"); txtLevel = F<TextBlock>("TxtLevel"); txtHex = F<TextBox>("TxtHex"); btnAllZones = F<Button>("BtnAllZones"); presets = F<StackPanel>("Presets");
             settingsPanel = F<FrameworkElement>("SettingsPanel"); txtMachine = F<TextBlock>("TxtMachine");
             keyCycle = F<RadioButton>("KeyCycle"); keyShow = F<RadioButton>("KeyShow"); keyMax = F<RadioButton>("KeyMax"); keyOff = F<RadioButton>("KeyOff");
             txtKeyInfo = F<TextBlock>("TxtKeyInfo"); btnLearn = F<Button>("BtnLearn"); tgSuppress = F<ToggleButton>("TgSuppress");
@@ -421,7 +434,128 @@ namespace Ohman {
             btnExit.Click += delegate { ExitApp(); };
         }
 
+        // ---------- keyboard lighting ----------
+        static readonly string[] PresetHex = { "FFFFFF", "FF3B30", "FF9500", "FFD60A", "34C759", "00C7BE", "0A84FF", "5E5CE6", "FF2D55" };
+        int[] SelectedZones() { var l = new List<int>(kbdBig.Selected); l.Sort(); return l.ToArray(); }
+        void BuildLighting() {
+            if (E.Light == null) { lightRow.Visibility = Visibility.Collapsed; lightDivider.Visibility = Visibility.Collapsed; return; }
+            var layout = KeyboardLayouts.Build(E.Light.Numpad, E.Light.Zones);
+            kbdMini = new KeyboardView { Interactive = false }; kbdMini.SetLayout(layout); miniHost.Child = kbdMini;
+            kbdMini.KeyClicked += delegate { ShowKeyboard(!kbdOpen); };
+            kbdBig = new KeyboardView { Interactive = true }; kbdBig.SetLayout(layout); kbdHost.Child = kbdBig; kbdBig.Selected.Add(0);
+            kbdBig.KeyClicked += delegate(KeyDef k) {
+                if (k == null) return;
+                bool multi = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
+                if (multi) { if (!kbdBig.Selected.Remove(k.Zone)) kbdBig.Selected.Add(k.Zone); if (kbdBig.Selected.Count == 0) kbdBig.Selected.Add(k.Zone); }
+                else { kbdBig.Selected.Clear(); kbdBig.Selected.Add(k.Zone); }
+                SyncPickerFromSelection(); kbdBig.Repaint();
+            };
+            txtKbdKind.Text = E.Light.Describe + (E.Light.Kind == LightKind.PerKey ? " · per-key editing comes later, zones for now" : "");
+            btnKbdClose.Click += delegate { ShowKeyboard(false); };
+            btnAllZones.Click += delegate { kbdBig.Selected.Clear(); for (int i = 0; i < E.Light.Zones; i++) kbdBig.Selected.Add(i); kbdBig.Repaint(); SyncPickerFromSelection(); };
+            if (E.Light.Zones == 1) btnAllZones.Visibility = Visibility.Collapsed;
+            if (!WinLighting.Present && !E.Hw.IsDemo) kWin.Visibility = Visibility.Collapsed;    // no Dynamic Lighting device for this keyboard
+            foreach (string hex in PresetHex) {
+                Rgb c; Rgb.TryParse(hex, out c); Rgb cc = c;
+                var d = new Button { Style = (Style)root.FindResource("Dot"), Background = Ui.Brush("#" + hex), ToolTip = "#" + hex };
+                d.Click += delegate { cc.ToHsv(out curH, out curS, out curV); SyncPickerControls(); PushColor(true); };
+                presets.Children.Add(d);
+            }
+            RoutedEventHandler mode = delegate {
+                if (syncing) return;
+                int m = kWin.IsChecked == true ? 2 : kOff.IsChecked == true ? 0 : 1;
+                int fx = kBreathe.IsChecked == true ? 1 : kCycle.IsChecked == true ? 2 : kWave.IsChecked == true ? 3 : 0;
+                Bg(delegate { E.SetLight(m, fx, true); });
+            };
+            foreach (var r in new RadioButton[] { kOff, kStatic, kBreathe, kCycle, kWave, kWin }) r.Checked += mode;
+            colorDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(90) };
+            colorDebounce.Tick += delegate { colorDebounce.Stop(); Rgb v = Rgb.FromHsv(curH, curS, curV); int[] z = SelectedZones(); Bg(delegate { E.SetLightColor(z, v); }); };
+            slHue.ValueChanged += delegate { if (syncing) return; curH = slHue.Value; svHue.Fill = Ui.Brush(Rgb.FromHue(curH)); PushColor(false); };
+            MouseEventHandler svMove = delegate(object o, MouseEventArgs me) {
+                if (me.LeftButton != MouseButtonState.Pressed) return;
+                var p = me.GetPosition(svBox);
+                curS = Math.Max(0, Math.Min(1, p.X / svBox.ActualWidth)); curV = Math.Max(0, Math.Min(1, 1 - p.Y / svBox.ActualHeight));
+                PlaceMarker(); PushColor(false);
+            };
+            svBox.MouseLeftButtonDown += delegate(object o, MouseButtonEventArgs me) { svBox.CaptureMouse(); svMove(o, me); };
+            svBox.MouseMove += svMove;
+            svBox.MouseLeftButtonUp += delegate { svBox.ReleaseMouseCapture(); PushColor(true); };
+            txtHex.KeyDown += delegate(object o, KeyEventArgs ke) { if (ke.Key == Key.Enter) ApplyHex(); };
+            txtHex.LostFocus += delegate { ApplyHex(); };
+            levelDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+            levelDebounce.Tick += delegate { levelDebounce.Stop(); int lv = (int)slLevel.Value; Bg(delegate { E.SetLightLevel(lv); }); };
+            slLevel.ValueChanged += delegate { txtLevel.Text = (int)slLevel.Value + " %"; if (!syncing) { levelDebounce.Stop(); levelDebounce.Start(); } };
+            svBox.SizeChanged += delegate { PlaceMarker(); };
+        }
+        void ApplyHex() {
+            Rgb c; string t = txtHex.Text.Trim().TrimStart('#');
+            if (!Rgb.TryParse(t, out c)) { SyncPickerControls(); return; }
+            c.ToHsv(out curH, out curS, out curV); SyncPickerControls(); PushColor(true);
+        }
+        void PlaceMarker() {
+            if (svBox.ActualWidth <= 0) return;
+            Canvas.SetLeft(svMarker, curS * svBox.ActualWidth - svMarker.Width / 2); Canvas.SetTop(svMarker, (1 - curV) * svBox.ActualHeight - svMarker.Height / 2);
+        }
+        void SyncPickerControls() {
+            syncing = true;
+            try { slHue.Value = curH; svHue.Fill = Ui.Brush(Rgb.FromHue(curH)); txtHex.Text = "#" + Rgb.FromHsv(curH, curS, curV).Hex; PlaceMarker(); }
+            finally { syncing = false; }
+        }
+        void SyncPickerFromSelection() {
+            int[] z = SelectedZones();
+            if (z.Length > 0 && E.LightColors.Length > z[0]) E.LightColors[z[0]].ToHsv(out curH, out curS, out curV);
+            SyncPickerControls();
+            txtKbdSel.Text = E.Light.Zones == 1 ? "The whole keyboard" : z.Length == E.Light.Zones ? "All zones selected · click a key to pick one, Ctrl-click to add" : "Zone " + string.Join(", ", Array.ConvertAll(z, delegate(int i) { return (i + 1).ToString(); })) + " selected · Ctrl-click to add zones";
+        }
+        /// <summary>Paint the selection in the drawings immediately, then send the colour to the firmware (debounced).</summary>
+        void PushColor(bool now) {
+            Rgb v = Rgb.FromHsv(curH, curS, curV);
+            foreach (int z in kbdBig.Selected) if (z < E.LightColors.Length) E.LightColors[z] = v;
+            kbdBig.ZoneColors = E.LightColors; kbdBig.Off = false; kbdBig.Repaint();
+            kbdMini.ZoneColors = E.LightColors; kbdMini.Off = false; kbdMini.Repaint();
+            syncing = true; try { txtHex.Text = "#" + v.Hex; } finally { syncing = false; }
+            colorDebounce.Stop(); if (now) { Rgb vv = v; int[] z = SelectedZones(); Bg(delegate { E.SetLightColor(z, vv); }); } else colorDebounce.Start();
+        }
+        /// <summary>The editor opens to the left of the panel. The content is anchored to the window's right edge, so
+        /// growing the window leftwards reveals the editor while the panel stays exactly where it was.</summary>
+        const double BaseWidth = 440;
+        DispatcherTimer slide;
+        public void ShowKeyboard(bool on) {
+            if (kbdMini == null || on == kbdOpen) return;
+            kbdOpen = on;
+            var wa = SystemParameters.WorkArea;
+            double targetW = on ? BaseWidth + KbdWidth : BaseWidth;
+            double targetL = on ? Math.Max(wa.Left, Left - KbdWidth) : Math.Min(Left + KbdWidth, wa.Right - BaseWidth);
+            SizeToContent = SizeToContent.Manual;
+            if (on) { kbdPanel.Visibility = Visibility.Visible; root.Width = targetW; SyncPickerFromSelection(); }
+            Action finish = delegate { if (!on) { kbdPanel.Visibility = Visibility.Collapsed; root.Width = BaseWidth; } Refit(); Log.Write("keyboard editor " + (on ? "open" : "closed")); };
+            if (screenshotPath != null) { Width = targetW; Left = targetL; finish(); return; }
+            double w0 = ActualWidth, l0 = Left; DateTime t0 = DateTime.Now;
+            if (slide != null) slide.Stop();
+            slide = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(12) };
+            slide.Tick += delegate {
+                double t = Math.Min(1, (DateTime.Now - t0).TotalMilliseconds / 220.0), e = 1 - Math.Pow(1 - t, 3);   // ease-out
+                Width = w0 + (targetW - w0) * e; Left = l0 + (targetL - l0) * e;
+                if (t >= 1) { slide.Stop(); Width = targetW; Left = targetL; finish(); }
+            };
+            slide.Start();
+        }
+        void RefreshLighting() {
+            if (E.Light == null || kbdMini == null) return;
+            var S = E.S;
+            kOff.IsChecked = S.Light == 0; kWin.IsChecked = S.Light == 2;
+            kStatic.IsChecked = S.Light == 1 && S.LightEffect == 0; kBreathe.IsChecked = S.Light == 1 && S.LightEffect == 1; kCycle.IsChecked = S.Light == 1 && S.LightEffect == 2; kWave.IsChecked = S.Light == 1 && S.LightEffect == 3;
+            bool off = S.Light == 0;
+            kbdMini.ZoneColors = E.LightColors; kbdMini.Off = off; kbdMini.Repaint();
+            kbdBig.ZoneColors = E.LightColors; kbdBig.Off = off; kbdBig.Repaint();
+            slLevel.Value = Math.Max(5, S.LightLevel); txtLevel.Text = S.LightLevel + " %";
+            string fxName = new[] { "Static", "Breathe", "Cycle", "Wave" }[Math.Max(0, Math.Min(3, S.LightEffect))];
+            txtLightSub.Text = S.Light == 2 ? "Windows Dynamic Lighting" : off ? "Off" : E.Light.Describe + " · " + fxName + (S.LightLevel < 100 ? " · " + S.LightLevel + " %" : "");
+            if (!kbdOpen) SyncPickerFromSelection();
+        }
+
         // ---------- helpers ----------
+        // header icon:        // ---------- helpers ----------
         // header icon: three "tune" sliders for Settings, a chevron for Back
         const string ICON_TUNE = "M4 7 H20 M4 12 H20 M4 17 H20 M9 7 m-2 0 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0 M15 12 m-2 0 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0 M10 17 m-2 0 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0";
         const string ICON_BACK = "M14.5 6 L8.5 12 L14.5 18";
@@ -496,6 +630,7 @@ namespace Ohman {
                 gpuBase.IsChecked = g == GpuLevel.Base; gpuBoost.IsChecked = g == GpuLevel.Boost; gpuMax.IsChecked = g == GpuLevel.Max;
                 tgGpuAuto.IsChecked = S.GpuAuto;
                 txtGpuSub.Text = S.GpuAuto ? "Follows the mode" : g == GpuLevel.Max ? "Custom TGP + PPAB" : g == GpuLevel.Boost ? "PPAB" : "Base TGP";
+                RefreshLighting();
                 keyCycle.IsChecked = S.Key == KeyAction.Cycle; keyShow.IsChecked = S.Key == KeyAction.Show; keyMax.IsChecked = S.Key == KeyAction.MaxFan; keyOff.IsChecked = S.Key == KeyAction.Off;
                 if (!E.Learning) txtKeyInfo.Text = KeyInfoText();
                 tgSuppress.IsChecked = S.SuppressOgh; tgHotkeys.IsChecked = S.Hotkeys; tgEcoBattery.IsChecked = S.EcoOnBattery; tgSyncPower.IsChecked = S.SyncWinPower; tgAutostart.IsChecked = autostart; tgEcoCool.IsChecked = S.EcoCool;
@@ -505,12 +640,14 @@ namespace Ohman {
                 errBanner.Visibility = err ? Visibility.Visible : Visibility.Collapsed;
                 if (err) txtErr.Text = !E.BiosOk ? "BIOS interface unavailable: " + E.LastError
                     : "Unsupported laptop (board " + E.Board + "). Read-only: nothing is written to the firmware. Run tools\\support-info.cmd and open a GitHub issue to add it.";
+                infoBanner.Visibility = E.Generic && !E.Hw.IsDemo ? Visibility.Visible : Visibility.Collapsed;
+                if (E.Generic) txtInfo.Text = "Unverified model (board " + E.Board + "): using the generic OMEN commands for its firmware generation. If it behaves, say so in a GitHub issue so it can be marked verified.";
                 for (int i = 0; i < 3; i++) trayModes[i].Checked = i == mi;
                 trayMax.Checked = S.Fan == FanMode.Max;
                 string tip = Program.DisplayName + " · " + E.ModeName + " · " + E.CurrentTdp + " W" + (S.Fan == FanMode.Max ? " · max fan" : "");
                 tray.Text = tip.Length > 63 ? tip.Substring(0, 63) : tip;
                 UpdateFooter();
-                bool bannerNow = errBanner.Visibility == Visibility.Visible, fanNow = fanPanel.Visibility == Visibility.Visible;
+                bool bannerNow = errBanner.Visibility == Visibility.Visible || infoBanner.Visibility == Visibility.Visible, fanNow = fanPanel.Visibility == Visibility.Visible;
                 if (bannerNow != lastBanner || fanNow != lastFanPanel) { lastBanner = bannerNow; lastFanPanel = fanNow; Refit(); }
             } finally { syncing = false; }
         }
@@ -621,6 +758,7 @@ namespace Ohman {
 
         void OnLoaded(object o, RoutedEventArgs e) {
             if (Program.FlashTest) Flash("Performance mode", ModeSubs[2], 2);
+            if (Program.KeyboardTest) ShowKeyboard(true);
             if (screenshotPath == null) return;
             var started = DateTime.Now;
             var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(Program.FlashTest ? 600 : 500) };
@@ -717,6 +855,10 @@ namespace Ohman {
         void QueryAutostartAsync() {
             Bg(delegate {
                 bool on = RunSchtasks("/Query /TN " + Program.AppName) == 0;
+                if (!on && E.S.FirstRun && !E.Hw.IsDemo) {              // first launch: start with Windows like every vendor app does; the switch turns it off
+                    SetAutostart(true); on = autostart;
+                    if (on) Dispatcher.BeginInvoke((Action)delegate { ShowToast("Starts with Windows from now on (Settings to change)", false); });
+                }
                 Dispatcher.BeginInvoke((Action)delegate { autostart = on; syncing = true; tgAutostart.IsChecked = on; syncing = false; });
             });
         }
@@ -726,7 +868,7 @@ namespace Ohman {
             int rc = on ? RunSchtasks("/Create /TN " + Program.AppName + " /TR \"\\\"" + exe + "\\\" --hidden\" /SC ONLOGON /RL HIGHEST /F") : RunSchtasks("/Delete /TN " + Program.AppName + " /F");
             Log.Write("autostart " + on + " rc=" + rc);
             autostart = on && rc == 0;
-            Dispatcher.BeginInvoke((Action)delegate { ShowToast(rc == 0 ? (on ? "Starts with Windows" : "Autostart removed") : "schtasks failed (" + rc + ")", rc != 0); });
+            if (!E.S.FirstRun) Dispatcher.BeginInvoke((Action)delegate { ShowToast(rc == 0 ? (on ? "Starts with Windows" : "Autostart removed") : "schtasks failed (" + rc + ")", rc != 0); });
         }
         static int RunSchtasks(string args) {
             try {

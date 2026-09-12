@@ -15,7 +15,11 @@ namespace Ohman {
         public int TdpBase = 30, TdpGainMax = 15;   // concurrent CPU+GPU budget: base and the "Smart Performance Gain" range
         public byte[] GpuBase = { 0, 0, 1, 75 }, GpuBoost = { 0, 1, 1, 87 }, GpuMax = { 1, 1, 1, 87 };
         public uint KeyEventId = 29, KeyEventData = 8613;   // hpqBEvnt of the OMEN key
+        // Features that not every OMEN has. A model without one keeps the row hidden and never sends the command.
+        public bool HasPowerGain = true;    // 0x29 concurrent CPU+GPU budget ("Smart Performance Gain")
+        public bool HasGpuPower = true;     // 0x22 cTGP / PPAB (discrete NVIDIA GPU with Dynamic Boost)
         public FanCurve Curve = new FanCurve();
+        public bool Verified = true;        // false = built at run time from the firmware's answers (generic mode)
         public string Notes;
     }
 
@@ -65,9 +69,45 @@ namespace Ohman {
         }
 
         public int Clamp(int level) { return Math.Max(Floor, Math.Min(Ceiling, level)); }
+        /// <summary>Stretch the level tables to a different ceiling (models whose levels are percent rather than rpm/100).</summary>
+        public void Rescale(int newCeiling) {
+            if (newCeiling == Ceiling || newCeiling <= 0) return;
+            double f = newCeiling / (double)Ceiling;
+            for (int i = 0; i < CpuLevels.Length; i++) CpuLevels[i] = (int)Math.Round(CpuLevels[i] * f);
+            for (int i = 0; i < GpuLevels.Length; i++) GpuLevels[i] = (int)Math.Round(GpuLevels[i] * f);
+            for (int i = 0; i < IrLevels.Length; i++) IrLevels[i] = (int)Math.Round(IrLevels[i] * f);
+            Fallback = (int)Math.Round(Fallback * f); Ceiling = newCeiling;
+        }
+    }
+
+    /// <summary>Board families the Linux hp-wmi driver drives through the same 0x1A mode command. Used to build a
+    /// generic profile for a board that has no verified entry yet; the firmware's system-design data decides the rest.</summary>
+    public static class Families {
+        // omen_thermal_profile_boards[] in drivers/platform/x86/hp/hp-wmi.c: mode bytes by thermal-policy version (system data byte 3)
+        public static readonly string[] Omen = { "84DA", "84DB", "84DC", "8572", "8573", "8574", "8575", "8600", "8601", "8602", "8603", "8604", "8605", "8606", "8607", "860A",
+            "8746", "8747", "8748", "8749", "874A", "8786", "8787", "8788", "878A", "878B", "878C", "87B5", "886B", "886C", "88C8", "88CB", "88D1", "88D2", "88F4", "88F5",
+            "88F6", "88F7", "88FD", "88FE", "88FF", "8900", "8901", "8902", "8912", "8917", "8918", "8949", "894A", "89EB", "8A15", "8A42", "8A43", "8BAD", "8C58", "8E41" };
+        public static readonly string[] OmenForceV0 = { "8607", "8746", "8747", "8748", "8749", "874A" };   // report v1 but want v0 bytes
+        public static readonly string[] Victus = { "88F8", "8A25" };                                       // 0x00 default, 0x01 performance, 0x03 quiet
+        public static readonly string[] VictusS = { "8A3D", "8B2F", "8BBE", "8BD4", "8BD5", "8C99", "8C9C" };   // 0x00 default, 0x01 performance
+        public static bool In(string[] list, string board) { foreach (var b in list) if (string.Equals(b, board, StringComparison.OrdinalIgnoreCase)) return true; return false; }
     }
 
     public static class Platforms {
+        /// <summary>A profile for a board without a verified entry. Null when the firmware generation is unknown (stay read-only).</summary>
+        public static PlatformProfile Generic(string board, SystemInfo info) {
+            if (info == null || !info.Valid) return null;
+            var p = new PlatformProfile { Name = "Generic OMEN/Victus (board " + board + ")", Boards = new[] { board }, Verified = false, ThermalPolicy = info.ThermalPolicy };
+            if (Families.In(Families.Victus, board)) { p.ModeEco = 0x03; p.ModeBalanced = 0x00; p.ModePerformance = 0x01; p.ModeCool = 0x03; p.Notes = "Victus family (hp-wmi victus_thermal_profile_boards)"; }
+            else if (Families.In(Families.VictusS, board)) { p.ModeEco = 0x00; p.ModeBalanced = 0x00; p.ModePerformance = 0x01; p.ModeCool = 0x00; p.Notes = "Victus S family"; }
+            else if (Families.In(Families.OmenForceV0, board) || info.ThermalPolicy == 0) { p.ModeEco = 0x00; p.ModeBalanced = 0x00; p.ModePerformance = 0x01; p.ModeCool = 0x02; p.ThermalPolicy = 0; p.Notes = "thermal policy v0"; }
+            else if (info.ThermalPolicy == 1) { p.Notes = "thermal policy v1" + (Families.In(Families.Omen, board) ? ", listed in hp-wmi" : ""); }
+            else return null;
+            p.TdpBase = info.DefaultConcurrentTdp; p.HasPowerGain = info.DefaultConcurrentTdp > 0;
+            p.HasGpuPower = false;                                        // the engine probes 0x21 and turns this on when the firmware answers
+            return p;
+        }
+
         public static readonly PlatformProfile[] Known = {
             new PlatformProfile {
                 Name = "HP OMEN Transcend 14 (2024, 14-fb0xxx)",

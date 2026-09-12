@@ -5,7 +5,9 @@ description: Add support for a new HP OMEN / Victus laptop to Ohman from a "New 
 
 # Add a laptop profile and open a PR
 
-Ohman only writes to firmware it has been verified on. Adding a laptop means adding ONE entry to
+Boards without an entry already run in generic mode (see `Platforms.Generic` in `src/Platform.cs`: mode bytes
+from the thermal-policy version and the hp-wmi board families, capabilities probed from the firmware). A verified
+entry pins what generic mode guessed and unlocks model-specific data such as OGH's fan curve. Adding a laptop means adding ONE entry to
 `src/Platform.cs` whose values are backed by evidence from that machine, then opening a PR that
 shows the evidence. Never guess a byte; when a value is unknown, keep the safe default and say so.
 
@@ -19,6 +21,7 @@ From the GitHub issue (template `.github/ISSUE_TEMPLATE/new-laptop-support.md`):
      byte 5 = default PL4, byte 8 = default concurrent TDP (the power-gain base).
    - `0x2F fan table`: byte 0 = fan count, byte 1 = entry count, then `{fan1, fan2, temp}` triplets.
    - `0x2D fan levels`, `0x2C fan types`, `0x23 sensor`, `0x21 gpu power`, `0x26 max fan`.
+   - `0x2B keyboard type` and the `0x20009` colour table / backlight byte (lighting is detected at run time; nothing to add to the profile).
    - the `hpqBEvnt` line(s) captured when the OMEN key was pressed (EventID / EventData).
 2. What OMEN Gaming Hub shows on that model (mode names, fan options, power slider, GPU options).
 3. Ideally OGH's background log (`HPOMENBG_<date>.log`) from a session where every mode was
@@ -51,6 +54,8 @@ the documented thermal-policy tables (v1: `0x30/0x31/0x50`; v0: `0x00/0x01/0x02`
        TdpBase = 30, TdpGainMax = 15,           // system data byte 8; OGH slider
        GpuBase = new byte[] { 0, 0, 1, 75 }, GpuBoost = new byte[] { 0, 1, 1, 87 }, GpuMax = new byte[] { 1, 1, 1, 87 },
        KeyEventId = 29, KeyEventData = 8613,
+       HasPowerGain = true, HasGpuPower = true,   // false when the support-info shows system-data byte 8 = 0 / 0x21 rc != 0
+       Verified = true,
        Curve = new FanCurve { Floor = 18, Ceiling = 57 /* CpuTemps/CpuLevels, GpuTemps/GpuLevels, IrTemps/IrLevels from OGH's profiles.json; omitted = the Transcend 14 curve is inherited, say so in Notes */ },
        Notes = "Verified <date> from issue #<n>: <what was verified, what is inferred>."
    }

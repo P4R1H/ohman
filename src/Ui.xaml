@@ -280,6 +280,99 @@
         </Setter.Value>
       </Setter>
     </Style>
+    <Style x:Key="Swatch" TargetType="Button">
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Width" Value="26"/>
+      <Setter Property="Height" Value="18"/>
+      <Setter Property="Margin" Value="0,0,4,0"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="B" CornerRadius="5" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1.5"/>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="B" Property="Opacity" Value="0.85"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="Dot" TargetType="Button">
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Width" Value="18"/>
+      <Setter Property="Height" Value="18"/>
+      <Setter Property="Margin" Value="0,0,8,0"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Ellipse x:Name="E" Fill="{TemplateBinding Background}" Stroke="#30000000" StrokeThickness="1"/>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="E" Property="Stroke" Value="#ECEFF4"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="Hex" TargetType="TextBox">
+      <Setter Property="Background" Value="{StaticResource Surface}"/>
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="CaretBrush" Value="{StaticResource Text}"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="Padding" Value="9,6"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TextBox">
+            <Border CornerRadius="8" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+              <ScrollViewer x:Name="PART_ContentHost"/>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="SlHue" TargetType="Slider" BasedOn="{StaticResource Sl}">
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Slider">
+            <Grid Height="26" Background="Transparent">
+              <Border Height="6" CornerRadius="3" VerticalAlignment="Center" Margin="7,0">
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                    <GradientStop Color="#FF0000" Offset="0"/><GradientStop Color="#FFFF00" Offset="0.167"/><GradientStop Color="#00FF00" Offset="0.333"/>
+                    <GradientStop Color="#00FFFF" Offset="0.5"/><GradientStop Color="#0000FF" Offset="0.667"/><GradientStop Color="#FF00FF" Offset="0.833"/><GradientStop Color="#FF0000" Offset="1"/>
+                  </LinearGradientBrush>
+                </Border.Background>
+              </Border>
+              <Track x:Name="PART_Track" VerticalAlignment="Center">
+                <Track.DecreaseRepeatButton>
+                  <RepeatButton Focusable="False" IsTabStop="False">
+                    <RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Grid Background="Transparent"/></ControlTemplate></RepeatButton.Template>
+                  </RepeatButton>
+                </Track.DecreaseRepeatButton>
+                <Track.IncreaseRepeatButton>
+                  <RepeatButton Focusable="False" IsTabStop="False">
+                    <RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Grid Background="Transparent"/></ControlTemplate></RepeatButton.Template>
+                  </RepeatButton>
+                </Track.IncreaseRepeatButton>
+                <Track.Thumb>
+                  <Thumb Width="14" Height="14" Focusable="False" Cursor="Hand">
+                    <Thumb.Template><ControlTemplate TargetType="Thumb"><Ellipse Fill="#ECEFF4" Stroke="#0E1014" StrokeThickness="2"/></ControlTemplate></Thumb.Template>
+                  </Thumb>
+                </Track.Thumb>
+              </Track>
+            </Grid>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
     <Style TargetType="ScrollBar">
       <Setter Property="Width" Value="5"/>
       <Setter Property="Background" Value="Transparent"/>
@@ -316,9 +409,85 @@
     <RowDefinition Height="*"/>
     <RowDefinition Height="Auto"/>
   </Grid.RowDefinitions>
+  <Grid.ColumnDefinitions>
+    <ColumnDefinition Width="Auto"/>
+    <ColumnDefinition Width="*"/>
+  </Grid.ColumnDefinitions>
+
+  <!-- keyboard editor: slides open on the left of the panel -->
+  <Border x:Name="KbdPanel" Grid.Column="0" Grid.RowSpan="3" Width="540" Visibility="Collapsed" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
+    <Grid Margin="18,0,18,16">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="54"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+      </Grid.RowDefinitions>
+      <Grid>
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+          <TextBlock Text="Keyboard" FontFamily="{StaticResource HeadFont}" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Text}"/>
+          <TextBlock x:Name="TxtKbdKind" Style="{StaticResource SubSm}" Margin="8,3,0,0" VerticalAlignment="Center"/>
+        </StackPanel>
+        <Button x:Name="BtnKbdClose" Style="{StaticResource IconBtn}" Content="&#xE8BB;" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,-8,0" ToolTip="Close"/>
+      </Grid>
+      <Border x:Name="KbdHost" Grid.Row="1"/>
+      <Border Grid.Row="2" Style="{StaticResource SegBox}" Margin="0,12,0,0">
+        <UniformGrid Rows="1">
+          <RadioButton x:Name="KOff" Style="{StaticResource Seg}" GroupName="kbd" Content="Off" MinWidth="0"/>
+          <RadioButton x:Name="KStatic" Style="{StaticResource Seg}" GroupName="kbd" Content="Static" MinWidth="0"/>
+          <RadioButton x:Name="KBreathe" Style="{StaticResource Seg}" GroupName="kbd" Content="Breathe" MinWidth="0"/>
+          <RadioButton x:Name="KCycle" Style="{StaticResource Seg}" GroupName="kbd" Content="Cycle" MinWidth="0"/>
+          <RadioButton x:Name="KWave" Style="{StaticResource Seg}" GroupName="kbd" Content="Wave" MinWidth="0"/>
+          <RadioButton x:Name="KWin" Style="{StaticResource Seg}" GroupName="kbd" Content="Windows" MinWidth="0" ToolTip="Hand the keyboard to Windows Dynamic Lighting"/>
+        </UniformGrid>
+      </Border>
+      <Grid x:Name="Picker" Grid.Row="3" Margin="0,14,0,0" VerticalAlignment="Top">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="200"/>
+          <ColumnDefinition Width="18"/>
+          <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Grid x:Name="SvBox" Width="200" Height="150" VerticalAlignment="Top" Cursor="Cross" Background="Transparent">
+          <Rectangle x:Name="SvHue" RadiusX="8" RadiusY="8" Fill="#FF0000"/>
+          <Rectangle RadiusX="8" RadiusY="8">
+            <Rectangle.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="1,0"><GradientStop Color="#FFFFFFFF" Offset="0"/><GradientStop Color="#00FFFFFF" Offset="1"/></LinearGradientBrush></Rectangle.Fill>
+          </Rectangle>
+          <Rectangle RadiusX="8" RadiusY="8">
+            <Rectangle.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#00000000" Offset="0"/><GradientStop Color="#FF000000" Offset="1"/></LinearGradientBrush></Rectangle.Fill>
+          </Rectangle>
+          <Canvas x:Name="SvCanvas" ClipToBounds="False">
+            <Ellipse x:Name="SvMarker" Width="12" Height="12" Stroke="White" StrokeThickness="2" Fill="Transparent"/>
+          </Canvas>
+        </Grid>
+        <StackPanel Grid.Column="2">
+          <Slider x:Name="SlHue" Style="{StaticResource SlHue}" Minimum="0" Maximum="359" IsSnapToTickEnabled="True" TickFrequency="1" Margin="-7,0,-7,0"/>
+          <Grid Margin="0,10,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="TxtHex" Style="{StaticResource Hex}" MaxLength="7"/>
+            <Button x:Name="BtnAllZones" Grid.Column="1" Style="{StaticResource TextBtn}" Content="All zones" Margin="8,0,0,0" ToolTip="Colour every zone at once"/>
+          </Grid>
+          <StackPanel x:Name="Presets" Orientation="Horizontal" Margin="1,14,0,0"/>
+          <Grid Margin="0,14,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="52"/>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="46"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Level" Style="{StaticResource Sub}" VerticalAlignment="Center" Margin="1,0,0,0"/>
+            <Slider x:Name="SlLevel" Grid.Column="1" Style="{StaticResource Sl}" Minimum="5" Maximum="100" IsSnapToTickEnabled="True" TickFrequency="5"/>
+            <TextBlock x:Name="TxtLevel" Grid.Column="2" Style="{StaticResource Mono}" FontSize="12"/>
+          </Grid>
+          <TextBlock x:Name="TxtKbdSel" Style="{StaticResource SubSm}" Margin="1,10,0,0"/>
+        </StackPanel>
+      </Grid>
+    </Grid>
+  </Border>
 
   <!-- header -->
-  <Grid x:Name="Header" Height="54" Background="Transparent">
+  <Grid x:Name="Header" Grid.Column="1" Height="54" Background="Transparent">
     <Grid.ColumnDefinitions>
       <ColumnDefinition Width="*"/>
       <ColumnDefinition Width="Auto"/>
@@ -345,11 +514,14 @@
   </Grid>
 
   <!-- body -->
-  <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+  <ScrollViewer Grid.Row="1" Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
     <StackPanel Margin="18,4,18,16">
 
       <Border x:Name="ErrBanner" Visibility="Collapsed" Background="#26FF5C5C" CornerRadius="8" Padding="10,7" Margin="0,0,0,12">
         <TextBlock x:Name="TxtErr" Style="{StaticResource Sub}" Foreground="#FF9A9A" Margin="0"/>
+      </Border>
+      <Border x:Name="InfoBanner" Visibility="Collapsed" Background="#1F5B8DEF" CornerRadius="8" Padding="10,7" Margin="0,0,0,12">
+        <TextBlock x:Name="TxtInfo" Style="{StaticResource Sub}" Foreground="#B9CDF7" Margin="0"/>
       </Border>
 
       <StackPanel x:Name="MainPanel">
@@ -406,10 +578,10 @@
           </Grid>
         </StackPanel>
 
-        <Rectangle Style="{StaticResource Divider}"/>
+        <Rectangle x:Name="PowerDivider" Style="{StaticResource Divider}"/>
 
         <!-- cpu power -->
-        <Grid>
+        <Grid x:Name="PowerRow">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="172"/>
             <ColumnDefinition Width="*"/>
@@ -424,10 +596,10 @@
           <TextBlock x:Name="TxtPower" Grid.Column="2" Style="{StaticResource Mono}" FontSize="14" Text="+0 W"/>
         </Grid>
 
-        <Rectangle Style="{StaticResource Divider}"/>
+        <Rectangle x:Name="GpuDivider" Style="{StaticResource Divider}"/>
 
         <!-- gpu power -->
-        <Grid>
+        <Grid x:Name="GpuRow">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>
             <ColumnDefinition Width="Auto"/>
@@ -445,6 +617,21 @@
             </UniformGrid>
           </Border>
           <ToggleButton x:Name="TgGpuAuto" Grid.Column="2" Style="{StaticResource PillToggle}" Content="AUTO" Margin="6,0,0,0" VerticalAlignment="Center" ToolTip="Follow the mode: Eco → Base, Balanced → Boost, Performance → Max"/>
+        </Grid>
+
+        <Rectangle x:Name="LightDivider" Style="{StaticResource Divider}"/>
+
+        <!-- keyboard lighting: a live glyph, click to edit -->
+        <Grid x:Name="LightRow">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <StackPanel VerticalAlignment="Center">
+            <TextBlock Text="Lighting" Style="{StaticResource Lbl}"/>
+            <TextBlock x:Name="TxtLightSub" Style="{StaticResource Sub}"/>
+          </StackPanel>
+          <Border x:Name="MiniHost" Grid.Column="1" Width="164" VerticalAlignment="Center" Cursor="Hand" ToolTip="Open the keyboard editor"/>
         </Grid>
       </StackPanel>
 
@@ -529,7 +716,7 @@
   </ScrollViewer>
 
   <!-- footer -->
-  <Border Grid.Row="2" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0">
+  <Border Grid.Row="2" Grid.Column="1" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0">
     <Grid Height="38" Margin="18,0,18,0">
       <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
         <Ellipse x:Name="DotHb" Width="6" Height="6" Fill="#3DDC84" VerticalAlignment="Center"/>

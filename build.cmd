@@ -8,7 +8,7 @@ cd /d "%~dp0"
 set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 set WPF=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\WPF
 set REFS=/r:System.Management.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Xaml.dll /r:"%WPF%\PresentationCore.dll" /r:"%WPF%\PresentationFramework.dll" /r:"%WPF%\WindowsBase.dll"
-set SRC=src\Platform.cs src\Hardware.cs src\Sensors.cs src\Engine.cs src\Ui.cs src\Program.cs
+set SRC=src\Platform.cs src\Hardware.cs src\Lighting.cs src\Keyboard.cs src\Sensors.cs src\Engine.cs src\Ui.cs src\Program.cs
 set RES=/resource:src\Ui.xaml,Ohman.Ui.xaml
 if not exist preview mkdir preview
 

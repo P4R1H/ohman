@@ -18,6 +18,7 @@ namespace Ohman {
         public static string FileStem { get { return AppName.ToLowerInvariant(); } }
         public static EventWaitHandle ShowEvent, ExitEvent;   // named events: another instance can ask us to show or exit
         public static bool FlashTest;                         // --flash: show the key OSD at start (preview/screenshot aid)
+        public static bool KeyboardTest;                      // --keyboard: open the keyboard editor at start (screenshot aid)
 
         [STAThread]
         public static int Main(string[] args) {
@@ -31,6 +32,7 @@ namespace Ohman {
                 else if (a == "--screenshot" && i + 1 < args.Length) shot = args[++i];
                 else if (a == "--set" && i + 1 < args.Length) overrides.Add(args[++i]);   // --set Key=Value: override for this run only (nothing is written back)
                 else if (a == "--flash") FlashTest = true;
+                else if (a == "--keyboard") KeyboardTest = true;
             }
             for (int i = 0; i + 1 < args.Length; i++)
                 if (args[i].ToLowerInvariant() == "--make-ico") { MainWindow.WriteIco(args[i + 1], Ui.BalColor); return 0; }   // build aid: writes the app icon
