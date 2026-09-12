@@ -895,7 +895,7 @@ namespace Ohman {
             if (on) {
                 // registered from XML: a task made with plain "schtasks /Create" stops the app when the laptop goes on battery and refuses to start it on battery
                 string tmp = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Program.FileStem + "-task.xml");
-                try { System.IO.File.WriteAllText(tmp, TaskXml(exe), System.Text.Encoding.Unicode); }   // schtasks parses the file as a UTF-16 string catch (Exception ex) { Log.Write("task xml: " + ex.Message); }
+                try { System.IO.File.WriteAllText(tmp, TaskXml(exe), System.Text.Encoding.Unicode); } catch (Exception ex) { Log.Write("task xml: " + ex.Message); }
                 rc = RunSchtasks("/Create /TN " + Program.AppName + " /XML \"" + tmp + "\" /F");
                 try { System.IO.File.Delete(tmp); } catch { }
             } else rc = RunSchtasks("/Delete /TN " + Program.AppName + " /F");
