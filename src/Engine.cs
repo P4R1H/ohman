@@ -161,6 +161,7 @@ namespace Ohman {
         public event Action<string, bool> Toast;          // (message, isError)
         public event Action<KeyAction> KeyPressed;        // OMEN key matched
         public event Action<uint, uint> AnyKeyEvent;      // every hpqBEvnt
+        public event Action<Rgb[]> FrameChanged;           // an effect frame was written to the keyboard (worker thread)
 
         public static readonly string[] ModeNames = { "Eco", "Balanced", "Performance" };
         public byte[] ModeBytes { get { return new byte[] { S.EcoCool ? P.ModeCool : P.ModeEco, P.ModeBalanced, P.ModePerformance }; } }
@@ -603,7 +604,7 @@ namespace Ohman {
             try {
                 fxPhase += 0.12 * SpeedFactor(S.LightSpeed); var frame = new Rgb[LightColors.Length];
                 for (int i = 0; i < frame.Length; i++) frame[i] = EffectFrame(S.LightEffect, fxPhase, LightColors, i);
-                try { Light.SetColors(Scaled(frame)); fxFailures = 0; }
+                try { var scaled = Scaled(frame); Light.SetColors(scaled); fxFailures = 0; var fh = FrameChanged; if (fh != null) fh(scaled); }
                 catch (Exception ex) { if (++fxFailures >= 5) { Log.Write("effect stopped: " + ex.Message); StopEffect(); } }
             } finally { Monitor.Exit(applySync); }
         }

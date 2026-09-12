@@ -74,6 +74,31 @@
       </Setter>
     </Style>
 
+    <Style x:Key="SegTight" TargetType="RadioButton" BasedOn="{StaticResource Seg}">
+      <Setter Property="MinWidth" Value="0"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RadioButton">
+            <Border x:Name="B" CornerRadius="7" Background="Transparent" Padding="6,6">
+              <ContentPresenter x:Name="CP" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                TextElement.Foreground="#A4ADBF" TextElement.FontSize="12" TextElement.FontWeight="SemiBold"
+                                TextElement.FontFamily="Segoe UI Variable Text, Segoe UI"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="B" Property="Background" Value="#1E222B"/>
+                <Setter TargetName="CP" Property="TextElement.Foreground" Value="#ECEFF4"/>
+              </Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="B" Property="Background" Value="#2A3140"/>
+                <Setter TargetName="CP" Property="TextElement.Foreground" Value="White"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
     <Style x:Key="Switch" TargetType="ToggleButton">
       <Setter Property="Focusable" Value="False"/>
       <Setter Property="Cursor" Value="Hand"/>
@@ -411,10 +436,9 @@
 
   <!-- keyboard editor: lives in its own window, docked beside the panel (see BuildKeyboardWindow) -->
   <Border x:Name="KbdPanel" Grid.Column="0" Width="754" Visibility="Collapsed">
-    <Grid Margin="18,0,18,16">
+    <Grid Margin="18,0,18,18">
       <Grid.RowDefinitions>
         <RowDefinition Height="54"/>
-        <RowDefinition Height="Auto"/>
         <RowDefinition Height="Auto"/>
       </Grid.RowDefinitions>
       <Grid x:Name="KbdHeader" Background="Transparent" Cursor="SizeAll">
@@ -424,64 +448,65 @@
         </StackPanel>
         <Button x:Name="BtnKbdClose" Style="{StaticResource IconBtn}" Content="&#xE8BB;" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,-8,0" ToolTip="Close"/>
       </Grid>
-      <Border Grid.Row="1" Style="{StaticResource SegBox}" Margin="0,0,0,14">
-        <UniformGrid Rows="1">
-          <RadioButton x:Name="KOff" Style="{StaticResource Seg}" GroupName="kbd" Content="Off" MinWidth="0"/>
-          <RadioButton x:Name="KStatic" Style="{StaticResource Seg}" GroupName="kbd" Content="Static" MinWidth="0"/>
-          <RadioButton x:Name="KBreathe" Style="{StaticResource Seg}" GroupName="kbd" Content="Breathe" MinWidth="0"/>
-          <RadioButton x:Name="KCycle" Style="{StaticResource Seg}" GroupName="kbd" Content="Cycle" MinWidth="0"/>
-          <RadioButton x:Name="KWave" Style="{StaticResource Seg}" GroupName="kbd" Content="Wave" MinWidth="0"/>
-          <RadioButton x:Name="KWin" Style="{StaticResource Seg}" GroupName="kbd" Content="Windows" MinWidth="0" ToolTip="Hand the keyboard to Windows Dynamic Lighting"/>
-        </UniformGrid>
-      </Border>
-      <Grid Grid.Row="2">
+      <Grid Grid.Row="1">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="460"/>
-          <ColumnDefinition Width="18"/>
+          <ColumnDefinition Width="20"/>
           <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
-        <Border x:Name="KbdHost" VerticalAlignment="Top"/>
-        <StackPanel x:Name="Picker" Grid.Column="2" VerticalAlignment="Top">
-          <!-- Static / Breathe: pick colours -->
-          <StackPanel x:Name="ColourBlock">
-            <Grid>
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-              </Grid.ColumnDefinitions>
-              <TextBlock Text="Colour" Style="{StaticResource Lbl}"/>
-              <TextBlock x:Name="TxtKbdSel" Grid.Column="1" Style="{StaticResource SubSm}" VerticalAlignment="Center"/>
-            </Grid>
-            <Grid x:Name="SvBox" Height="88" Margin="0,8,0,0" Cursor="Cross" Background="Transparent">
-              <Rectangle x:Name="SvHue" RadiusX="8" RadiusY="8" Fill="#FF0000"/>
-              <Rectangle RadiusX="8" RadiusY="8">
-                <Rectangle.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="1,0"><GradientStop Color="#FFFFFFFF" Offset="0"/><GradientStop Color="#00FFFFFF" Offset="1"/></LinearGradientBrush></Rectangle.Fill>
-              </Rectangle>
-              <Rectangle RadiusX="8" RadiusY="8">
-                <Rectangle.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#00000000" Offset="0"/><GradientStop Color="#FF000000" Offset="1"/></LinearGradientBrush></Rectangle.Fill>
-              </Rectangle>
-              <Canvas x:Name="SvCanvas" ClipToBounds="False">
-                <Ellipse x:Name="SvMarker" Width="12" Height="12" Stroke="White" StrokeThickness="2" Fill="Transparent"/>
-              </Canvas>
-            </Grid>
-            <Slider x:Name="SlHue" Style="{StaticResource SlHue}" Minimum="0" Maximum="359" IsSnapToTickEnabled="True" TickFrequency="1" Margin="-7,6,-7,0"/>
-            <Grid Margin="0,6,0,0">
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-              </Grid.ColumnDefinitions>
-              <TextBox x:Name="TxtHex" Style="{StaticResource Hex}" MaxLength="7" Width="92" TextAlignment="Center" Padding="6,5"/>
-              <Button x:Name="BtnAllZones" Grid.Column="2" Style="{StaticResource LinkBtn}" Content="All zones" VerticalAlignment="Center" ToolTip="Colour every zone at once"/>
-            </Grid>
+        <!-- left: mode bar over the keyboard, same width -->
+        <StackPanel x:Name="KbdLeft">
+          <Border Style="{StaticResource SegBox}" Margin="0,0,0,12">
+            <UniformGrid Rows="1">
+              <RadioButton x:Name="KOff" Style="{StaticResource SegTight}" GroupName="kbd" Content="Off"/>
+              <RadioButton x:Name="KStatic" Style="{StaticResource SegTight}" GroupName="kbd" Content="Static"/>
+              <RadioButton x:Name="KBreathe" Style="{StaticResource SegTight}" GroupName="kbd" Content="Breathe"/>
+              <RadioButton x:Name="KCycle" Style="{StaticResource SegTight}" GroupName="kbd" Content="Cycle"/>
+              <RadioButton x:Name="KWave" Style="{StaticResource SegTight}" GroupName="kbd" Content="Wave"/>
+              <RadioButton x:Name="KWin" Style="{StaticResource SegTight}" GroupName="kbd" Content="Windows" ToolTip="Hand the keyboard to Windows Dynamic Lighting"/>
+            </UniformGrid>
+          </Border>
+          <Border x:Name="KbdHost"/>
+        </StackPanel>
+        <!-- right: controls, exactly as tall as the left column (height set in code) -->
+        <Grid x:Name="Picker" Grid.Column="2">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+          </Grid.RowDefinitions>
+          <!-- Static / Breathe: which zone, and the exact value -->
+          <Grid x:Name="ColourHead" Height="32">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <TextBlock x:Name="TxtKbdSel" Style="{StaticResource Lbl}"/>
+              <Button x:Name="BtnAllZones" Style="{StaticResource LinkBtn}" Content="All zones" Margin="6,1,0,0" VerticalAlignment="Center" ToolTip="Colour every zone at once (Ctrl-click keys to add zones one by one)"/>
+            </StackPanel>
+            <TextBox x:Name="TxtHex" Grid.Column="1" Style="{StaticResource Hex}" MaxLength="7" Width="88" TextAlignment="Center" Padding="6,5" VerticalAlignment="Center"/>
+          </Grid>
+          <!-- Cycle / Wave / Off / Windows: what is going on instead -->
+          <StackPanel x:Name="InfoBlock" Visibility="Collapsed" VerticalAlignment="Top" Margin="0,4,0,0">
+            <TextBlock x:Name="TxtKbdInfo" Style="{StaticResource Sub}" FontSize="12.5"/>
+            <Button x:Name="BtnWinLighting" Style="{StaticResource LinkBtn}" Content="Open Windows lighting settings" HorizontalAlignment="Left" Margin="-4,8,0,0" Visibility="Collapsed"/>
           </StackPanel>
-          <!-- Cycle / Wave: the effect makes the colours; Off / Windows: nothing to pick -->
-          <StackPanel x:Name="InfoBlock" Visibility="Collapsed">
-            <TextBlock x:Name="TxtKbdInfo" Style="{StaticResource Sub}" Margin="0,2,0,0"/>
-            <Button x:Name="BtnWinLighting" Style="{StaticResource LinkBtn}" Content="Open Windows lighting settings" HorizontalAlignment="Left" Margin="-4,6,0,0" Visibility="Collapsed"/>
-          </StackPanel>
-          <!-- Breathe / Cycle / Wave -->
-          <Grid x:Name="SpeedRow" Margin="0,12,0,0" Visibility="Collapsed">
+          <Grid x:Name="SvBox" Grid.Row="1" Margin="0,10,0,0" Cursor="Cross" Background="Transparent">
+            <Rectangle x:Name="SvHue" RadiusX="8" RadiusY="8" Fill="#FF0000"/>
+            <Rectangle RadiusX="8" RadiusY="8">
+              <Rectangle.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="1,0"><GradientStop Color="#FFFFFFFF" Offset="0"/><GradientStop Color="#00FFFFFF" Offset="1"/></LinearGradientBrush></Rectangle.Fill>
+            </Rectangle>
+            <Rectangle RadiusX="8" RadiusY="8">
+              <Rectangle.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#00000000" Offset="0"/><GradientStop Color="#FF000000" Offset="1"/></LinearGradientBrush></Rectangle.Fill>
+            </Rectangle>
+            <Canvas x:Name="SvCanvas" ClipToBounds="False">
+              <Ellipse x:Name="SvMarker" Width="12" Height="12" Stroke="White" StrokeThickness="2" Fill="Transparent"/>
+            </Canvas>
+          </Grid>
+          <Slider x:Name="SlHue" Grid.Row="2" Style="{StaticResource SlHue}" Minimum="0" Maximum="359" IsSnapToTickEnabled="True" TickFrequency="1" Margin="-7,10,-7,0"/>
+          <Grid x:Name="SpeedRow" Grid.Row="2" Margin="0,8,0,0" Visibility="Collapsed">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="46"/>
               <ColumnDefinition Width="*"/>
@@ -491,8 +516,7 @@
             <Slider x:Name="SlSpeed" Grid.Column="1" Style="{StaticResource Sl}" Minimum="1" Maximum="5" IsSnapToTickEnabled="True" TickFrequency="1"/>
             <TextBlock x:Name="TxtSpeed" Grid.Column="2" Style="{StaticResource Mono}" FontSize="11.5"/>
           </Grid>
-          <!-- every lit mode -->
-          <Grid x:Name="LevelRow" Margin="0,8,0,0">
+          <Grid x:Name="LevelRow" Grid.Row="3" Margin="0,8,0,0">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="46"/>
               <ColumnDefinition Width="*"/>
@@ -502,7 +526,7 @@
             <Slider x:Name="SlLevel" Grid.Column="1" Style="{StaticResource Sl}" Minimum="5" Maximum="100" IsSnapToTickEnabled="True" TickFrequency="5"/>
             <TextBlock x:Name="TxtLevel" Grid.Column="2" Style="{StaticResource Mono}" FontSize="11.5"/>
           </Grid>
-        </StackPanel>
+        </Grid>
       </Grid>
     </Grid>
   </Border>

@@ -142,8 +142,8 @@ namespace Ohman {
         // keyboard lighting
         FrameworkElement lightRow, lightDivider, kbdPanel, svBox; Border miniHost, kbdHost; TextBlock txtLightSub, txtKbdKind, txtKbdSel, txtLevel;
         RadioButton kOff, kStatic, kBreathe, kCycle, kWave, kWin; Button btnAllZones, btnKbdClose; TextBox txtHex; Rectangle svHue; Ellipse svMarker; Canvas svCanvas;
-        KeyboardView kbdMini, kbdBig; bool kbdOpen; double curH, curS = 1, curV = 1; DispatcherTimer colorDebounce, levelDebounce, speedDebounce, previewTimer; const double KbdWidth = 540;
-        FrameworkElement colourBlock, infoBlock, speedRow, levelRow; TextBlock txtKbdInfo, txtSpeed; Slider slSpeed; Button btnWinLighting; double previewPhase;
+        KeyboardView kbdMini, kbdBig; bool kbdOpen; double curH, curS = 1, curV = 1; DispatcherTimer colorDebounce, levelDebounce, speedDebounce;
+        FrameworkElement colourHead, infoBlock, speedRow, levelRow, kbdLeft; TextBlock txtKbdInfo, txtSpeed; Slider slSpeed; Button btnWinLighting; bool miniNeedsFrame;
         ToggleButton tgGpuAuto, tgSuppress, tgHotkeys, tgAutostart, tgEcoBattery, tgSyncPower, tgEcoCool;
         FrameworkElement fanPanel, settingsPanel, mainPanel, demoBadge, errBanner, infoBanner, header; TextBlock txtInfo;
         Border mark; Ellipse dotHb; bool footerMessage;
@@ -235,7 +235,7 @@ namespace Ohman {
             kOff = F<RadioButton>("KOff"); kStatic = F<RadioButton>("KStatic"); kBreathe = F<RadioButton>("KBreathe"); kCycle = F<RadioButton>("KCycle"); kWave = F<RadioButton>("KWave"); kWin = F<RadioButton>("KWin");
             svBox = F<FrameworkElement>("SvBox"); svHue = F<Rectangle>("SvHue"); svMarker = F<Ellipse>("SvMarker"); svCanvas = F<Canvas>("SvCanvas");
             slHue = F<Slider>("SlHue"); slLevel = F<Slider>("SlLevel"); txtLevel = F<TextBlock>("TxtLevel"); txtHex = F<TextBox>("TxtHex"); btnAllZones = F<Button>("BtnAllZones");
-            colourBlock = F<FrameworkElement>("ColourBlock"); infoBlock = F<FrameworkElement>("InfoBlock"); speedRow = F<FrameworkElement>("SpeedRow"); levelRow = F<FrameworkElement>("LevelRow");
+            colourHead = F<FrameworkElement>("ColourHead"); infoBlock = F<FrameworkElement>("InfoBlock"); speedRow = F<FrameworkElement>("SpeedRow"); levelRow = F<FrameworkElement>("LevelRow"); kbdLeft = F<FrameworkElement>("KbdLeft");
             txtKbdInfo = F<TextBlock>("TxtKbdInfo"); txtSpeed = F<TextBlock>("TxtSpeed"); slSpeed = F<Slider>("SlSpeed"); btnWinLighting = F<Button>("BtnWinLighting");
             settingsPanel = F<FrameworkElement>("SettingsPanel"); txtMachine = F<TextBlock>("TxtMachine");
             keyCycle = F<RadioButton>("KeyCycle"); keyShow = F<RadioButton>("KeyShow"); keyMax = F<RadioButton>("KeyMax"); keyOff = F<RadioButton>("KeyOff");
@@ -487,24 +487,22 @@ namespace Ohman {
             slSpeed.ValueChanged += delegate { txtSpeed.Text = SpeedText((int)slSpeed.Value); if (!syncing) { speedDebounce.Stop(); speedDebounce.Start(); } };
             btnWinLighting.Click += delegate { try { Process.Start(new ProcessStartInfo("ms-settings:personalization-lighting") { UseShellExecute = true }); } catch (Exception ex) { ShowToast("Cannot open Windows settings: " + ex.Message, true); } };
             svBox.SizeChanged += delegate { PlaceMarker(); };
-            // live preview of an effect in both drawings, same maths as the firmware frames
-            previewTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
-            previewTimer.Tick += delegate {
-                var S = E.S; if (S.Light != 1 || S.LightEffect == 0 || E.LightColors.Length == 0) { previewTimer.Stop(); return; }
-                previewPhase += 0.12 * Engine.SpeedFactor(S.LightSpeed);
-                var frame = new Rgb[E.LightColors.Length]; double lv = Math.Max(0.05, S.LightLevel / 100.0);
-                for (int i = 0; i < frame.Length; i++) frame[i] = Engine.EffectFrame(S.LightEffect, previewPhase, E.LightColors, i).Scale(lv);
-                kbdMini.ZoneColors = frame; kbdMini.Repaint();
-                if (kbdOpen) { kbdBig.ZoneColors = frame; kbdBig.Repaint(); }
-            };
-            IsVisibleChanged += delegate { if (IsVisible) RefreshLighting(); else previewTimer.Stop(); };
+            // the drawings show the frames the keyboard actually received; the panel glyph only while the pointer is over the row
+            E.FrameChanged += delegate(Rgb[] f) { Dispatcher.BeginInvoke((Action)delegate { OnFrame(f); }); };
+            lightRow.MouseEnter += delegate { miniNeedsFrame = true; };
+        }
+        void OnFrame(Rgb[] f) {
+            if (kbdMini == null) return;
+            if (kbdOpen) { kbdBig.ZoneColors = f; kbdBig.Repaint(); }
+            if (lightRow.IsMouseOver || miniNeedsFrame) { miniNeedsFrame = false; kbdMini.ZoneColors = f; kbdMini.Repaint(); }
         }
         static string SpeedText(int s) { return new[] { "slowest", "slow", "normal", "fast", "fastest" }[Math.Max(0, Math.Min(4, s - 1))]; }
         /// <summary>Show only what the current mode can use.</summary>
         void ApplyEditorState() {
             var S = E.S; int m = S.Light, fx = S.LightEffect;
             bool lit = m == 1, pick = lit && (fx == 0 || fx == 1), effect = lit && fx != 0;
-            colourBlock.Visibility = pick ? Visibility.Visible : Visibility.Collapsed;
+            colourHead.Visibility = pick ? Visibility.Visible : Visibility.Collapsed;
+            svBox.Visibility = pick ? Visibility.Visible : Visibility.Collapsed; slHue.Visibility = pick ? Visibility.Visible : Visibility.Collapsed;
             speedRow.Visibility = effect ? Visibility.Visible : Visibility.Collapsed;
             levelRow.Visibility = lit ? Visibility.Visible : Visibility.Collapsed;
             infoBlock.Visibility = pick ? Visibility.Collapsed : Visibility.Visible;
@@ -513,8 +511,8 @@ namespace Ohman {
                 : m == 2 ? "Windows Dynamic Lighting is painting the keyboard; its colours and effects come from Windows settings. Pick a mode above to take it back."
                 : fx == 2 ? "Cycle runs every zone through the spectrum together." : "Wave runs the spectrum across the zones, left to right.";
             kbdBig.Selectable = pick; kbdBig.Off = m == 0 || m == 2; kbdMini.Off = m == 0 || m == 2;
-            speedRow.Margin = new Thickness(0, pick ? 10 : 14, 0, 0);
-            if (effect) { if (!previewTimer.IsEnabled) previewTimer.Start(); } else previewTimer.Stop();
+            miniNeedsFrame = true;
+
         }
         void ApplyHex() {
             Rgb c; string t = txtHex.Text.Trim().TrimStart('#');
@@ -534,7 +532,7 @@ namespace Ohman {
             int[] z = SelectedZones();
             if (z.Length > 0 && E.LightColors.Length > z[0]) E.LightColors[z[0]].ToHsv(out curH, out curS, out curV);
             SyncPickerControls();
-            txtKbdSel.Text = E.Light.Zones == 1 ? "whole keyboard" : z.Length == E.Light.Zones ? "all zones" : "zone " + string.Join(", ", Array.ConvertAll(z, delegate(int i) { return (i + 1).ToString(); })) + " · Ctrl-click adds";
+            txtKbdSel.Text = E.Light.Zones == 1 ? "Keyboard" : z.Length == E.Light.Zones ? "All zones" : "Zone " + string.Join(", ", Array.ConvertAll(z, delegate(int i) { return (i + 1).ToString(); }));
         }
         /// <summary>Paint the selection in the drawings immediately, then send the colour to the firmware (debounced).</summary>
         void PushColor(bool now) {
@@ -583,11 +581,13 @@ namespace Ohman {
         public void ShowKeyboard(bool on) {
             if (kbdMini == null || kbdWin == null || on == kbdOpen) return;
             kbdOpen = on;
-            if (!on) { kbdWin.Hide(); previewTimer.Stop(); RefreshLighting(); Log.Write("keyboard editor closed"); return; }
+            if (!on) { kbdWin.Hide(); RefreshLighting(); Log.Write("keyboard editor closed"); return; }
             kbdDetached = false;
             SyncPickerFromSelection(); ApplyEditorState();
             if (kbdWin.Owner == null) kbdWin.Owner = this;                       // only allowed once the panel has been shown
             kbdWin.Show(); kbdWin.UpdateLayout();
+            F<FrameworkElement>("Picker").Height = kbdLeft.ActualHeight;          // controls column: same top and bottom as mode bar + keyboard
+            kbdWin.UpdateLayout();
             PlaceKeyboardWindow();
             // a short slide out from behind the panel
             double target = kbdWin.Left, dir = target < Left ? 1 : -1, start = target + dir * 36; DateTime t0 = DateTime.Now;
