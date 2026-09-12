@@ -28,7 +28,8 @@ Ohman interacts with the BIOS through the same commands OGH uses. Use at your ow
 | **Live** | CPU and GPU temperature, fan speeds, load, clocks, GPU watts, battery. |
 | **OMEN key** | Fn+F12 opens the panel (or cycles modes, or toggles max fan). Shift+F11 cycles modes. OGH's key handler is stopped, reversibly. |
 | **Safety** | A thermal guard forces max fan on a hot CPU, a hot chassis or stalled fans. Fans are never set below 1800 rpm. |
-| **Extras** | Tray, hotkeys, start with Windows without a UAC prompt, Eco on battery, on-screen flash on key presses. |
+| **Lighting** | A live keyboard in the panel; click it and an editor slides open beside it: pick zones on the keyboard, a proper colour picker, presets, brightness, Breathe / Cycle / Wave effects, or hand the keyboard to Windows Dynamic Lighting. One-zone and four-zone keyboards; per-key editing is next. |
+| **Extras** | Tray, hotkeys (Shift+F11 cycles modes, Ctrl+Alt+E/B/P/M/O), starts with Windows without a UAC prompt (on by default, one switch to turn off), Eco on battery, on-screen flash on key presses. |
 
 Settings live in `ohman.state`, everything the app does goes to `ohman.log`.
 
