@@ -65,6 +65,7 @@ namespace Ohman {
         public string LightColors = "";             // zone colours RRGGBB,RRGGBB,... (seeded from the firmware on first run)
         public int LightLevel = 100;                // brightness 0..100, applied by scaling the colours (firmware level byte is unverified)
         public int LightEffect = 0;                 // 0 static, 1 breathe, 2 cycle, 3 wave (software effects, ~8 frames/s)
+        public int LightSpeed = 3;                  // 1..5
         public bool NoPersist;                      // set when --set overrides are in effect: never write them back to the file
         public int SavedModeOverride = -1;          // while battery forces Eco, the file keeps the user's own mode
 
@@ -113,6 +114,7 @@ namespace Ohman {
                         case "LightColors": s.LightColors = v; break;
                         case "LightLevel": if (TryInt(v, out n)) s.LightLevel = Math.Max(0, Math.Min(100, n)); break;
                         case "LightEffect": if (TryInt(v, out n)) s.LightEffect = Math.Max(0, Math.Min(3, n)); break;
+                        case "LightSpeed": if (TryInt(v, out n)) s.LightSpeed = Math.Max(1, Math.Min(5, n)); break;
                     }
                 }
             } catch (Exception ex) { Log.Write("settings apply " + k + ": " + ex.Message); }
@@ -135,7 +137,7 @@ namespace Ohman {
                 sb.AppendLine("SuppressOgh=" + SuppressOgh); sb.AppendLine("Hotkeys=" + Hotkeys);
                 sb.AppendLine("EcoOnBattery=" + EcoOnBattery); sb.AppendLine("SyncWinPower=" + SyncWinPower);
                 sb.AppendLine("HeartbeatSec=" + HeartbeatSec);
-                sb.AppendLine("Light=" + Light); sb.AppendLine("LightColors=" + LightColors); sb.AppendLine("LightLevel=" + LightLevel); sb.AppendLine("LightEffect=" + LightEffect);
+                sb.AppendLine("Light=" + Light); sb.AppendLine("LightColors=" + LightColors); sb.AppendLine("LightLevel=" + LightLevel); sb.AppendLine("LightEffect=" + LightEffect); sb.AppendLine("LightSpeed=" + LightSpeed);
                 sb.AppendLine("WinX=" + WinX); sb.AppendLine("WinY=" + WinY); sb.AppendLine("StartHidden=" + StartHidden);
                 sb.AppendLine("# Name=   (optional: a different display name for the window and tray; no rebuild needed)");
                 if (!string.IsNullOrEmpty(Name)) sb.AppendLine("Name=" + Name);
@@ -574,12 +576,23 @@ namespace Ohman {
             lock (applySync) ApplyLightCore();
             Changed();
         }
+        public static double SpeedFactor(int speed) { return new[] { 0.35, 0.6, 1.0, 1.6, 2.4 }[Math.Max(0, Math.Min(4, speed - 1))]; }
+        public void SetLightSpeed(int speed) { S.LightSpeed = Math.Max(1, Math.Min(5, speed)); S.Save(); Changed(); }
         public void SetLightLevel(int level) {
             S.LightLevel = Math.Max(0, Math.Min(100, level)); S.Save();
             lock (applySync) { if (S.Light == 1 && Light != null && S.LightEffect == 0) Try(delegate { Light.SetColors(Scaled(LightColors)); }, "Keyboard brightness"); }
             Changed();
         }
 
+        /// <summary>Colour of zone i at a given phase for an effect. Shared with the editor's preview.</summary>
+        public static Rgb EffectFrame(int effect, double phase, Rgb[] baseColors, int i) {
+            switch (effect) {
+                case 1: return baseColors[i].Scale(0.15 + 0.85 * (0.5 + 0.5 * Math.Sin(phase * 1.6)));                 // breathe
+                case 2: return Rgb.FromHue(phase * 25);                                                                  // cycle: every zone through the spectrum
+                case 3: return Rgb.FromHue(phase * 25 + i * (360.0 / Math.Max(1, baseColors.Length)));                   // wave: zones offset
+                default: return baseColors[i];
+            }
+        }
         // software effects: a frame every 120 ms through the same colour-table write (OGH animates the same way, ~15 fps)
         System.Threading.Timer fx; double fxPhase; int fxFailures;
         void StartEffect() { fxFailures = 0; if (fx == null) fx = new System.Threading.Timer(delegate { EffectTick(); }, null, 120, 120); else fx.Change(120, 120); }
@@ -588,14 +601,8 @@ namespace Ohman {
             if (Light == null || S.Light != 1 || S.LightEffect == 0) return;
             if (!Monitor.TryEnter(applySync, 50)) return;
             try {
-                fxPhase += 0.12; var frame = new Rgb[LightColors.Length];
-                for (int i = 0; i < frame.Length; i++) {
-                    switch (S.LightEffect) {
-                        case 1: frame[i] = LightColors[i].Scale(0.15 + 0.85 * (0.5 + 0.5 * Math.Sin(fxPhase * 1.6))); break;                 // breathe: 4 s cycle
-                        case 2: frame[i] = Rgb.FromHue(fxPhase * 25); break;                                                                  // cycle: all zones through the spectrum
-                        default: frame[i] = Rgb.FromHue(fxPhase * 25 + i * (360.0 / Math.Max(1, frame.Length))); break;                       // wave: zones offset
-                    }
-                }
+                fxPhase += 0.12 * SpeedFactor(S.LightSpeed); var frame = new Rgb[LightColors.Length];
+                for (int i = 0; i < frame.Length; i++) frame[i] = EffectFrame(S.LightEffect, fxPhase, LightColors, i);
                 try { Light.SetColors(Scaled(frame)); fxFailures = 0; }
                 catch (Exception ex) { if (++fxFailures >= 5) { Log.Write("effect stopped: " + ex.Message); StopEffect(); } }
             } finally { Monitor.Exit(applySync); }

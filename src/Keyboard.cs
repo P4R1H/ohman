@@ -53,7 +53,7 @@ namespace Ohman {
     public sealed class KeyboardView : FrameworkElement {
         public List<KeyDef> Keys = new List<KeyDef>();
         public Rgb[] ZoneColors = new Rgb[0];
-        public bool Off, Interactive, PerKey;
+        public bool Off, Interactive, PerKey, Selectable = true;   // Selectable=false: an effect owns the colours, clicks are ignored
         public HashSet<int> Selected = new HashSet<int>();       // zone indices (or key indices when PerKey)
         public event Action<KeyDef> KeyClicked;
         int hover = -1; double unitsW = 15, unitsH = 5.7;
@@ -76,7 +76,6 @@ namespace Ohman {
             return new Rect(pad + k.X * scale + gap, pad + k.Y * scale + gap, Math.Max(1, k.W * scale - 2 * gap), Math.Max(1, k.H * scale - 2 * gap));
         }
 
-        static Color Mix(Color a, Color b, double t) { return Color.FromRgb((byte)(a.R + (b.R - a.R) * t), (byte)(a.G + (b.G - a.G) * t), (byte)(a.B + (b.B - a.B) * t)); }
         static Color WithA(Color c, double a) { return Color.FromArgb((byte)Math.Round(a * 255), c.R, c.G, c.B); }
         static SolidColorBrush B(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
         static Color ToColor(Rgb c) { return Color.FromRgb(c.R, c.G, c.B); }
@@ -85,38 +84,18 @@ namespace Ohman {
             double pad = Interactive ? 12 : 3, gap = Interactive ? 2.2 : 0.6;
             double scale = (ActualWidth - 2 * pad) / unitsW;
             double h = unitsH * scale + 2 * pad;
-            if (!Interactive) {
-                // the small glyph: flat colour blocks read best at this size
-                dc.DrawRoundedRectangle(Ui.Brush("#141820"), new Pen(Ui.Brush("#1F232C"), 1), new Rect(0.5, 0.5, ActualWidth - 1, h - 1), 4, 4);
-                foreach (var k in Keys) {
-                    var r = KeyRect(k, scale, pad, gap);
-                    Color fill = Off || ZoneColors.Length == 0 ? Color.FromRgb(0x2A, 0x2F, 0x3A) : ToColor(ZoneColors[Math.Min(ZoneColors.Length - 1, k.Zone)]);
-                    dc.DrawRoundedRectangle(B(fill), null, r, 1.2, 1.2);
-                }
-                return;
-            }
-            // the editor: a dark deck, dark keycaps, and the zone colour as the light under and through each cap
-            var deck = new LinearGradientBrush(Color.FromRgb(0x14, 0x18, 0x20), Color.FromRgb(0x0F, 0x12, 0x18), 90); deck.Freeze();
-            dc.DrawRoundedRectangle(deck, new Pen(Ui.Brush("#232833"), 1), new Rect(0.5, 0.5, ActualWidth - 1, h - 1), 12, 12);
-            Color capTop = Color.FromRgb(0x23, 0x27, 0x30), capBottom = Color.FromRgb(0x18, 0x1C, 0x23), offLegend = Color.FromRgb(0x55, 0x5C, 0x6B);
+            var deck = Interactive ? (Brush)Ui.Brush("#12151C") : Ui.Brush("#141820");
+            dc.DrawRoundedRectangle(deck, new Pen(Ui.Brush(Interactive ? "#232833" : "#1F232C"), 1), new Rect(0.5, 0.5, ActualWidth - 1, h - 1), Interactive ? 12 : 4, Interactive ? 12 : 4);
+            Color dimFill = Color.FromRgb(0x24, 0x29, 0x33), dimLegend = Color.FromRgb(0x6B, 0x73, 0x85), litLegend = Color.FromRgb(0x0E, 0x10, 0x14);
             foreach (var k in Keys) {
                 var r = KeyRect(k, scale, pad, gap);
                 bool lit = !Off && ZoneColors.Length > 0;
-                Color zone = lit ? ToColor(ZoneColors[Math.Min(ZoneColors.Length - 1, PerKey ? Math.Min(k.Index, ZoneColors.Length - 1) : k.Zone)]) : offLegend;
-                bool sel = Selected.Contains(PerKey ? k.Index : k.Zone), hov = k.Index == hover;
-                if (lit) {
-                    // underglow: two soft layers around the cap
-                    var g1 = r; g1.Inflate(5, 5); dc.DrawRoundedRectangle(B(WithA(zone, 0.13)), null, g1, 7, 7);
-                    var g2 = r; g2.Inflate(2.2, 2.2); dc.DrawRoundedRectangle(B(WithA(zone, 0.28)), null, g2, 5.5, 5.5);
-                }
-                var cap = new LinearGradientBrush(capTop, capBottom, 90); cap.Freeze();
-                Pen edge = new Pen(B(lit ? WithA(zone, sel ? 0.95 : hov ? 0.8 : 0.55) : WithA(offLegend, sel ? 0.9 : 0.35)), sel ? 1.5 : 1);
-                dc.DrawRoundedRectangle(cap, edge, r, 4, 4);
-                if (sel) { var s2 = r; s2.Inflate(3.2, 3.2); dc.DrawRoundedRectangle(null, new Pen(B(WithA(Colors.White, 0.35)), 1), s2, 6, 6); }
-                if (k.Label.Length > 0 && r.Width > 14) {
-                    // legends glow in the zone colour, the way a backlit keyboard shows them
-                    Color legend = lit ? Mix(zone, Colors.White, 0.42) : offLegend;
-                    var ft = new FormattedText(k.Label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, k.Label.Length > 3 ? 8 : k.Label.Length > 1 ? 9 : 10, B(legend), 1.0);
+                Color fill = lit ? ToColor(ZoneColors[Math.Min(ZoneColors.Length - 1, PerKey ? Math.Min(k.Index, ZoneColors.Length - 1) : k.Zone)]) : dimFill;
+                bool sel = Interactive && Selectable && Selected.Contains(PerKey ? k.Index : k.Zone), hov = Interactive && Selectable && k.Index == hover;
+                Pen pen = sel ? new Pen(Brushes.White, 1.6) : hov ? new Pen(B(WithA(Colors.White, 0.55)), 1) : null;
+                dc.DrawRoundedRectangle(B(fill), pen, r, Interactive ? 4 : 1.2, Interactive ? 4 : 1.2);
+                if (Interactive && k.Label.Length > 0 && r.Width > 14) {
+                    var ft = new FormattedText(k.Label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, k.Label.Length > 3 ? 8 : k.Label.Length > 1 ? 9 : 10, B(lit ? litLegend : dimLegend), 1.0);
                     dc.DrawText(ft, new Point(r.X + 5, r.Y + 3.5));
                 }
             }
@@ -130,7 +109,7 @@ namespace Ohman {
         }
         protected override void OnMouseMove(MouseEventArgs e) {
             if (!Interactive) return;
-            var k = Hit(e.GetPosition(this)); int h = k == null ? -1 : k.Index;
+            var k = Selectable ? Hit(e.GetPosition(this)) : null; int h = k == null ? -1 : k.Index;
             if (h != hover) { hover = h; Cursor = k == null ? Cursors.Arrow : Cursors.Hand; InvalidateVisual(); }
         }
         protected override void OnMouseLeave(MouseEventArgs e) { if (hover != -1) { hover = -1; InvalidateVisual(); } }

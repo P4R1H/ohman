@@ -404,18 +404,13 @@
     </Style>
   </Grid.Resources>
 
-  <Grid.RowDefinitions>
-    <RowDefinition Height="Auto"/>
-    <RowDefinition Height="*"/>
-    <RowDefinition Height="Auto"/>
-  </Grid.RowDefinitions>
   <Grid.ColumnDefinitions>
     <ColumnDefinition Width="Auto"/>
     <ColumnDefinition Width="*"/>
   </Grid.ColumnDefinitions>
 
   <!-- keyboard editor: slides open on the left of the panel -->
-  <Border x:Name="KbdPanel" Grid.Column="0" Grid.RowSpan="3" Width="540" Visibility="Collapsed" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
+  <Border x:Name="KbdPanel" Grid.Column="0" Width="540" Visibility="Collapsed" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
     <Grid Margin="18,0,18,16">
       <Grid.RowDefinitions>
         <RowDefinition Height="54"/>
@@ -423,7 +418,7 @@
         <RowDefinition Height="Auto"/>
         <RowDefinition Height="*"/>
       </Grid.RowDefinitions>
-      <Grid>
+      <Grid x:Name="KbdHeader" Background="Transparent" Cursor="SizeAll">
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
           <TextBlock Text="Keyboard" FontFamily="{StaticResource HeadFont}" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Text}"/>
           <TextBlock x:Name="TxtKbdKind" Style="{StaticResource SubSm}" Margin="8,3,0,0" VerticalAlignment="Center"/>
@@ -442,40 +437,60 @@
         </UniformGrid>
       </Border>
       <StackPanel x:Name="Picker" Grid.Row="3" Margin="0,18,0,0" VerticalAlignment="Top">
-        <Grid>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="Auto"/>
-          </Grid.ColumnDefinitions>
-          <TextBlock Text="Colour" Style="{StaticResource Lbl}"/>
-          <TextBlock x:Name="TxtKbdSel" Grid.Column="1" Style="{StaticResource SubSm}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-          <Button x:Name="BtnAllZones" Grid.Column="2" Style="{StaticResource LinkBtn}" Content="All zones" VerticalAlignment="Center" ToolTip="Colour every zone at once"/>
-        </Grid>
-        <Grid x:Name="SvBox" Height="132" Margin="0,10,0,0" Cursor="Cross" Background="Transparent">
-          <Rectangle x:Name="SvHue" RadiusX="9" RadiusY="9" Fill="#FF0000"/>
-          <Rectangle RadiusX="9" RadiusY="9">
-            <Rectangle.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="1,0"><GradientStop Color="#FFFFFFFF" Offset="0"/><GradientStop Color="#00FFFFFF" Offset="1"/></LinearGradientBrush></Rectangle.Fill>
-          </Rectangle>
-          <Rectangle RadiusX="9" RadiusY="9">
-            <Rectangle.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#00000000" Offset="0"/><GradientStop Color="#FF000000" Offset="1"/></LinearGradientBrush></Rectangle.Fill>
-          </Rectangle>
-          <Canvas x:Name="SvCanvas" ClipToBounds="False">
-            <Ellipse x:Name="SvMarker" Width="12" Height="12" Stroke="White" StrokeThickness="2" Fill="Transparent"/>
-          </Canvas>
-        </Grid>
-        <Slider x:Name="SlHue" Style="{StaticResource SlHue}" Minimum="0" Maximum="359" IsSnapToTickEnabled="True" TickFrequency="1" Margin="-7,8,-7,0"/>
-        <Grid Margin="0,10,0,0">
+        <!-- Static / Breathe: pick colours -->
+        <StackPanel x:Name="ColourBlock">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Colour" Style="{StaticResource Lbl}"/>
+            <TextBlock x:Name="TxtKbdSel" Grid.Column="1" Style="{StaticResource SubSm}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <Button x:Name="BtnAllZones" Grid.Column="2" Style="{StaticResource LinkBtn}" Content="All zones" VerticalAlignment="Center" ToolTip="Colour every zone at once"/>
+          </Grid>
+          <Grid x:Name="SvBox" Height="124" Margin="0,10,0,0" Cursor="Cross" Background="Transparent">
+            <Rectangle x:Name="SvHue" RadiusX="9" RadiusY="9" Fill="#FF0000"/>
+            <Rectangle RadiusX="9" RadiusY="9">
+              <Rectangle.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="1,0"><GradientStop Color="#FFFFFFFF" Offset="0"/><GradientStop Color="#00FFFFFF" Offset="1"/></LinearGradientBrush></Rectangle.Fill>
+            </Rectangle>
+            <Rectangle RadiusX="9" RadiusY="9">
+              <Rectangle.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#00000000" Offset="0"/><GradientStop Color="#FF000000" Offset="1"/></LinearGradientBrush></Rectangle.Fill>
+            </Rectangle>
+            <Canvas x:Name="SvCanvas" ClipToBounds="False">
+              <Ellipse x:Name="SvMarker" Width="12" Height="12" Stroke="White" StrokeThickness="2" Fill="Transparent"/>
+            </Canvas>
+          </Grid>
+          <Slider x:Name="SlHue" Style="{StaticResource SlHue}" Minimum="0" Maximum="359" IsSnapToTickEnabled="True" TickFrequency="1" Margin="-7,8,-7,0"/>
+          <Grid Margin="0,10,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="64"/>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Presets" Style="{StaticResource Sub}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+            <StackPanel x:Name="Presets" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="7,0,0,0"/>
+            <TextBox x:Name="TxtHex" Grid.Column="2" Style="{StaticResource Hex}" MaxLength="7" Width="96" TextAlignment="Center" Padding="6,5"/>
+          </Grid>
+        </StackPanel>
+        <!-- Cycle / Wave: the effect makes the colours; Off / Windows: nothing to pick -->
+        <StackPanel x:Name="InfoBlock" Visibility="Collapsed">
+          <TextBlock x:Name="TxtKbdInfo" Style="{StaticResource Sub}" Margin="0,2,0,0"/>
+          <Button x:Name="BtnWinLighting" Style="{StaticResource LinkBtn}" Content="Open Windows lighting settings" HorizontalAlignment="Left" Margin="-4,6,0,0" Visibility="Collapsed"/>
+        </StackPanel>
+        <!-- Breathe / Cycle / Wave -->
+        <Grid x:Name="SpeedRow" Margin="0,12,0,0" Visibility="Collapsed">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="64"/>
             <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="74"/>
           </Grid.ColumnDefinitions>
-          <TextBlock Text="Presets" Style="{StaticResource Sub}" Margin="4,0,0,0" VerticalAlignment="Center"/>
-          <StackPanel x:Name="Presets" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="7,0,0,0"/>
-          <TextBox x:Name="TxtHex" Grid.Column="2" Style="{StaticResource Hex}" MaxLength="7" Width="96" TextAlignment="Center" Padding="6,5"/>
+          <TextBlock Text="Speed" Style="{StaticResource Sub}" Margin="4,0,0,0" VerticalAlignment="Center"/>
+          <Slider x:Name="SlSpeed" Grid.Column="1" Style="{StaticResource Sl}" Minimum="1" Maximum="5" IsSnapToTickEnabled="True" TickFrequency="1"/>
+          <TextBlock x:Name="TxtSpeed" Grid.Column="2" Style="{StaticResource Mono}" FontSize="12"/>
         </Grid>
-        <Grid Margin="0,10,0,0">
+        <!-- every lit mode -->
+        <Grid x:Name="LevelRow" Margin="0,10,0,0">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="64"/>
             <ColumnDefinition Width="*"/>
@@ -489,8 +504,16 @@
     </Grid>
   </Border>
 
+  <!-- the panel: header, body, footer -->
+  <Grid Grid.Column="1">
+  <Grid.RowDefinitions>
+    <RowDefinition Height="Auto"/>
+    <RowDefinition Height="*"/>
+    <RowDefinition Height="Auto"/>
+  </Grid.RowDefinitions>
+
   <!-- header -->
-  <Grid x:Name="Header" Grid.Column="1" Height="54" Background="Transparent">
+  <Grid x:Name="Header" Height="54" Background="Transparent">
     <Grid.ColumnDefinitions>
       <ColumnDefinition Width="*"/>
       <ColumnDefinition Width="Auto"/>
@@ -517,7 +540,7 @@
   </Grid>
 
   <!-- body -->
-  <ScrollViewer Grid.Row="1" Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+  <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
     <StackPanel Margin="18,4,18,16">
 
       <Border x:Name="ErrBanner" Visibility="Collapsed" Background="#26FF5C5C" CornerRadius="8" Padding="10,7" Margin="0,0,0,12">
@@ -719,7 +742,7 @@
   </ScrollViewer>
 
   <!-- footer -->
-  <Border Grid.Row="2" Grid.Column="1" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0">
+  <Border Grid.Row="2" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0">
     <Grid Height="38" Margin="18,0,18,0">
       <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
         <Ellipse x:Name="DotHb" Width="6" Height="6" Fill="#3DDC84" VerticalAlignment="Center"/>
@@ -729,4 +752,5 @@
     </Grid>
   </Border>
 
+  </Grid>
 </Grid>

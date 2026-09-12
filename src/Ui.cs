@@ -142,7 +142,8 @@ namespace Ohman {
         // keyboard lighting
         FrameworkElement lightRow, lightDivider, kbdPanel, svBox; Border miniHost, kbdHost; StackPanel presets; TextBlock txtLightSub, txtKbdKind, txtKbdSel, txtLevel;
         RadioButton kOff, kStatic, kBreathe, kCycle, kWave, kWin; Button btnAllZones, btnKbdClose; TextBox txtHex; Rectangle svHue; Ellipse svMarker; Canvas svCanvas;
-        KeyboardView kbdMini, kbdBig; bool kbdOpen; double curH, curS = 1, curV = 1; DispatcherTimer colorDebounce, levelDebounce; const double KbdWidth = 540;
+        KeyboardView kbdMini, kbdBig; bool kbdOpen; double curH, curS = 1, curV = 1; DispatcherTimer colorDebounce, levelDebounce, speedDebounce, previewTimer; const double KbdWidth = 540;
+        FrameworkElement colourBlock, infoBlock, speedRow, levelRow; TextBlock txtKbdInfo, txtSpeed; Slider slSpeed; Button btnWinLighting; double previewPhase;
         ToggleButton tgGpuAuto, tgSuppress, tgHotkeys, tgAutostart, tgEcoBattery, tgSyncPower, tgEcoCool;
         FrameworkElement fanPanel, settingsPanel, mainPanel, demoBadge, errBanner, infoBanner, header; TextBlock txtInfo;
         Border mark; Ellipse dotHb; bool footerMessage;
@@ -175,8 +176,8 @@ namespace Ohman {
             ShowInTaskbar = true; SnapsToDevicePixels = true; UseLayoutRounding = true;
             TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
             root = LoadXaml(); Content = root;
-            root.HorizontalAlignment = HorizontalAlignment.Right; root.Width = BaseWidth;   // anchored right: the keyboard editor grows the window leftwards
             FindAll(); BuildModeBar(); BuildTiles(); BuildLighting(); BuildIcons(); BuildTray(); Wire(); Position(); SetSettingsIcon(false);
+            if (E.Light != null) BuildKeyboardWindow();
             slFan1.Minimum = slFan2.Minimum = E.P.Curve.Floor; slFan1.Maximum = slFan2.Maximum = E.P.Curve.Ceiling;   // bounds belong to the profile
             slPower.Maximum = E.MaxOffset;
             if (!E.P.HasPowerGain) { F<FrameworkElement>("PowerRow").Visibility = Visibility.Collapsed; F<FrameworkElement>("PowerDivider").Visibility = Visibility.Collapsed; }
@@ -196,7 +197,7 @@ namespace Ohman {
             Application.Current.SessionEnding += delegate { ExitApp(); };        // logoff/shutdown: leave cleanly instead of hiding
             StateChanged += delegate { if (WindowState == WindowState.Minimized) { WindowState = WindowState.Normal; HideToTray(); } };
             IsVisibleChanged += delegate { sensors.SetInterval(IsVisible ? 2000 : 15000); if (IsVisible) ReadHardwareAsync(); };
-            LocationChanged += delegate { if (IsVisible && WindowState == WindowState.Normal && Left > -30000 && !kbdOpen) { E.S.WinX = (int)Left; E.S.WinY = (int)Top; } };
+            LocationChanged += delegate { if (IsVisible && WindowState == WindowState.Normal && Left > -30000) { E.S.WinX = (int)Left; E.S.WinY = (int)Top; } };
 
             uiTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
             uiTimer.Tick += delegate { if (IsVisible) ReadHardwareAsync(); UpdateFooter(); };
@@ -234,6 +235,8 @@ namespace Ohman {
             kOff = F<RadioButton>("KOff"); kStatic = F<RadioButton>("KStatic"); kBreathe = F<RadioButton>("KBreathe"); kCycle = F<RadioButton>("KCycle"); kWave = F<RadioButton>("KWave"); kWin = F<RadioButton>("KWin");
             svBox = F<FrameworkElement>("SvBox"); svHue = F<Rectangle>("SvHue"); svMarker = F<Ellipse>("SvMarker"); svCanvas = F<Canvas>("SvCanvas");
             slHue = F<Slider>("SlHue"); slLevel = F<Slider>("SlLevel"); txtLevel = F<TextBlock>("TxtLevel"); txtHex = F<TextBox>("TxtHex"); btnAllZones = F<Button>("BtnAllZones"); presets = F<StackPanel>("Presets");
+            colourBlock = F<FrameworkElement>("ColourBlock"); infoBlock = F<FrameworkElement>("InfoBlock"); speedRow = F<FrameworkElement>("SpeedRow"); levelRow = F<FrameworkElement>("LevelRow");
+            txtKbdInfo = F<TextBlock>("TxtKbdInfo"); txtSpeed = F<TextBlock>("TxtSpeed"); slSpeed = F<Slider>("SlSpeed"); btnWinLighting = F<Button>("BtnWinLighting");
             settingsPanel = F<FrameworkElement>("SettingsPanel"); txtMachine = F<TextBlock>("TxtMachine");
             keyCycle = F<RadioButton>("KeyCycle"); keyShow = F<RadioButton>("KeyShow"); keyMax = F<RadioButton>("KeyMax"); keyOff = F<RadioButton>("KeyOff");
             txtKeyInfo = F<TextBlock>("TxtKeyInfo"); btnLearn = F<Button>("BtnLearn"); tgSuppress = F<ToggleButton>("TgSuppress");
@@ -465,6 +468,7 @@ namespace Ohman {
                 if (syncing) return;
                 int m = kWin.IsChecked == true ? 2 : kOff.IsChecked == true ? 0 : 1;
                 int fx = kBreathe.IsChecked == true ? 1 : kCycle.IsChecked == true ? 2 : kWave.IsChecked == true ? 3 : 0;
+                E.S.Light = m; E.S.LightEffect = fx; ApplyEditorState();
                 Bg(delegate { E.SetLight(m, fx, true); });
             };
             foreach (var r in new RadioButton[] { kOff, kStatic, kBreathe, kCycle, kWave, kWin }) r.Checked += mode;
@@ -485,7 +489,39 @@ namespace Ohman {
             levelDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
             levelDebounce.Tick += delegate { levelDebounce.Stop(); int lv = (int)slLevel.Value; Bg(delegate { E.SetLightLevel(lv); }); };
             slLevel.ValueChanged += delegate { txtLevel.Text = (int)slLevel.Value + " %"; if (!syncing) { levelDebounce.Stop(); levelDebounce.Start(); } };
+            speedDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+            speedDebounce.Tick += delegate { speedDebounce.Stop(); int sp = (int)slSpeed.Value; Bg(delegate { E.SetLightSpeed(sp); }); };
+            slSpeed.ValueChanged += delegate { txtSpeed.Text = SpeedText((int)slSpeed.Value); if (!syncing) { speedDebounce.Stop(); speedDebounce.Start(); } };
+            btnWinLighting.Click += delegate { try { Process.Start(new ProcessStartInfo("ms-settings:personalization-lighting") { UseShellExecute = true }); } catch (Exception ex) { ShowToast("Cannot open Windows settings: " + ex.Message, true); } };
             svBox.SizeChanged += delegate { PlaceMarker(); };
+            // live preview of an effect in both drawings, same maths as the firmware frames
+            previewTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
+            previewTimer.Tick += delegate {
+                var S = E.S; if (S.Light != 1 || S.LightEffect == 0 || E.LightColors.Length == 0) { previewTimer.Stop(); return; }
+                previewPhase += 0.12 * Engine.SpeedFactor(S.LightSpeed);
+                var frame = new Rgb[E.LightColors.Length]; double lv = Math.Max(0.05, S.LightLevel / 100.0);
+                for (int i = 0; i < frame.Length; i++) frame[i] = Engine.EffectFrame(S.LightEffect, previewPhase, E.LightColors, i).Scale(lv);
+                kbdMini.ZoneColors = frame; kbdMini.Repaint();
+                if (kbdOpen) { kbdBig.ZoneColors = frame; kbdBig.Repaint(); }
+            };
+            IsVisibleChanged += delegate { if (IsVisible) RefreshLighting(); else previewTimer.Stop(); };
+        }
+        static string SpeedText(int s) { return new[] { "slowest", "slow", "normal", "fast", "fastest" }[Math.Max(0, Math.Min(4, s - 1))]; }
+        /// <summary>Show only what the current mode can use.</summary>
+        void ApplyEditorState() {
+            var S = E.S; int m = S.Light, fx = S.LightEffect;
+            bool lit = m == 1, pick = lit && (fx == 0 || fx == 1), effect = lit && fx != 0;
+            colourBlock.Visibility = pick ? Visibility.Visible : Visibility.Collapsed;
+            speedRow.Visibility = effect ? Visibility.Visible : Visibility.Collapsed;
+            levelRow.Visibility = lit ? Visibility.Visible : Visibility.Collapsed;
+            infoBlock.Visibility = pick ? Visibility.Collapsed : Visibility.Visible;
+            btnWinLighting.Visibility = m == 2 ? Visibility.Visible : Visibility.Collapsed;
+            txtKbdInfo.Text = m == 0 ? "The keyboard backlight is off. Fn+F4 or a mode above turns it back on."
+                : m == 2 ? "Windows Dynamic Lighting is painting the keyboard; its colours and effects come from Windows settings. Pick a mode above to take it back."
+                : fx == 2 ? "Cycle runs every zone through the spectrum together." : "Wave runs the spectrum across the zones, left to right.";
+            kbdBig.Selectable = pick; kbdBig.Off = m == 0 || m == 2; kbdMini.Off = m == 0 || m == 2;
+            speedRow.Margin = new Thickness(0, pick ? 12 : 14, 0, 0);
+            if (effect) { if (!previewTimer.IsEnabled) previewTimer.Start(); } else previewTimer.Stop();
         }
         void ApplyHex() {
             Rgb c; string t = txtHex.Text.Trim().TrimStart('#');
@@ -516,59 +552,79 @@ namespace Ohman {
             syncing = true; try { txtHex.Text = "#" + v.Hex; } finally { syncing = false; }
             colorDebounce.Stop(); if (now) { Rgb vv = v; int[] z = SelectedZones(); Bg(delegate { E.SetLightColor(z, vv); }); } else colorDebounce.Start();
         }
-        /// <summary>The editor opens to the left of the panel. The content is anchored to the window's right edge, so
-        /// growing the window leftwards reveals the editor while the panel stays exactly where it was.</summary>
-        const double BaseWidth = 440;
-        [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
-        const uint SWP_NOZORDER = 0x0004, SWP_NOACTIVATE = 0x0010;
-        bool sliding;
-        double MeasuredHeight(double width) {
-            root.Measure(new Size(width, double.PositiveInfinity));
-            double max = Math.Max(420, SystemParameters.WorkArea.Height - 24);
-            return Math.Min(Math.Ceiling(root.DesiredSize.Height), max);
+        /// <summary>The editor is its own window, docked beside the panel (left when there is room), owned by it so it
+        /// follows, hides and minimises with the panel. The panel itself never changes size.</summary>
+        Window kbdWin; bool kbdDetached; const double KbdGap = 10;
+        void BuildKeyboardWindow() {
+            var parent = kbdPanel.Parent as Panel; if (parent != null) parent.Children.Remove(kbdPanel);
+            var border = (Border)kbdPanel;
+            border.Visibility = Visibility.Visible; border.BorderThickness = new Thickness(0); border.Background = Ui.Brush("#0E1014"); border.CornerRadius = new CornerRadius(8);
+            kbdWin = new Window {
+                Title = Program.DisplayName + " keyboard", WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize, ShowInTaskbar = false,
+                Background = Brushes.Transparent, AllowsTransparency = false, Width = 540, SizeToContent = SizeToContent.Height, Content = kbdPanel,
+                ShowActivated = true, Icon = Icon
+            };
+            kbdWin.Background = Ui.Brush("#0E1014");
+            kbdWin.SourceInitialized += delegate {
+                var h = new WindowInteropHelper(kbdWin).Handle;
+                try { int pref = 2; DwmSetWindowAttribute(h, 33, ref pref, 4); int dark = 1; DwmSetWindowAttribute(h, 20, ref dark, 4); int border2 = 0x002C2823; DwmSetWindowAttribute(h, 34, ref border2, 4); } catch { }
+            };
+            kbdWin.Closing += delegate(object o, System.ComponentModel.CancelEventArgs ce) { if (!exiting) { ce.Cancel = true; ShowKeyboard(false); } };
+            kbdWin.KeyDown += delegate(object o, KeyEventArgs ke) { if (ke.Key == Key.Escape) ShowKeyboard(false); };
+            var head = F<FrameworkElement>("KbdHeader");
+            head.MouseLeftButtonDown += delegate(object o, MouseButtonEventArgs me) {
+                if (me.LeftButton != MouseButtonState.Pressed) return;
+                try { kbdWin.DragMove(); kbdDetached = true; } catch { }      // dragged away: stop docking it to the panel
+            };
+            LocationChanged += delegate { if (kbdOpen && !kbdDetached) PlaceKeyboardWindow(); };
+        }
+        /// <summary>Docked beside the panel: left of it when the work area allows, else right; tops aligned; clamped to the screen.</summary>
+        void PlaceKeyboardWindow() {
+            var wa = SystemParameters.WorkArea; double w = kbdWin.ActualWidth > 0 ? kbdWin.ActualWidth : kbdWin.Width, h = kbdWin.ActualHeight;
+            double left = Left - w - KbdGap;
+            if (left < wa.Left) left = Left + ActualWidth + KbdGap;
+            if (left + w > wa.Right) left = Math.Max(wa.Left, wa.Right - w);
+            double top = Top; if (h > 0 && top + h > wa.Bottom) top = Math.Max(wa.Top, wa.Bottom - h);
+            kbdWin.Left = left; kbdWin.Top = top;
         }
         public void ShowKeyboard(bool on) {
-            if (kbdMini == null || on == kbdOpen || sliding) return;
+            if (kbdMini == null || kbdWin == null || on == kbdOpen) return;
             kbdOpen = on;
-            var wa = SystemParameters.WorkArea;
-            double targetW = on ? BaseWidth + KbdWidth : BaseWidth;
-            double targetL = on ? Math.Max(wa.Left, Left - KbdWidth) : Math.Min(Left + KbdWidth, wa.Right - BaseWidth);
-            SizeToContent = SizeToContent.Manual;
-            // the height the window wants at the end, measured before anything moves, so height, width and position travel together
-            kbdPanel.Visibility = on ? Visibility.Visible : Visibility.Collapsed; root.Width = targetW;
-            double targetH = MeasuredHeight(targetW);
-            kbdPanel.Visibility = Visibility.Visible;                          // stays visible while sliding either way
-            if (on) SyncPickerFromSelection(); else root.Width = BaseWidth + KbdWidth;
-            Action finish = delegate {
-                if (!on) { kbdPanel.Visibility = Visibility.Collapsed; root.Width = BaseWidth; }
-                Width = targetW; Height = targetH; Left = targetL; Top = Math.Max(wa.Top, Math.Min(Top, wa.Bottom - targetH));
-                sliding = false; Log.Write("keyboard editor " + (on ? "open" : "closed"));
-            };
-            if (screenshotPath != null) { finish(); return; }
-            // one window move-and-size per rendered frame: width, left and height together, so nothing jumps
-            var hwnd = new WindowInteropHelper(this).Handle; var dpi = VisualTreeHelper.GetDpi(this);
-            double w0 = ActualWidth, l0 = Left, h0 = ActualHeight, top = Top; DateTime t0 = DateTime.Now;
-            sliding = true;
-            EventHandler tick = null;
-            tick = delegate {
-                double t = Math.Min(1, (DateTime.Now - t0).TotalMilliseconds / 260.0), e = 1 - Math.Pow(1 - t, 3);   // ease-out
-                double w = w0 + (targetW - w0) * e, l = l0 + (targetL - l0) * e, hh = h0 + (targetH - h0) * e;
-                SetWindowPos(hwnd, IntPtr.Zero, (int)Math.Round(l * dpi.DpiScaleX), (int)Math.Round(top * dpi.DpiScaleY), (int)Math.Round(w * dpi.DpiScaleX), (int)Math.Round(hh * dpi.DpiScaleY), SWP_NOZORDER | SWP_NOACTIVATE);
-                if (t >= 1) { CompositionTarget.Rendering -= tick; finish(); }
-            };
-            CompositionTarget.Rendering += tick;
+            if (!on) { kbdWin.Hide(); previewTimer.Stop(); RefreshLighting(); Log.Write("keyboard editor closed"); return; }
+            kbdDetached = false;
+            SyncPickerFromSelection(); ApplyEditorState();
+            if (kbdWin.Owner == null) kbdWin.Owner = this;                       // only allowed once the panel has been shown
+            kbdWin.Show(); kbdWin.UpdateLayout();
+            PlaceKeyboardWindow();
+            // a short slide out from behind the panel
+            double target = kbdWin.Left, dir = target < Left ? 1 : -1, start = target + dir * 36; DateTime t0 = DateTime.Now;
+            if (screenshotPath == null) {
+                kbdWin.Left = start;
+                EventHandler tick = null;
+                tick = delegate {
+                    double t = Math.Min(1, (DateTime.Now - t0).TotalMilliseconds / 180.0), e = 1 - Math.Pow(1 - t, 3);
+                    kbdWin.Left = start + (target - start) * e;
+                    if (t >= 1) { CompositionTarget.Rendering -= tick; kbdWin.Left = target; }
+                };
+                CompositionTarget.Rendering += tick;
+            }
+            Log.Write("keyboard editor open");
         }
         void RefreshLighting() {
             if (E.Light == null || kbdMini == null) return;
             var S = E.S;
             kOff.IsChecked = S.Light == 0; kWin.IsChecked = S.Light == 2;
             kStatic.IsChecked = S.Light == 1 && S.LightEffect == 0; kBreathe.IsChecked = S.Light == 1 && S.LightEffect == 1; kCycle.IsChecked = S.Light == 1 && S.LightEffect == 2; kWave.IsChecked = S.Light == 1 && S.LightEffect == 3;
-            bool off = S.Light == 0;
-            kbdMini.ZoneColors = E.LightColors; kbdMini.Off = off; kbdMini.Repaint();
-            kbdBig.ZoneColors = E.LightColors; kbdBig.Off = off; kbdBig.Repaint();
+            ApplyEditorState();
+            if (!(S.Light == 1 && S.LightEffect != 0)) {                       // static colours; effects repaint from the preview timer
+                kbdMini.ZoneColors = E.LightColors; kbdMini.Repaint();
+                kbdBig.ZoneColors = E.LightColors; kbdBig.Repaint();
+            }
             slLevel.Value = Math.Max(5, S.LightLevel); txtLevel.Text = S.LightLevel + " %";
+            slSpeed.Value = S.LightSpeed; txtSpeed.Text = SpeedText(S.LightSpeed);
             string fxName = new[] { "Static", "Breathe", "Cycle", "Wave" }[Math.Max(0, Math.Min(3, S.LightEffect))];
-            txtLightSub.Text = S.Light == 2 ? "Windows Dynamic Lighting" : off ? "Off" : E.Light.Describe + " · " + fxName + (S.LightLevel < 100 ? " · " + S.LightLevel + " %" : "");
+            bool off = S.Light == 0;
+            txtLightSub.Text = S.Light == 2 ? "Windows Dynamic Lighting" : S.Light == 0 ? "Off" : E.Light.Describe + " · " + fxName + (S.LightLevel < 100 ? " · " + S.LightLevel + " %" : "");
             if (!kbdOpen) SyncPickerFromSelection();
         }
 
@@ -805,8 +861,22 @@ namespace Ohman {
         void Snapshot(string path) {
             root.UpdateLayout();
             var dpi = VisualTreeHelper.GetDpi(root);
-            var rtb = new RenderTargetBitmap((int)Math.Ceiling(root.ActualWidth * dpi.DpiScaleX), (int)Math.Ceiling(root.ActualHeight * dpi.DpiScaleY), dpi.PixelsPerInchX, dpi.PixelsPerInchY, PixelFormats.Pbgra32);
-            rtb.Render(root);
+            var parts = new List<FrameworkElement>(); if (kbdOpen) { kbdPanel.UpdateLayout(); parts.Add(kbdPanel); } parts.Add(root);
+            double gap = parts.Count > 1 ? KbdGap : 0, w = 0, h = 0;
+            foreach (var p in parts) { w += p.ActualWidth; h = Math.Max(h, p.ActualHeight); }
+            w += gap * (parts.Count - 1);
+            var dv = new DrawingVisual();
+            using (var dc = dv.RenderOpen()) {
+                double x = 0;
+                foreach (var p in parts) {
+                    var part = new RenderTargetBitmap((int)Math.Ceiling(p.ActualWidth * dpi.DpiScaleX), (int)Math.Ceiling(p.ActualHeight * dpi.DpiScaleY), dpi.PixelsPerInchX, dpi.PixelsPerInchY, PixelFormats.Pbgra32);
+                    part.Render(p);
+                    dc.DrawImage(part, new Rect(x, 0, p.ActualWidth, p.ActualHeight));
+                    x += p.ActualWidth + gap;
+                }
+            }
+            var rtb = new RenderTargetBitmap((int)Math.Ceiling(w * dpi.DpiScaleX), (int)Math.Ceiling(h * dpi.DpiScaleY), dpi.PixelsPerInchX, dpi.PixelsPerInchY, PixelFormats.Pbgra32);
+            rtb.Render(dv);
             var enc = new PngBitmapEncoder(); enc.Frames.Add(BitmapFrame.Create(rtb));
             using (var fs = System.IO.File.Create(path)) enc.Save(fs);
         }
@@ -823,7 +893,7 @@ namespace Ohman {
             Topmost = true; Topmost = false;
         }
         void TogglePanel() { if (IsVisible) HideToTray(); else ShowPanel(); }
-        void HideToTray() { E.S.Save(); Hide(); }
+        void HideToTray() { if (kbdOpen) ShowKeyboard(false); E.S.Save(); Hide(); }
         void StartShowListener() {
             var t = new Thread(delegate() {
                 var handles = new List<WaitHandle>();
@@ -849,6 +919,7 @@ namespace Ohman {
             try { Microsoft.Win32.SystemEvents.PowerModeChanged -= OnPowerMode; } catch { }
             try { if (tray != null) { tray.Visible = false; tray.Dispose(); } } catch { }
             try { if (osd != null) osd.Close(); } catch { }
+            try { if (kbdWin != null) kbdWin.Close(); } catch { }
             try { E.Dispose(); } catch { }
             try { sensors.Dispose(); } catch { }
             Log.Write("exit");
