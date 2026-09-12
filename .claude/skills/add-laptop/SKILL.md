@@ -63,7 +63,8 @@ the documented thermal-policy tables (v1: `0x30/0x31/0x50`; v0: `0x00/0x01/0x02`
 
    Keep the engine and UI untouched. If the model needs something the profile cannot express, stop and
    say what is missing rather than special-casing it elsewhere.
-3. **Build**: `build.cmd preview` must succeed. The real build needs no change.
+3. **Build**: `build.cmd preview` must succeed. Run `preview\Ohman.exe --demo --board <id>` once and check
+   `preview\ohman.log` shows the new profile being picked (not a generic one). The real build needs no change.
 4. **Update the README** "Built for" line to list the new model.
 5. **Commit** on a branch named `platform/<board id>` with a message like
    `Add <model> (<board id>) platform profile` and the issue reference.

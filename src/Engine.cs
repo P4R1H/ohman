@@ -200,7 +200,7 @@ namespace Ohman {
             var prof = Platforms.Find(Board);
             Supported = prof != null || Hw.IsDemo;
             if (prof != null) P = prof;
-            Log.Write("platform: model='" + Model + "' board='" + Board + "' -> " + (prof != null ? prof.Name : "UNKNOWN (read-only, no BIOS writes)"));
+            Log.Write("platform: model='" + Model + "' board='" + Board + "' -> " + (prof != null ? prof.Name : "no verified profile"));
             try {
                 FanCount = Hw.GetFanCountPassive();     // never the 0x10 query here: it is the keep-alive trigger
                 Info = Hw.GetSystemInfo();
@@ -208,7 +208,7 @@ namespace Ohman {
                 if (Supported && !Hw.IsDemo && Info.Valid && Info.ThermalPolicy != P.ThermalPolicy) {
                     Supported = false; Log.Write("thermal policy v" + Info.ThermalPolicy + " does not match the profile (v" + P.ThermalPolicy + "); switching to read-only");
                 }
-                if (prof == null && !Hw.IsDemo) {
+                if (prof == null && (!Hw.IsDemo || Platforms.BoardOverride != null)) {
                     // no verified profile: build one from what the firmware says about itself, the way the Linux driver does
                     var g = Platforms.Generic(Board, Info);
                     if (g != null) {

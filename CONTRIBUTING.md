@@ -19,6 +19,9 @@ and the firmware probes. Please don't special-case a model anywhere else.
   touching fans, a measurement on the device. `docs/research.md` documents the interface.
 - Keep the UI free of prose; short labels with a subscript for context.
 
+To see what generic mode would build for a board without running on it: `preview\Ohman.exe --demo --board 8A25`
+and read `preview\ohman.log`.
+
 ## Reporting a problem
 
 Use the **Bug report** template and attach `ohman.log` (no personal data in it). If fans or temperatures

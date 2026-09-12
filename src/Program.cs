@@ -2,6 +2,7 @@
 //   Ohman.exe                 normal start (elevated build asks for UAC once)
 //   Ohman.exe --hidden        start minimised to the tray (used by the autostart task)
 //   Ohman.exe --demo          force simulated hardware
+//   Ohman.exe --demo --board 8A25   simulate another board id (shows the generic profile the engine would build)
 //   Ohman.exe --screenshot f.png [--settings]   render the window to a PNG and exit (UI preview)
 using System;
 using System.Security.Principal;
@@ -33,6 +34,7 @@ namespace Ohman {
                 else if (a == "--set" && i + 1 < args.Length) overrides.Add(args[++i]);   // --set Key=Value: override for this run only (nothing is written back)
                 else if (a == "--flash") FlashTest = true;
                 else if (a == "--keyboard") KeyboardTest = true;
+                else if (a == "--board" && i + 1 < args.Length) Platforms.BoardOverride = args[++i];   // pretend to be another board (with --demo: see what generic mode would build)
             }
             for (int i = 0; i + 1 < args.Length; i++)
                 if (args[i].ToLowerInvariant() == "--make-ico") { MainWindow.WriteIco(args[i + 1], Ui.BalColor); return 0; }   // build aid: writes the app icon

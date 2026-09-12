@@ -116,8 +116,10 @@ namespace Ohman {
             }
         };
 
+        public static string BoardOverride;         // --board: test aid
         /// <summary>DMI baseboard product id, e.g. "8C58". Empty when unavailable.</summary>
         public static string ReadBoard() {
+            if (!string.IsNullOrEmpty(BoardOverride)) return BoardOverride;
             try {
                 using (var s = new ManagementObjectSearcher("SELECT Product FROM Win32_BaseBoard"))
                     foreach (ManagementObject mo in s.Get()) return (mo["Product"] as string ?? "").Trim();

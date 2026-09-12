@@ -1,7 +1,7 @@
 <p align="center"><img src="docs/logo.webp" width="120" alt=""></p>
 <h1 align="center">Ohman</h1>
 <p align="center">OMEN Gaming Hub's performance controls, without OMEN Gaming Hub.</p>
-<p align="center"><a href="https://github.com/P4R1H/Ohman/releases/latest/download/Ohman.exe"><img src="https://img.shields.io/badge/Download%20for%20Windows-Ohman.exe-5B8DEF?style=for-the-badge" alt="Download Ohman.exe"></a></p>
+<p align="center"><a href="https://github.com/P4R1H/Ohman/releases/latest/download/Ohman.exe"><img src="https://img.shields.io/badge/Download%20for%20Windows-Ohman.exe-5B8DEF?style=for-the-badge" alt="Download Ohman.exe"></a><br><a href="https://p4r1h.github.io/ohman/">p4r1h.github.io/ohman</a></p>
 
 Don't you love paying $2,500 for a laptop and still having ads pushed down your throat by mandatory
 software with no alternative? Ohman is the alternative. One executable, no services, no drivers, no account,
