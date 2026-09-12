@@ -49,73 +49,154 @@ namespace Ohman {
         }
     }
 
-    /// <summary>Draws a keyboard with each key in its zone's (or its own) colour. Interactive instances report clicks.</summary>
+    /// <summary>Draws a keyboard as light on dark keys: halo under each cap, a tinted cap, a coloured edge and a bright
+    /// legend; zones read through a wash over the deck and a plate around the selected bands. The same class draws the
+    /// small glyph in the panel (no deck, no legends). Frames arriving during an effect are smoothed per rendered frame.</summary>
     public sealed class KeyboardView : FrameworkElement {
         public List<KeyDef> Keys = new List<KeyDef>();
-        public Rgb[] ZoneColors = new Rgb[0];
-        public bool Off, Interactive, PerKey, Selectable = true;   // Selectable=false: an effect owns the colours, clicks are ignored
-        public HashSet<int> Selected = new HashSet<int>();       // zone indices (or key indices when PerKey)
+        public bool Interactive, PerKey, Selectable = true, Off, WindowsOwned;
+        public double Level = 1.0;                                // 0..1: the Level slider dims the drawing too
+        public HashSet<int> Selected = new HashSet<int>();        // zone indices (key indices when PerKey)
         public event Action<KeyDef> KeyClicked;
-        int hover = -1; double unitsW = 15, unitsH = 5.7;
+        Rgb[] shown = new Rgb[0], target = new Rgb[0]; bool animating;
+        int hoverZone = -1, zones = 1; double unitsW = 15.5, unitsH = 5.7;
         static readonly Typeface Face = new Typeface(new FontFamily("Segoe UI Variable Text, Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
+        static readonly Dictionary<uint, SolidColorBrush> Brushes_ = new Dictionary<uint, SolidColorBrush>();
+        static readonly Color Deck = Color.FromRgb(0x12, 0x15, 0x1C), DeckEdge = Color.FromRgb(0x23, 0x28, 0x33), CapTop = Color.FromRgb(0x1A, 0x1E, 0x26), CapBottom = Color.FromRgb(0x12, 0x16, 0x20),
+            OffCap = Color.FromRgb(0x1A, 0x1E, 0x26), OffEdge = Color.FromRgb(0x20, 0x24, 0x2D), OffLegend = Color.FromRgb(0x5C, 0x63, 0x73), WinLegend = Color.FromRgb(0x6E, 0x77, 0x89), Accent = Color.FromRgb(0x5B, 0x8D, 0xEF), MiniCap = Color.FromRgb(0x19, 0x1D, 0x25);
+
+        public Rgb[] ZoneColors { get { return shown; } set { SetColors(value, false); } }
+        /// <summary>animate = true eases the drawing toward the new colours (35 % per rendered frame) instead of jumping.</summary>
+        public void SetColors(Rgb[] c, bool animate) {
+            if (c == null) c = new Rgb[0];
+            if (!animate || shown.Length != c.Length) { shown = (Rgb[])c.Clone(); target = (Rgb[])c.Clone(); StopAnim(); InvalidateVisual(); return; }
+            target = (Rgb[])c.Clone();
+            if (!animating) { animating = true; CompositionTarget.Rendering += Tick; }
+        }
+        void Tick(object o, EventArgs e) {
+            bool done = true;
+            for (int i = 0; i < shown.Length; i++) {
+                var a = shown[i]; var b = target[i];
+                shown[i] = new Rgb(Ease(a.R, b.R), Ease(a.G, b.G), Ease(a.B, b.B));
+                if (shown[i].R != b.R || shown[i].G != b.G || shown[i].B != b.B) done = false;
+            }
+            InvalidateVisual();
+            if (done) StopAnim();
+        }
+        static byte Ease(byte a, byte b) { int d = b - a; if (Math.Abs(d) <= 1) return b; return (byte)(a + d * 0.35); }
+        void StopAnim() { if (animating) { animating = false; CompositionTarget.Rendering -= Tick; } }
 
         public void SetLayout(List<KeyDef> keys) {
-            Keys = keys; unitsW = 0; unitsH = 0;
-            foreach (var k in keys) { unitsW = Math.Max(unitsW, k.X + k.W); unitsH = Math.Max(unitsH, k.Y + k.H); }
+            Keys = keys; unitsW = 0; unitsH = 0; zones = 1;
+            foreach (var k in keys) { unitsW = Math.Max(unitsW, k.X + k.W); unitsH = Math.Max(unitsH, k.Y + k.H); zones = Math.Max(zones, k.Zone + 1); }
             InvalidateMeasure(); InvalidateVisual();
         }
         public void Repaint() { InvalidateVisual(); }
 
+        double Pad { get { return Interactive ? 15 : 5; } }
+        double Gap { get { return Interactive ? 3 : 1.2; } }
         protected override Size MeasureOverride(Size a) {
             double w = double.IsInfinity(a.Width) ? 480 : a.Width;
-            double pad = Interactive ? 12 : 3;
-            return new Size(w, (w - 2 * pad) / unitsW * unitsH + 2 * pad);
+            return new Size(w, (w - 2 * Pad) / unitsW * unitsH + 2 * Pad);
+        }
+        Rect KeyRect(KeyDef k, double u) { double p = Pad, g = Gap; return new Rect(p + k.X * u + g / 2, p + k.Y * u + g / 2, Math.Max(1, k.W * u - g), Math.Max(1, k.H * u - g)); }
+        /// <summary>The band of keys belonging to a zone, inflated into a plate.</summary>
+        Rect Band(int zone, double u) {
+            double minX = double.MaxValue, maxX = 0;
+            foreach (var k in Keys) if (k.Zone == zone) { minX = Math.Min(minX, k.X); maxX = Math.Max(maxX, k.X + k.W); }
+            if (minX == double.MaxValue) return Rect.Empty;
+            return new Rect(Pad + minX * u - 5, Pad - 5, (maxX - minX) * u + 10, unitsH * u + 10);
         }
 
-        Rect KeyRect(KeyDef k, double scale, double pad, double gap) {
-            return new Rect(pad + k.X * scale + gap, pad + k.Y * scale + gap, Math.Max(1, k.W * scale - 2 * gap), Math.Max(1, k.H * scale - 2 * gap));
+        static SolidColorBrush B(Color c) {
+            uint key = (uint)(c.A << 24 | c.R << 16 | c.G << 8 | c.B); SolidColorBrush b;
+            if (!Brushes_.TryGetValue(key, out b)) { b = new SolidColorBrush(c); b.Freeze(); Brushes_[key] = b; }
+            return b;
         }
-
-        static Color WithA(Color c, double a) { return Color.FromArgb((byte)Math.Round(a * 255), c.R, c.G, c.B); }
-        static SolidColorBrush B(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
+        static Color WithA(Color c, double a) { return Color.FromArgb((byte)Math.Round(Math.Max(0, Math.Min(1, a)) * 255), c.R, c.G, c.B); }
+        static Color Blend(Color a, Color b, double t) { t = Math.Max(0, Math.Min(1, t)); return Color.FromRgb((byte)(a.R + (b.R - a.R) * t), (byte)(a.G + (b.G - a.G) * t), (byte)(a.B + (b.B - a.B) * t)); }
         static Color ToColor(Rgb c) { return Color.FromRgb(c.R, c.G, c.B); }
+        Color ZoneColor(KeyDef k) { int i = PerKey ? k.Index : k.Zone; return ToColor(shown[Math.Min(shown.Length - 1, Math.Max(0, i))]); }
+        LinearGradientBrush Wash(double alpha) {
+            var g = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+            int n = Math.Max(1, Math.Min(zones, shown.Length));
+            for (int i = 0; i < n; i++) g.GradientStops.Add(new GradientStop(WithA(ToColor(shown[i]), alpha), n == 1 ? 0.5 : (i + 0.5) / n));
+            g.Freeze(); return g;
+        }
 
         protected override void OnRender(DrawingContext dc) {
-            double pad = Interactive ? 12 : 3, gap = Interactive ? 2.2 : 0.6;
-            double scale = (ActualWidth - 2 * pad) / unitsW;
-            double h = unitsH * scale + 2 * pad;
-            var deck = Interactive ? (Brush)Ui.Brush("#12151C") : Ui.Brush("#141820");
-            dc.DrawRoundedRectangle(deck, new Pen(Ui.Brush(Interactive ? "#232833" : "#1F232C"), 1), new Rect(0.5, 0.5, ActualWidth - 1, h - 1), Interactive ? 12 : 4, Interactive ? 12 : 4);
-            Color dimFill = Color.FromRgb(0x24, 0x29, 0x33), dimLegend = Color.FromRgb(0x6B, 0x73, 0x85), litLegend = Color.FromRgb(0x0E, 0x10, 0x14);
+            double W = ActualWidth, u = (W - 2 * Pad) / unitsW, fieldH = unitsH * u, H = fieldH + 2 * Pad;
+            bool lit = !Off && !WindowsOwned && shown.Length > 0;
+            double lv = 0.40 + 0.60 * Math.Max(0, Math.Min(1, Level));
+            if (!Interactive) {
+                // the panel glyph: no frame, no legends; caps carry the colour, one soft halo around the field
+                if (lit) dc.DrawRoundedRectangle(Wash(0.18), null, new Rect(Pad - 4, Pad - 4, W - 2 * Pad + 8, fieldH + 8), 6, 6);
+                foreach (var k in Keys) {
+                    var r = KeyRect(k, u);
+                    dc.DrawRoundedRectangle(B(lit ? Blend(MiniCap, ZoneColor(k), 0.55 * lv) : OffCap), null, r, 2, 2);
+                }
+                return;
+            }
+            // deck
+            dc.DrawRoundedRectangle(B(Deck), new Pen(B(DeckEdge), 1), new Rect(0.5, 0.5, W - 1, H - 1), 14, 14);
+            dc.DrawLine(new Pen(B(WithA(Colors.White, 0.04)), 1), new Point(14, 1.5), new Point(W - 14, 1.5));
+            if (WindowsOwned) dc.DrawRoundedRectangle(null, new Pen(B(WithA(Accent, 0.35)), 1), new Rect(2.5, 2.5, W - 5, H - 5), 12, 12);
+            if (lit) dc.DrawRoundedRectangle(Wash(0.10 * lv), null, new Rect(1, 1, W - 2, H - 2), 13, 13);
+            // zone plates: the selection as one plate per run of adjacent zones, the hovered zone as a faint plate
+            bool anySel = Selectable && Selected.Count > 0 && !PerKey;
+            if (Selectable && zones > 1 && !PerKey) {
+                int z = 0;
+                while (z < zones) {
+                    if (!Selected.Contains(z)) { z++; continue; }
+                    int from = z; while (z + 1 < zones && Selected.Contains(z + 1)) z++;
+                    var a = Band(from, u); var b = Band(z, u);
+                    var plate = new Rect(a.X, a.Y, b.Right - a.X, a.Height);
+                    dc.DrawRoundedRectangle(B(WithA(Colors.White, 0.05)), new Pen(B(WithA(Colors.White, 0.20)), 1), plate, 9, 9);
+                    z++;
+                }
+                if (hoverZone >= 0 && !Selected.Contains(hoverZone)) dc.DrawRoundedRectangle(null, new Pen(B(WithA(Colors.White, 0.10)), 1), Band(hoverZone, u), 9, 9);
+            }
+            // keys
             foreach (var k in Keys) {
-                var r = KeyRect(k, scale, pad, gap);
-                bool lit = !Off && ZoneColors.Length > 0;
-                Color fill = lit ? ToColor(ZoneColors[Math.Min(ZoneColors.Length - 1, PerKey ? Math.Min(k.Index, ZoneColors.Length - 1) : k.Zone)]) : dimFill;
-                bool sel = Interactive && Selectable && Selected.Contains(PerKey ? k.Index : k.Zone), hov = Interactive && Selectable && k.Index == hover;
-                Pen pen = sel ? new Pen(Brushes.White, 1.6) : hov ? new Pen(B(WithA(Colors.White, 0.55)), 1) : null;
-                dc.DrawRoundedRectangle(B(fill), pen, r, Interactive ? 4 : 1.2, Interactive ? 4 : 1.2);
-                if (Interactive && k.Label.Length > 0 && r.Width > 14) {
-                    var ft = new FormattedText(k.Label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, k.Label.Length > 3 ? 8 : k.Label.Length > 1 ? 9 : 10, B(lit ? litLegend : dimLegend), 1.0);
-                    dc.DrawText(ft, new Point(r.X + 5, r.Y + 3.5));
+                var r = KeyRect(k, u);
+                Color legend;
+                if (lit) {
+                    Color c = ZoneColor(k);
+                    bool dim = anySel && !Selected.Contains(k.Zone), hov = Selectable && hoverZone == k.Zone;
+                    double halo = lv * (dim ? 0.45 : 1) * (hov ? 1.3 : 1), tint = lv * (dim ? 0.70 : 1);
+                    var h1 = r; h1.Inflate(4, 4); dc.DrawRoundedRectangle(B(WithA(c, 0.045 * halo)), null, h1, 9, 9);
+                    var h2 = r; h2.Inflate(2.5, 2.5); dc.DrawRoundedRectangle(B(WithA(c, 0.08 * halo)), null, h2, 7.5, 7.5);
+                    var h3 = r; h3.Inflate(1, 1); dc.DrawRoundedRectangle(B(WithA(c, 0.13 * halo)), null, h3, 6, 6);
+                    var cap = new LinearGradientBrush(Blend(CapTop, c, 0.30 * tint), Blend(CapBottom, c, 0.12 * tint), 90); cap.Freeze();
+                    dc.DrawRoundedRectangle(cap, new Pen(B(WithA(c, 0.55 * lv)), 1), r, 5, 5);
+                    legend = WithA(Blend(c, Colors.White, 0.62), 0.92 * lv);
+                } else {
+                    dc.DrawRoundedRectangle(B(OffCap), new Pen(B(OffEdge), 1), r, 5, 5);
+                    legend = WindowsOwned ? WinLegend : OffLegend;
+                }
+                string label = k.Label.Trim();
+                if (label.Length > 0 && r.Width >= 16 && r.Height >= 14) {
+                    double size = label.Length == 1 ? 9 : label.Length <= 3 ? 8 : 7.5;
+                    var ft = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, size, B(legend), 1.0);
+                    dc.DrawText(ft, new Point(r.X + (r.Width - ft.Width) / 2, r.Y + (r.Height - ft.Height) / 2));
                 }
             }
         }
 
         KeyDef Hit(Point p) {
-            double pad = Interactive ? 12 : 3, gap = Interactive ? 2.2 : 0.6;
-            double scale = (ActualWidth - 2 * pad) / unitsW;
-            foreach (var k in Keys) if (KeyRect(k, scale, pad, gap).Contains(p)) return k;
+            double u = (ActualWidth - 2 * Pad) / unitsW;
+            foreach (var k in Keys) if (KeyRect(k, u).Contains(p)) return k;
             return null;
         }
         protected override void OnMouseMove(MouseEventArgs e) {
             if (!Interactive) return;
-            var k = Selectable ? Hit(e.GetPosition(this)) : null; int h = k == null ? -1 : k.Index;
-            if (h != hover) { hover = h; Cursor = k == null ? Cursors.Arrow : Cursors.Hand; InvalidateVisual(); }
+            var k = Selectable ? Hit(e.GetPosition(this)) : null; int z = k == null ? -1 : (PerKey ? k.Index : k.Zone);
+            if (z != hoverZone) { hoverZone = z; Cursor = k == null ? Cursors.Arrow : Cursors.Hand; InvalidateVisual(); }
         }
-        protected override void OnMouseLeave(MouseEventArgs e) { if (hover != -1) { hover = -1; InvalidateVisual(); } }
+        protected override void OnMouseLeave(MouseEventArgs e) { if (hoverZone != -1) { hoverZone = -1; InvalidateVisual(); } }
         protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e) {
             var k = Hit(e.GetPosition(this));
-            var h = KeyClicked; if (h != null) h(k);      // null = clicked the chassis (main-panel glyph opens the editor)
+            var h = KeyClicked; if (h != null) h(k);
         }
     }
 }
