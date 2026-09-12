@@ -116,6 +116,10 @@ Same mailbox, second command id. Layout from OGH's own lighting module (`HP.Omen
 - Arbitration: Windows owns the keyboard while `HKCU\Software\Microsoft\Lighting\Devices\<VHF id>\AmbientLightingEnabled`
   is 1 (and the global value). OGH flips that value to take or return control; Ohman does the same and only for HP's
   virtual device, never for external LampArray peripherals.
+- Measured 2026-09-12 on this machine: keyboard type byte = 2; writing `FF0000 / 00FF00 / 0000FF / FFFFFF` through
+  `0x20009/0x03` read back byte-exact and lit the four bands left to right in that order; the backlight byte read `00`
+  while Windows was driving the keyboard and `E4` after the app wrote it, so bit 7 is not a reliable "is lit" probe
+  when Dynamic Lighting owns the device.
 - The WinRT `LampArray` path reported `IsAvailable = false` for a background desktop app even with ambient off, so
   the app writes the firmware table directly. Brightness is applied by scaling the colours; effects are frames
   written every 120 ms (OGH animates the same way, on the CPU, at about 15 frames per second).

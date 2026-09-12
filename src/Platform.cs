@@ -112,7 +112,7 @@ namespace Ohman {
             new PlatformProfile {
                 Name = "HP OMEN Transcend 14 (2024, 14-fb0xxx)",
                 Boards = new[] { "8C58" },
-                Notes = "Core Ultra 9 185H + RTX 4070. Verified 2026-09-08 against OMEN Gaming Hub 1101.2608 logs, decompiled code, hp-wmi.c and OmenMon."
+                Notes = "Core Ultra 9 185H + RTX 4070. Modes, fans, power and GPU verified 2026-09-08 against OMEN Gaming Hub 1101.2608 logs and code; four-zone keyboard lighting verified on the device 2026-09-12."
             }
         };
 
