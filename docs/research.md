@@ -93,7 +93,15 @@ Fn is held (Shift+Fn+F12 arrives as a plain event), and Windows reserves F12 for
 own (disabled) startup task; the OGH main app also starts it. Ohman stops the process and disables those
 tasks while it owns the key, and re-enables them when told.
 
-## 6. Keyboard lighting
+## 6. Graphics mode (MUX / iGPU only)
+
+Legacy mailbox, not the performance one: command `1` (read BIOS config) / `2` (write), CommandType `0x52`. Read
+returns out4 `[0] & 0x7F`: 0 Hybrid, 1 Discrete, 2 Optimus, 3 iGPU only (OGH `GraphicsSwitcherMode`). Write sends
+`{mode, 0, 0, 0}`; OGH sets bit 7 ("no reboot") only on platforms from its cycle "26C1" on, everything earlier,
+including the Transcend 14, applies the change at the next restart. Which modes a model offers is system-design
+data byte 7 as a bitmask: 1 iGPU only, 2 Hybrid, 4 Discrete, 8 Advanced Optimus. This unit reports `0x03`.
+
+## 7. Keyboard lighting
 
 Same mailbox, second command id. Layout from OGH's own lighting module (`HP.Omen.Background.FourZone`,
 `HP.Omen.Core.Model.Device`), matched against OmenMon and read back on this machine.
@@ -124,7 +132,7 @@ Same mailbox, second command id. Layout from OGH's own lighting module (`HP.Omen
   the app writes the firmware table directly. Brightness is applied by scaling the colours; effects are frames
   written every 120 ms (OGH animates the same way, on the CPU, at about 15 frames per second).
 
-## 7. Generic support for other boards
+## 8. Generic support for other boards
 
 A board without a verified profile gets one built at run time, the way the Linux driver decides: the thermal-policy
 version from system-design byte 3 selects the mode bytes (v1 `0x30/0x31/0x50`, v0 `0x00/0x01/0x02`), the Victus
@@ -133,7 +141,7 @@ board lists from `hp-wmi.c` override them (`88F8`, `8A25`: `0x00/0x01/0x03`; the
 non-zero, GPU power only when `0x21` answers, and the fan ceiling is raised to the highest level in the firmware's
 own fan table when that is above 57. The fan floor, the keep-alive rule and the thermal guard are unchanged.
 
-## 8. Where the OGH internals live
+## 9. Where the OGH internals live
 
 - Logs: `%LOCALAPPDATA%\Packages\AD2F1837.OMENCommandCenter_v10z8vjag6ke6\LocalCache\Local\HPOMEN\HPOMENBG_<date>.log`
   record `[ExecuteBiosWmiCommandThruDriver] inputData=…` for every call, with the helper names around them.
@@ -141,7 +149,7 @@ own fan table when that is above 57. The fan floor, the keep-alive rule and the 
   `Assembly.LoadFrom` in PowerShell for reflection (enums, resource strings, embedded per-model JSON under
   `HP.Omen.Core.Common.PowerControl.JSON.*`); method IL can be read with `GetMethodBody().GetILAsByteArray()`.
 
-## 9. Open questions
+## 10. Open questions
 
 - Whether the mode command `0x1A` alone (without `0x10`) keeps the firmware in user-defined state, and whether
   performance mode reverts after 120 s without the query (`fantest` phase D).

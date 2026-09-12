@@ -37,6 +37,7 @@ namespace Ohman {
         public bool SwFanControl;        // byte 4 bit 0
         public int DefaultPl4;           // byte 5 (W)
         public int DefaultConcurrentTdp; // byte 8 (W) — base for the "+15 W" slider
+        public int GpuModes;             // byte 7: bitmask of graphics modes the firmware offers (1 iGPU-only, 2 Hybrid, 4 Discrete, 8 Advanced Optimus)
         public byte[] Raw = new byte[0];
         public string Hex { get { return Bios.Hex(Raw, 12); } }
     }
@@ -65,6 +66,9 @@ namespace Ohman {
         void SetFanLevels(int fan1, int fan2);
         void SetConcurrentTdp(int watts);
         void SetGpuPower(bool customTgp, bool ppab, int peakTemp);
+        /// <summary>Graphics mode: 0 Hybrid, 1 Discrete, 2 Optimus, 3 iGPU only. Legacy mailbox (command 1 read / 2 write, type 0x52).</summary>
+        int GetGpuMode();
+        void SetGpuMode(int mode);                  // takes effect after a restart on every generation before HP's "26C1" cycle
     }
 
     /// <summary>Real BIOS access via WMI. Thread-safe (one call at a time).</summary>
@@ -176,7 +180,7 @@ namespace Ohman {
             var s = new SystemInfo { Raw = d };
             if (d.Length >= 9) {
                 s.Valid = true; s.ThermalPolicy = d[3]; s.SwFanControl = (d[4] & 1) != 0;
-                s.DefaultPl4 = d[5]; s.DefaultConcurrentTdp = d[8];
+                s.DefaultPl4 = d[5]; s.DefaultConcurrentTdp = d[8]; s.GpuModes = d[7];
             }
             return s;
         }
@@ -202,6 +206,12 @@ namespace Ohman {
         public void SetGpuPower(bool customTgp, bool ppab, int peakTemp) {
             Call(OP_GPU_POWER_SET, new byte[] { (byte)(customTgp ? 1 : 0), (byte)(ppab ? 1 : 0), 1, (byte)peakTemp }, 0);
         }
+
+        // Graphics switching lives in the legacy mailbox: command 1 = read BIOS config, 2 = write; type 0x52.
+        // OGH: mode = data[0] & 0x7F; on write, bit 7 set means "no reboot" and is only used on platforms from cycle 26C1 on.
+        public const uint CMD_BIOS_READ = 1, CMD_BIOS_WRITE = 2, OP_GPU_MODE = 0x52;
+        public int GetGpuMode() { var d = Call(CMD_BIOS_READ, OP_GPU_MODE, new byte[0], 4); return d.Length > 0 ? (d[0] & 0x7F) : -1; }
+        public void SetGpuMode(int mode) { Call(CMD_BIOS_WRITE, OP_GPU_MODE, new byte[] { (byte)(mode & 0x7F), 0, 0, 0 }, 0); }
     }
 
     public sealed class BiosException : Exception {
@@ -228,7 +238,7 @@ namespace Ohman {
         public bool GetMaxFan() { return max; }
         public GpuPowerState GetGpuPower() { return new GpuPowerState { CustomTgp = true, Ppab = ppab, DState = 1, PeakTemp = 87 }; }
         public SystemInfo GetSystemInfo() {
-            return new SystemInfo { Valid = true, ThermalPolicy = 1, SwFanControl = true, DefaultPl4 = 159, DefaultConcurrentTdp = 30,
+            return new SystemInfo { Valid = true, ThermalPolicy = 1, SwFanControl = true, DefaultPl4 = 159, DefaultConcurrentTdp = 30, GpuModes = 3,
                 Raw = new byte[] { 0x8C, 0, 0x35, 1, 1, 0x9F, 0, 3, 0x1E } };
         }
         public void SetMode(byte m, bool byBios) { mode = m; }
@@ -236,6 +246,9 @@ namespace Ohman {
         public void SetFanLevels(int a, int b) { m1 = a > 0 ? a : -1; m2 = b > 0 ? b : -1; }
         public void SetConcurrentTdp(int w) { tdp = w; }
         public void SetGpuPower(bool c, bool p, int t) { ppab = p; }
+        int gpuMode = 0;
+        public int GetGpuMode() { return gpuMode; }
+        public void SetGpuMode(int m) { gpuMode = m; }
     }
 }
 

@@ -138,7 +138,7 @@ namespace Ohman {
         readonly MetricTile[] tiles = new MetricTile[4];
         TextBlock txtModeSub, txtSensors, txtFanSub, txtFan1, txtFan2, txtPower, txtPowerSub, txtGpuSub, txtKeyInfo, txtFoot, txtKeyFoot, txtDiag, txtErr, txtMachine;
         RadioButton fanAuto, fanMax, fanManual, gpuBase, gpuBoost, gpuMax, keyCycle, keyShow, keyMax, keyOff, keyRun;
-        FrameworkElement hzRow, keyCmdRow; UniformGrid hzGrid; TextBox txtKeyCmd; readonly List<RadioButton> hzRadios = new List<RadioButton>(); readonly List<WF.ToolStripMenuItem> trayHz = new List<WF.ToolStripMenuItem>();
+        FrameworkElement hzRow, keyCmdRow, gfxRow; UniformGrid hzGrid, gfxGrid; TextBlock txtGfxSub; TextBox txtKeyCmd; readonly List<RadioButton> gfxRadios = new List<RadioButton>(); readonly List<RadioButton> hzRadios = new List<RadioButton>(); readonly List<WF.ToolStripMenuItem> trayHz = new List<WF.ToolStripMenuItem>();
         Slider slFan1, slFan2, slPower, slHue, slLevel;
         // keyboard lighting
         FrameworkElement lightRow, lightDivider, kbdPanel, svBox, cardStatic, zoneHead, cardHairline, cardInner; Border miniHost, kbdHost, lightRowHost; TextBlock txtLightSub, txtKbdKind, txtKbdSel, txtLevel;
@@ -240,7 +240,7 @@ namespace Ohman {
             txtKbdInfo = F<TextBlock>("TxtKbdInfo"); txtSpeed = F<TextBlock>("TxtSpeed"); slSpeed = F<Slider>("SlSpeed"); btnWinLighting = F<Button>("BtnWinLighting");
             settingsPanel = F<FrameworkElement>("SettingsPanel"); txtMachine = F<TextBlock>("TxtMachine");
             keyCycle = F<RadioButton>("KeyCycle"); keyShow = F<RadioButton>("KeyShow"); keyMax = F<RadioButton>("KeyMax"); keyOff = F<RadioButton>("KeyOff"); keyRun = F<RadioButton>("KeyRun");
-            keyCmdRow = F<FrameworkElement>("KeyCmdRow"); txtKeyCmd = F<TextBox>("TxtKeyCmd"); hzRow = F<FrameworkElement>("HzRow"); hzGrid = F<UniformGrid>("HzGrid"); tgLowHzBattery = F<ToggleButton>("TgLowHzBattery"); tgTrayTemp = F<ToggleButton>("TgTrayTemp");
+            keyCmdRow = F<FrameworkElement>("KeyCmdRow"); txtKeyCmd = F<TextBox>("TxtKeyCmd"); hzRow = F<FrameworkElement>("HzRow"); hzGrid = F<UniformGrid>("HzGrid"); gfxRow = F<FrameworkElement>("GfxRow"); gfxGrid = F<UniformGrid>("GfxGrid"); txtGfxSub = F<TextBlock>("TxtGfxSub"); tgLowHzBattery = F<ToggleButton>("TgLowHzBattery"); tgTrayTemp = F<ToggleButton>("TgTrayTemp");
             txtKeyInfo = F<TextBlock>("TxtKeyInfo"); btnLearn = F<Button>("BtnLearn"); tgSuppress = F<ToggleButton>("TgSuppress");
             tgHotkeys = F<ToggleButton>("TgHotkeys"); tgEcoBattery = F<ToggleButton>("TgEcoBattery"); tgEcoCool = F<ToggleButton>("TgEcoCool"); tgSyncPower = F<ToggleButton>("TgSyncPower"); tgAutostart = F<ToggleButton>("TgAutostart");
             btnDiag = F<Button>("BtnDiag"); btnLog = F<Button>("BtnLog"); btnExit = F<Button>("BtnExit"); txtDiag = F<TextBlock>("TxtDiag");
@@ -420,7 +420,7 @@ namespace Ohman {
             txtKeyCmd.LostFocus += delegate { E.S.KeyCommand = txtKeyCmd.Text.Trim(); E.S.Save(); };
             txtKeyCmd.TextChanged += delegate { F<FrameworkElement>("TxtKeyCmdHint").Visibility = txtKeyCmd.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed; };
             txtKeyCmd.KeyDown += delegate(object o, KeyEventArgs ke) { if (ke.Key == Key.Enter) { E.S.KeyCommand = txtKeyCmd.Text.Trim(); E.S.Save(); ShowToast("OMEN key runs: " + (E.S.KeyCommand.Length > 0 ? E.S.KeyCommand : "(nothing)"), false); } };
-            BuildRefreshRates();
+            BuildRefreshRates(); BuildGraphicsModes();
 
             learnTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
             learnTimer.Tick += delegate { learnTimer.Stop(); E.Learning = false; txtKeyInfo.Text = KeyInfoText(); };
@@ -677,6 +677,29 @@ namespace Ohman {
                 hzRadios.Add(r); hzGrid.Children.Add(r);
             }
         }
+        /// <summary>Graphics modes the firmware offers, as a segment; a change is written at once and needs a restart to take effect.</summary>
+        void BuildGraphicsModes() {
+            if (!E.BiosOk && !E.Hw.IsDemo) return;
+            int[] order = { 0, 1, 3 };                                       // Hybrid, Discrete, iGPU only (Optimus is the driver's own switching, not a BIOS choice)
+            foreach (int mode in order) {
+                if (!E.GpuModeOffered(mode)) continue;
+                int m = mode; var r = new RadioButton { Style = (Style)root.FindResource("SegTight"), GroupName = "gfx", Content = Engine.GpuModeNames[mode], Tag = mode };
+                r.Checked += delegate {
+                    if (syncing) return;
+                    int current = E.GpuModePending >= 0 ? E.GpuModePending : E.GpuMode;
+                    if (m == current) return;
+                    var answer = MessageBox.Show(this, "Switch graphics to " + Engine.GpuModeNames[m] + "?\n\nThe change is written now and takes effect after a restart, the same way OMEN Gaming Hub does it.\n\nRestart now?",
+                        Program.DisplayName, MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+                    if (answer == MessageBoxResult.Cancel) { Refresh(); return; }
+                    bool ok = E.SetGpuMode(m);
+                    if (!ok) { Refresh(); return; }
+                    if (answer == MessageBoxResult.Yes) { try { Process.Start(new ProcessStartInfo("shutdown.exe", "/r /t 5 /c \"" + Program.DisplayName + ": graphics mode change\"") { CreateNoWindow = true, UseShellExecute = false }); } catch (Exception ex) { ShowToast("Restart failed: " + ex.Message, true); } }
+                    else ShowToast(Engine.GpuModeNames[m] + " after the next restart", false);
+                };
+                gfxRadios.Add(r); gfxGrid.Children.Add(r);
+            }
+            if (gfxRadios.Count >= 2) gfxRow.Visibility = Visibility.Visible; else gfxGrid.Children.Clear();
+        }
         void RunKeyCommand() {
             string cmd = E.S.KeyCommand.Trim();
             if (cmd.Length == 0) { ShowToast("OMEN key: no command set (Settings)", true); return; }
@@ -804,6 +827,8 @@ namespace Ohman {
                 keyCmdRow.Visibility = S.Key == KeyAction.Run ? Visibility.Visible : Visibility.Collapsed; if (!txtKeyCmd.IsKeyboardFocused) txtKeyCmd.Text = S.KeyCommand;
                 tgLowHzBattery.IsChecked = S.LowHzOnBattery; tgTrayTemp.IsChecked = S.TrayTemp;
                 int hzNow = Display.CurrentHz(); foreach (var r in hzRadios) r.IsChecked = (int)r.Tag == hzNow; foreach (var m in trayHz) m.Checked = (int)m.Tag == hzNow;
+                int gfx = E.GpuModePending >= 0 ? E.GpuModePending : E.GpuMode; foreach (var r in gfxRadios) r.IsChecked = (int)r.Tag == gfx;
+                txtGfxSub.Text = E.GpuModePending >= 0 && E.GpuModePending != E.GpuMode ? Engine.GpuModeNames[E.GpuModePending] + " after the next restart" : "Takes effect after a restart";
                 if (!E.Learning) txtKeyInfo.Text = KeyInfoText();
                 tgSuppress.IsChecked = S.SuppressOgh; tgHotkeys.IsChecked = S.Hotkeys; tgEcoBattery.IsChecked = S.EcoOnBattery; tgSyncPower.IsChecked = S.SyncWinPower; tgAutostart.IsChecked = autostart; tgEcoCool.IsChecked = S.EcoCool;
                 txtKeyFoot.Text = "Fn+F12 " + KeyActionText(S.Key) + (S.Hotkeys && S.Key != KeyAction.Cycle ? " · Shift+F11 cycles" : "");

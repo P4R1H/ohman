@@ -787,6 +787,19 @@
             <TextBlock Text="Restores your mode when plugged in" Style="{StaticResource SubSm}"/>
           </StackPanel>
         </ToggleButton>
+        <Grid x:Name="GfxRow" Visibility="Collapsed" Margin="0,4,0,4" MinHeight="36">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <StackPanel VerticalAlignment="Center">
+            <TextBlock Text="Graphics" Style="{StaticResource Lbl}"/>
+            <TextBlock x:Name="TxtGfxSub" Text="Takes effect after a restart" Style="{StaticResource SubSm}" TextWrapping="NoWrap"/>
+          </StackPanel>
+          <Border Grid.Column="1" Style="{StaticResource SegBox}" VerticalAlignment="Center">
+            <UniformGrid x:Name="GfxGrid" Rows="1"/>
+          </Border>
+        </Grid>
         <Grid x:Name="HzRow" Visibility="Collapsed" Margin="0,4,0,4" MinHeight="36">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>

@@ -181,6 +181,11 @@ namespace Ohman {
         public string Board = "", Model = "";
         public bool Supported;                              // false = unknown board: read-only, no BIOS writes
         public bool Generic;                                // true = profile built at run time from the firmware (unverified model)
+        public int GpuMode = -1;                            // graphics mode the firmware reports (0 Hybrid, 1 Discrete, 2 Optimus, 3 iGPU only), -1 unknown
+        public int GpuModePending = -1;                     // mode written this session, live after a restart
+        public static readonly string[] GpuModeNames = { "Hybrid", "Discrete", "Optimus", "iGPU only" };
+        /// <summary>Modes the firmware offers (system-design byte 7): 1 iGPU only, 2 Hybrid, 4 Discrete, 8 Advanced Optimus.</summary>
+        public bool GpuModeOffered(int mode) { int bit = mode == 3 ? 1 : mode == 0 ? 2 : mode == 1 ? 4 : 8; return (Info.GpuModes & bit) != 0; }
         public ILighting Light;                             // null = this keyboard has no controllable lighting (or read-only board)
         public Rgb[] LightColors = new Rgb[0];              // what the app believes the zones show
         public bool ReadOnly { get { return !Supported && !Hw.IsDemo; } }
@@ -230,6 +235,7 @@ namespace Ohman {
                         Log.Write("generic profile: " + g.Notes + " · modes " + g.ModeEco.ToString("X2") + "/" + g.ModeBalanced.ToString("X2") + "/" + g.ModePerformance.ToString("X2") + " · powerGain=" + g.HasPowerGain + " (base " + g.TdpBase + " W) · gpuPower=" + g.HasGpuPower + " · fan ceiling " + g.Curve.Ceiling);
                     } else Log.Write("generic profile not possible (thermal policy v" + Info.ThermalPolicy + "); read-only");
                 }
+                try { GpuMode = Hw.GetGpuMode(); } catch (Exception ex) { Log.Write("graphics mode read: " + ex.Message); }
                 Log.Write("BIOS ok: fans=" + FanCount + " policy=v" + Info.ThermalPolicy + " swFan=" + Info.SwFanControl + " defPL4=" + Info.DefaultPl4 + "W baseTdp=" + Info.DefaultConcurrentTdp + "W raw=" + Info.Hex + (Hw.IsDemo ? " (DEMO)" : ""));
             } catch (Exception ex) { BiosOk = false; LastError = ex.Message; Log.Write("BIOS self-test FAILED: " + ex.Message); }
             // take the key over only where we can also take over the fans; on an unknown board OGH stays in charge
@@ -541,6 +547,16 @@ namespace Ohman {
             var h = KeyPressed; if (h != null) { try { h(S.Key); } catch { } }
         }
 
+        // ---------- graphics mode ----------
+        /// <summary>Writes the graphics mode the way OGH does on this generation; the firmware applies it at the next restart.</summary>
+        public bool SetGpuMode(int mode) {
+            if (mode < 0 || mode > 3 || !GpuModeOffered(mode)) return false;
+            bool ok; lock (applySync) ok = Try(delegate { Hw.SetGpuMode(mode); }, "Graphics mode");
+            if (ok) { GpuModePending = mode; Log.Write("graphics mode " + GpuModeNames[mode] + " written; live after a restart"); }
+            Changed();
+            return ok;
+        }
+
         // ---------- display refresh rate ----------
         void ApplyRefreshRate(bool onBattery) {
             try {
@@ -660,6 +676,7 @@ namespace Ohman {
             try { sb.AppendLine("max fan: " + Hw.GetMaxFan()); } catch (Exception ex) { sb.AppendLine("max fan: " + ex.Message); }
             try { sb.AppendLine("gpu power: " + Hw.GetGpuPower()); } catch (Exception ex) { sb.AppendLine("gpu power: " + ex.Message); }
             sb.AppendLine("settings: mode=" + ModeName + " (BIOS 0x" + ModeByte.ToString("X2") + (OnBattery ? ", DC" : ", AC") + ") fan=" + S.Fan + " " + S.Fan1 + "/" + S.Fan2 + " tdp=" + CurrentTdp + "W gpu=" + EffectiveGpu + (S.GpuAuto ? "(auto)" : "") + " key=" + KeyId + "/" + KeyData + "→" + S.Key + " ecoCool=" + S.EcoCool);
+            sb.AppendLine("graphics: " + (GpuMode >= 0 && GpuMode < 4 ? GpuModeNames[GpuMode] : "unknown") + " (offered mask 0x" + Info.GpuModes.ToString("X2") + ")" + (GpuModePending >= 0 ? " -> " + GpuModeNames[GpuModePending] + " after restart" : ""));
             sb.AppendLine("lighting: " + (Light == null ? "none" : Light.Describe + " mode=" + S.Light + " level=" + S.LightLevel + " colours=" + S.LightColors + " windowsControl=" + WinLighting.HasControl));
             sb.AppendLine("fan drive: written " + curLevel1 + "/" + curLevel2 + "  cpu " + Fmt(CpuTemp) + "  gpu " + Fmt(GpuTemp) + "  ir " + Fmt(IrTemp) + "  guard=" + GuardActive + "  writeFailures=" + fanWriteFailures);
             sb.AppendLine("last heartbeat: " + (LastHeartbeat == DateTime.MinValue ? "never" : LastHeartbeat.ToString("HH:mm:ss")) + "   last key event: " + (LastEventTime == DateTime.MinValue ? "none" : LastEventId + "/" + LastEventData + " at " + LastEventTime.ToString("HH:mm:ss")));
