@@ -895,7 +895,7 @@ namespace Ohman {
             if (on) {
                 // registered from XML: a task made with plain "schtasks /Create" stops the app when the laptop goes on battery and refuses to start it on battery
                 string tmp = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Program.FileStem + "-task.xml");
-                try { System.IO.File.WriteAllText(tmp, TaskXml(exe), new System.Text.UTF8Encoding(false)); } catch (Exception ex) { Log.Write("task xml: " + ex.Message); }
+                try { System.IO.File.WriteAllText(tmp, TaskXml(exe), System.Text.Encoding.Unicode); }   // schtasks parses the file as a UTF-16 string catch (Exception ex) { Log.Write("task xml: " + ex.Message); }
                 rc = RunSchtasks("/Create /TN " + Program.AppName + " /XML \"" + tmp + "\" /F");
                 try { System.IO.File.Delete(tmp); } catch { }
             } else rc = RunSchtasks("/Delete /TN " + Program.AppName + " /F");
@@ -906,7 +906,7 @@ namespace Ohman {
         /// <summary>Logon task for this user: highest privileges (no UAC prompt), starts and keeps running on battery, no time limit.</summary>
         static string TaskXml(string exe) {
             string sid = System.Security.Principal.WindowsIdentity.GetCurrent().User.Value;
-            return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+            return "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\n" +
                 "<Task version=\"1.4\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\n" +
                 "  <RegistrationInfo><Description>" + Program.AppName + " starts with Windows</Description></RegistrationInfo>\n" +
                 "  <Triggers><LogonTrigger><Enabled>true</Enabled><UserId>" + sid + "</UserId></LogonTrigger></Triggers>\n" +
