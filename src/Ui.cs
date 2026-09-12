@@ -543,9 +543,9 @@ namespace Ohman {
             Canvas.SetLeft(svMarker, curS * svBox.ActualWidth - svMarker.Width / 2); Canvas.SetTop(svMarker, (1 - curV) * svBox.ActualHeight - svMarker.Height / 2);
         }
         void SyncPickerControls() {
-            syncing = true;
+            bool was = syncing; syncing = true;
             try { slHue.Value = curH; svHue.Fill = Ui.Brush(Rgb.FromHue(curH)); txtHex.Text = "#" + Rgb.FromHsv(curH, curS, curV).Hex; PlaceMarker(); }
-            finally { syncing = false; }
+            finally { syncing = was; }
         }
         void SyncPickerFromSelection() {
             int[] z = SelectedZones();
@@ -559,7 +559,7 @@ namespace Ohman {
             foreach (int z in kbdBig.Selected) if (z < E.LightColors.Length) E.LightColors[z] = v;
             kbdBig.ZoneColors = E.LightColors; kbdBig.Off = false; kbdBig.Repaint();
             kbdMini.ZoneColors = E.LightColors; kbdMini.Off = false; kbdMini.Repaint();
-            syncing = true; try { txtHex.Text = "#" + v.Hex; } finally { syncing = false; }
+            bool was = syncing; syncing = true; try { txtHex.Text = "#" + v.Hex; } finally { syncing = was; }
             colorDebounce.Stop(); if (now) { Rgb vv = v; int[] z = SelectedZones(); Bg(delegate { E.SetLightColor(z, vv); }); } else colorDebounce.Start();
         }
         /// <summary>The editor is its own window, docked beside the panel (left when there is room), owned by it so it

@@ -550,7 +550,6 @@ namespace Ohman {
             } catch (Exception ex) { Log.Write("refresh rate: " + ex.Message); }
         }
         public void SetRefreshRate(int hz) {
-            Log.Write("SetRefreshRate " + hz + Environment.NewLine + Environment.StackTrace);
             S.RefreshHz = hz; S.Save();
             if (Display.SetHz(hz)) Say(hz + " Hz"); else Fire(Toast, "Could not switch to " + hz + " Hz", true);
             Changed();
