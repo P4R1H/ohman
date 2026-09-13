@@ -138,7 +138,9 @@ namespace Ohman {
 
     /// <summary>Simulated keyboard for the preview build.</summary>
     public sealed class DemoLighting : ILighting {
-        Rgb[] colors = { new Rgb(0x0F, 0x84, 0xFA), new Rgb(0x71, 0x0F, 0xFA), new Rgb(0xF9, 0x35, 0x0F), new Rgb(0xFA, 0xAC, 0x0F) };   // OGH's factory default
+        // Zone ids are HP's (0 right, 1 middle, 2 left, 3 WASD), so written in that order this is a blue ramp
+        // running light on the left to deep on the right, with the WASD cluster picked out in near-white.
+        Rgb[] colors = { new Rgb(0x2E, 0x6B, 0xFF), new Rgb(0x33, 0xA5, 0xE6), new Rgb(0x5F, 0xCB, 0xE0), new Rgb(0xF2, 0xEC, 0xE6) };
         int light = 0xE4;
         public LightKind Kind { get { return LightKind.Zones; } }
         public bool Inert { get { return false; } }

@@ -1219,6 +1219,7 @@ namespace Ohman {
         }
 
         public void Refresh() {
+            PollRate();                       // the fan mode decides how fast the sensors have to run; it changes here
             bool wasSyncing = syncing; syncing = true;
             try {
                 var S = E.S; int mi = E.ModeIndex;
@@ -1343,7 +1344,14 @@ namespace Ohman {
         /// fan curve, and on battery even that can wait longer. The per-frame work (the footer, the fan readouts)
         /// has no reader at all when the window is hidden, so its timer stops outright.</summary>
         void PollRate() {
-            int ms = IsVisible ? 2000 : E.S.TrayTemp ? (onBattery ? 10000 : 5000) : (onBattery ? 30000 : 15000);
+            // Whoever is reading these numbers sets the floor. The software fan curve steps every 5 s and steps from
+            // the last reading it was given, so polling slower than that would make the fans answer a poll interval
+            // late — not a saving worth having. With nothing but the tray number waiting on them, they can wait.
+            bool curveDrivesFans = !E.ReadOnly && (E.S.Fan == FanMode.Auto || E.S.Fan == FanMode.Custom);
+            int ms = IsVisible ? 2000
+                   : curveDrivesFans ? 5000
+                   : E.S.TrayTemp ? (onBattery ? 10000 : 5000)
+                   : (onBattery ? 30000 : 15000);
             sensors.SetInterval(ms);
             if (uiTimer == null) return;
             if (IsVisible) { if (!uiTimer.IsEnabled) uiTimer.Start(); } else uiTimer.Stop();
