@@ -11,10 +11,6 @@
 <meta property="og:description" content="OMEN Gaming Hub's controls, without OMEN Gaming Hub. One executable, no services, no ads.">
 <meta property="og:image" content="https://p4r1h.github.io/ohman/home.png">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="demo.css">
 <style>
 /* ---------- palette and tokens: dark only, one accent, warm neutrals to match the app ---------- */
 :root{
@@ -59,11 +55,11 @@ img{display:block}
 
 /* ---------- 1. header row ---------- */
 .bar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-top:24px}
-.brand{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:600;letter-spacing:-.01em}
+.brand{display:flex;align-items:center;gap:11px;font-size:16px;font-weight:600;letter-spacing:-.01em}
 /* the mark, and the joke the name is: hover it and it says what it is */
-.mark{position:relative;width:28px;height:28px;flex:none}
+.mark{position:relative;width:38px;height:38px;flex:none}
 .mark svg,.mark span{position:absolute;inset:0;transition:opacity 220ms ease,transform 320ms cubic-bezier(.22,1,.28,1)}
-.mark span{font-size:21px;line-height:28px;text-align:center;opacity:0;transform:scale(.6) rotate(-18deg)}
+.mark span{font-size:28px;line-height:38px;text-align:center;opacity:0;transform:scale(.6) rotate(-18deg)}
 .brand:hover .mark svg{opacity:0;transform:scale(.6) rotate(18deg)}
 .brand:hover .mark span{opacity:1;transform:none}
 .bar nav{display:flex;align-items:center;gap:6px}
@@ -108,8 +104,13 @@ h1{
 .count{color:var(--muted);font-weight:500;font-variant-numeric:tabular-nums}
 .meta{margin:16px 0 0;color:var(--muted);font-size:13px}
 
-/* ---------- 4. the live panel, and the strip of screens ---------- */
-.demo{margin:56px 0 0}
+/* ---------- 4. the hero shot, and the strip of screens ---------- */
+.shot{
+  width:100%;max-width:460px;height:auto;
+  margin:56px auto 0;
+  border:1px solid var(--border);border-radius:14px;
+  box-shadow:0 18px 44px rgba(0,0,0,.55);
+}
 
 /* full-bleed: the only thing on the page that leaves the column */
 .strip{
@@ -218,7 +219,7 @@ footer p{margin:0 0 8px}
 
   <!-- 1. header -->
   <header class="bar">
-    <span class="brand"><span class="mark" aria-hidden="true"><svg viewBox="0 0 28 28"><defs><linearGradient id="mk" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7FB2FF"/><stop offset="1" stop-color="#2C62B3"/></linearGradient></defs><rect x="7.4" y="7.4" width="13.2" height="13.2" rx="2.2" fill="url(#mk)" transform="rotate(45 14 14)"/></svg><span>😮</span></span>Ohman</span>
+    <span class="brand"><span class="mark" aria-hidden="true"><svg viewBox="0 0 28 28" width="38" height="38"><defs><linearGradient id="mk" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7FB2FF"/><stop offset="1" stop-color="#2C62B3"/></linearGradient></defs><rect x="7.4" y="7.4" width="13.2" height="13.2" rx="2.2" fill="url(#mk)" transform="rotate(45 14 14)"/></svg><span>😮</span></span>Ohman</span>
     <nav>
       <a class="out" href="#laptops">Laptops</a>
       <a class="out" href="https://github.com/P4R1H/Ohman">GitHub</a>
@@ -247,8 +248,9 @@ footer p{margin:0 0 8px}
       <p class="meta"><span id="ver">v2.0</span> &middot; <span id="size">400 KB</span> &middot; Windows 10/11</p>
     </div>
 
-    <!-- 4. the app, actually running -->
-    <div id="demo" class="demo"></div>
+    <!-- 4. the app -->
+    <img class="shot" src="home.png" width="920" height="1082"
+         alt="The Ohman panel: Eco, Balanced and Performance buttons, live CPU and GPU temperatures and fan speeds, and rows for fans, power gain and keyboard lighting.">
 
     <!-- 5. what it does -->
     <section aria-labelledby="what">
@@ -405,6 +407,5 @@ footer p{margin:0 0 8px}
 })();
 </script>
 
-<script src="demo.js" defer></script>
 </body>
 </html>
