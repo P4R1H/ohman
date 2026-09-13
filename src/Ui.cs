@@ -146,6 +146,10 @@ namespace Ohman {
             if (!E.Hw.IsDemo && E.S.UpdateOnLaunch) Slow(delegate { E.CheckForUpdate(false); });
             sensors.SkipGpu = E.GpuMode == 3;                          // iGPU only: there is nothing to wake
             StartShowListener();
+            // Build the window handle now rather than on first Show. Started from the logon task this window
+            // may never be shown at all, and without a handle there is nowhere to register a hotkey or to hook
+            // WM_HOTKEY: every hotkey was silently dead after a reboot.
+            new WindowInteropHelper(this).EnsureHandle();
         }
 
         // ---------- construction ----------
@@ -1434,6 +1438,7 @@ namespace Ohman {
             try { if (tray != null) { tray.Visible = false; tray.Dispose(); } } catch { }
             try { if (osd != null) osd.Close(); } catch { }
             try { if (trayTempIcon != null) { IntPtr h = trayTempIcon.Handle; trayTempIcon.Dispose(); DestroyIcon(h); } } catch { }
+            try { E.Park(); } catch { }        // before Dispose: the timers must still be alive to write
             try { E.Dispose(); } catch { }
             try { sensors.Dispose(); } catch { }
             Log.Write("exit");

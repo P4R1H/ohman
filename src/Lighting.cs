@@ -89,8 +89,11 @@ namespace Ohman {
         /// <summary>Asks the firmware what keyboard this is. Read-only. Null when there is nothing to control.</summary>
         public static BiosLighting Detect() {
             int type = -1;
-            try { var d = Bios.Call(Bios.CMD_DEFAULT, OP_KBD_TYPE, new byte[0], 4); if (d.Length > 0) type = d[0]; }
+            try { var d = Bios.Call(Bios.CMD_DEFAULT, OP_KBD_TYPE, new byte[0], 4); if (d.Length > 0) type = (sbyte)d[0]; }
             catch (Exception ex) { Log.Write("keyboard type query: " + ex.Message); }
+            // The byte is signed and None is -1. Read unsigned that is 255, which matches no branch below and
+            // falls through to the platform-info probe, whose bit 0 is a saturating counter on some boards.
+            if (type == 0 || type < 0) { Log.Write("keyboard lighting: none (type " + type + ")"); return null; }
             LightKind k = LightKind.None; int z = 0;
             if (type == 1 || type == 2) { k = LightKind.Zones; z = 4; }
             else if (type == 4 || type == 5) { k = LightKind.Zones; z = 1; }

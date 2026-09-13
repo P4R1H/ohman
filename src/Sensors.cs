@@ -38,14 +38,27 @@ namespace Ohman {
         /// <summary>Counter setup takes seconds the first time; it runs on the worker so the window is not held back.</summary>
         void InitCounters() {
             try {
+                // Machines expose several ACPI thermal zones and the order means nothing: the first one
+                // alphabetically is as likely to be a skin sensor, or a constant, as the processor. Take the
+                // hottest zone that reads like a real temperature, because the CPU is the hottest thing in a
+                // laptop at idle and a wrong choice here blinds the fan curve and the thermal guard together.
                 var cat = new PerformanceCounterCategory("Thermal Zone Information");
                 string[] inst = cat.GetInstanceNames();
-                if (inst.Length > 0) {
-                    Array.Sort(inst);
-                    thermal = new PerformanceCounter("Thermal Zone Information", "Temperature", inst[0], true);
-                    thermal.NextValue();
-                    Log.Write("thermal zone counter: " + inst[0]);
+                Array.Sort(inst);
+                double best = 0; string bestName = null;
+                foreach (string name in inst) {
+                    PerformanceCounter c = null;
+                    try {
+                        c = new PerformanceCounter("Thermal Zone Information", "Temperature", name, true);
+                        double k = c.NextValue();
+                        if (k < 283 || k > 398) { c.Dispose(); continue; }     // 10 C to 125 C; anything else is not a temperature
+                        if (k <= best) { c.Dispose(); continue; }
+                        if (thermal != null) thermal.Dispose();
+                        thermal = c; best = k; bestName = name;
+                    } catch { if (c != null) try { c.Dispose(); } catch { } }
                 }
+                if (bestName != null) Log.Write("thermal zone counter: " + bestName + " (" + Math.Round(best - 273.15, 1) + " C, hottest of " + inst.Length + ")");
+                else Log.Write("no usable thermal zone among " + inst.Length + "; CPU temperature unavailable");
             } catch (Exception ex) { Log.Write("no thermal zone counter: " + ex.Message); }
             try { cpuUtil = new PerformanceCounter("Processor Information", "% Processor Utility", "_Total", true); cpuUtil.NextValue(); } catch (Exception ex) { Log.Write("no cpu util counter: " + ex.Message); }
             try { cpuFreq = new PerformanceCounter("Processor Information", "Processor Frequency", "_Total", true); } catch { }

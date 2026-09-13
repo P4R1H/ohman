@@ -400,6 +400,23 @@ namespace Ohman {
                 }
             }
         }
+        /// <summary>Leave the fans somewhere they can survive being left. We hold them by refreshing the
+        /// firmware's user-defined state; stop refreshing and the firmware keeps the last level we wrote for
+        /// about 120 s before its own curve resumes (research.md §4). Quitting at an idle level and then
+        /// starting a game would therefore leave the fans idle while the chips climb. Fallback is the level
+        /// the curve uses when it cannot see a temperature at all, which is exactly the situation we are about
+        /// to be in, so it is the right number to leave behind. Never writes lower than what is already set.</summary>
+        public void Park() {
+            if (!BiosOk || Hw.IsDemo || ReadOnly) return;
+            if (GuardActive || S.Fan == FanMode.Max) return;            // already at maximum: leave it there
+            try {
+                int want = Math.Max(P.Curve.Fallback, Math.Max(curLevel1, curLevel2));
+                if (want <= curLevel1 && want <= curLevel2) return;      // already at or above it
+                lock (applySync) WriteLevels(want, want, "Fan level on exit");
+                Log.Write("parked fans at " + want + " for the ~120 s the firmware holds the last level");
+            } catch (Exception ex) { Log.Write("park fans: " + ex.Message); }
+        }
+
         public void Dispose() {
             stopping = true; try { workReady.Set(); } catch { }
             try { if (fx != null) fx.Dispose(); } catch { }
@@ -798,7 +815,10 @@ namespace Ohman {
         void ApplyRefreshRate(bool onBattery) {
             try {
                 int[] rates = Display.Rates(); if (rates.Length < 2) return;
-                int want = S.LowHzOnBattery && onBattery ? Display.BatteryHz() : (S.RefreshHz > 0 ? S.RefreshHz : 0);
+                int want = S.LowHzOnBattery && onBattery ? Display.BatteryHz()
+                         : S.RefreshHz > 0 ? S.RefreshHz
+                         : S.LowHzOnBattery ? Display.HighestHz()   // we lowered it, so we put it back
+                         : 0;
                 if (want > 0 && Display.CurrentHz() != want) Display.SetHz(want);
             } catch (Exception ex) { Log.Write("refresh rate: " + ex.Message); }
         }

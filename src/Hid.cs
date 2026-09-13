@@ -238,8 +238,8 @@ namespace Ohman {
                     // reply is filed under the id it reports, not under i.
                     int id = U16(rep, 1); if (id < 0 || id >= LampCount) id = i;
                     X[id] = I32(rep, 3); Y[id] = I32(rep, 7);
-                    programmable[id] = rep[featureLen > 28 ? 27 : featureLen - 2] != 0;
-                    KeyUsage[id] = U16(rep, 23);                      // LampPurposes' input binding: the key under the lamp
+                    programmable[id] = featureLen > 27 && rep[27] != 0;      // IsProgrammable
+                    KeyUsage[id] = U16(rep, 28);                      // InputBinding: the HID usage of the key under the lamp
                 } catch { }
             }
         }

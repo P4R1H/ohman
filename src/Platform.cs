@@ -119,7 +119,13 @@ namespace Ohman {
             if (Families.In(Families.Victus, board)) { p.ModeEco = 0x03; p.ModeBalanced = 0x00; p.ModePerformance = 0x01; p.ModeCool = 0x03; p.Notes = "Victus family (hp-wmi victus_thermal_profile_boards)"; }
             else if (Families.In(Families.VictusS, board)) { p.ModeEco = 0x00; p.ModeBalanced = 0x00; p.ModePerformance = 0x01; p.ModeCool = 0x00; p.Notes = "Victus S family"; }
             else if (Families.In(Families.OmenForceV0, board) || info.ThermalPolicy == 0) { p.ModeEco = 0x00; p.ModeBalanced = 0x00; p.ModePerformance = 0x01; p.ModeCool = 0x02; p.ThermalPolicy = 0; p.Notes = "thermal policy v0"; }
-            else if (info.ThermalPolicy == 1) { p.Notes = "thermal policy v1" + (Families.In(Families.Omen, board) ? ", listed in hp-wmi" : ""); }
+            else if (info.ThermalPolicy == 1) {
+                // 0x50 (Cool) is documented only for the boards the kernel lists. Anywhere else, leave the
+                // quieter-Eco switch writing the ordinary Eco byte rather than one we cannot source.
+                bool listed = Families.In(Families.Omen, board);
+                if (!listed) p.ModeCool = p.ModeEco;
+                p.Notes = "thermal policy v1" + (listed ? ", listed in hp-wmi" : ", not in hp-wmi: no Cool profile");
+            }
             else return null;
             p.TdpBase = info.DefaultConcurrentTdp; p.HasPowerGain = info.DefaultConcurrentTdp > 0;
             p.HasGpuPower = false;                                        // the engine probes 0x21 and turns this on when the firmware answers

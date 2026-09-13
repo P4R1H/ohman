@@ -60,6 +60,12 @@ namespace Ohman {
             foreach (int r in all) if (r >= 48) return r;
             return all[0];
         }
+        /// <summary>The panel's fastest rate. Used to put things back when Ohman lowered the rate on battery and
+        /// the user never chose a rate of their own, so there is nothing else to return to.</summary>
+        public static int HighestHz() {
+            var all = Rates();
+            return all.Length == 0 ? 0 : all[all.Length - 1];
+        }
         /// <summary>Switch the primary display's refresh rate, keeping resolution and depth; persisted like the Settings app does.</summary>
         public static bool SetHz(int hz) {
             try {
