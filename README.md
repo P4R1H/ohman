@@ -3,7 +3,7 @@
 <p align="center">
 <a href="https://github.com/P4R1H/Ohman/releases/latest/download/Ohman.exe"><img alt="Download Ohman.exe" src="https://img.shields.io/badge/Download%20Ohman.exe-3F8CFF?style=for-the-badge&logo=windows&logoColor=white"></a>
 &nbsp;
-<a href="https://p4r1h.github.io/ohman/"><img alt="Website" src="https://img.shields.io/badge/Website-21262D?style=for-the-badge"></a>
+<a href="https://ohmanapp.github.io/"><img alt="Website" src="https://img.shields.io/badge/Website-21262D?style=for-the-badge"></a>
 <a href="docs/laptops.md"><img alt="Supported laptops" src="https://img.shields.io/badge/Supported%20laptops-21262D?style=for-the-badge"></a>
 <a href="docs/research.md"><img alt="How the firmware works" src="https://img.shields.io/badge/How%20it%20works-21262D?style=for-the-badge"></a>
 </p>
