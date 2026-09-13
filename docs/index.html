@@ -41,7 +41,7 @@ body{
   line-height:1.62;
   -webkit-font-smoothing:antialiased;
 }
-.wrap{max-width:980px;margin:0 auto;padding:0 28px}
+.wrap{max-width:880px;margin:0 auto;padding:0 28px}
 a{
   color:var(--accent);
   text-decoration:underline;
@@ -84,7 +84,7 @@ h1{
   line-height:1.14;
   letter-spacing:-.028em;
 }
-.lede{margin:0;max-width:760px;color:var(--muted);font-size:16.5px}
+.lede{margin:0;max-width:690px;color:var(--muted);font-size:16.5px}
 
 /* ---------- 3. buttons and meta ---------- */
 .cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}
@@ -119,15 +119,20 @@ h1{
   -webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);
           mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);
 }
-.strip-track{display:flex;width:max-content;animation:drift 64s linear infinite}
+.strip-track{display:flex;align-items:flex-end;width:max-content;animation:drift 64s linear infinite}
 .strip:hover .strip-track{animation-play-state:paused}
-/* the spacing is a margin, not a gap: a gap is not part of the track's width, so translating by exactly one
-   third of it would land 8px short every cycle and the loop would visibly jump */
+/* One scale for all four, never one height: the window is a different size on every page and that is the point.
+   Keyboard is the wide one and Settings the tall one, exactly as they are on screen. Widths are the window's own
+   dimensions at 0.72; height follows from the image, so nothing is stretched.
+   The spacing is a margin and not a gap, because a gap is not part of the track's width and the loop would land
+   8px short every cycle. */
 .strip img{
-  height:440px;width:auto;flex:none;margin-right:22px;
+  height:auto;flex:none;margin-right:22px;
   border:1px solid var(--border);border-radius:14px;
   box-shadow:0 18px 44px rgba(0,0,0,.55);
 }
+.strip img[width="920"]{width:331px}
+.strip img[width="1400"]{width:503px}
 @keyframes drift{from{transform:translateX(0)}to{transform:translateX(calc(-100% / 3))}}
 @media (prefers-reduced-motion:reduce){.strip-track{animation:none}.strip{overflow-x:auto}}
 
