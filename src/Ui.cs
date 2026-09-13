@@ -446,7 +446,15 @@ namespace Ohman {
                 float mid = size / 2f;
                 float side = size * 0.74f;
                 float radius = side * (label == null ? 0.15f : 0.11f);
-                using (var path = RoundSquare(mid, side, radius, mid)) using (var b = new SD.SolidBrush(c)) g.FillPath(b, path);
+                // Same light-to-dark ramp as the mark on the rail and on the website. The path is already rotated,
+                // so the gradient is simply vertical in device space: top point light, bottom point dark. The end
+                // points are pushed a little past the shape so GDI+ does not band at the extremes.
+                float half = side * 0.71f;
+                using (var path = RoundSquare(mid, side, radius, mid))
+                using (var b = new System.Drawing.Drawing2D.LinearGradientBrush(
+                        new SD.PointF(0, mid - half - 1), new SD.PointF(0, mid + half + 1),
+                        Shade(c, 0.24f), Shade(c, -0.28f)))
+                    g.FillPath(b, path);
                 if (label == null) return bmp;
                 g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
                 float em = size * (label.Length >= 3 ? 0.46f : 0.68f);
@@ -499,6 +507,14 @@ namespace Ohman {
                 bw.Flush();
                 return ms.ToArray();
             }
+        }
+        /// <summary>Toward white for a positive amount, toward black for a negative one.</summary>
+        static SD.Color Shade(SD.Color c, float t) {
+            int to = t > 0 ? 255 : 0; float k = Math.Abs(t);
+            return SD.Color.FromArgb(c.A,
+                (int)Math.Round(c.R + (to - c.R) * k),
+                (int)Math.Round(c.G + (to - c.G) * k),
+                (int)Math.Round(c.B + (to - c.B) * k));
         }
         static System.Drawing.Drawing2D.GraphicsPath RoundSquare(float center, float side, float radius, float rotateAbout) {
             var p = new System.Drawing.Drawing2D.GraphicsPath();

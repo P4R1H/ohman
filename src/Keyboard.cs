@@ -225,6 +225,10 @@ namespace Ohman {
 
         protected override void OnRender(DrawingContext dc) {
             if (face == null) face = new Typeface(Ui.MonoFont, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+            // A FrameworkElement is only hit-testable where it has drawn something, so without this the gaps
+            // between the keys are not part of the control: the pointer crossing one counts as leaving
+            // altogether, MouseLeave fires, and the hover drops. Transparent is hit-testable; null is not.
+            dc.DrawRectangle(Brushes.Transparent, null, new Rect(0, 0, ActualWidth, ActualHeight));
             bool lit = !Off && !WindowsOwned && shown.Length > 0;
             double lv = 0.35 + 0.65 * Math.Max(0, Math.Min(1, Level));
             double radius = Interactive ? 4 : 2;
