@@ -61,9 +61,9 @@ namespace Ohman {
         FrameworkElement curveBlock, maxBlock, manualBlock, optsAuto, optsCurve, optsMax, optsManual; Border curveWhichHost;
         LinkSeg curveWhich; CurveView curveView; Slider slFan1, slFan2, slFloor, slRamp; ToggleButton tgLink, tgEcoCool2, tgMaxCool, tgManualLink; bool curveGpu;
         // keyboard
-        LinkSeg kbdModes; Seg granSeg; Border kbdHost, hexChip; TextBlock txtKbdStatus, txtKeySel, txtSpeed, txtSpeed2, txtLevel, txtLevel2, txtKbdInfo, btnWinLighting;
-        FrameworkElement selectRow, colorEditor, effectEditor, kbdInfo, speedInline;
-        Slider slSpeed, slSpeed2, slLevel, slLevel2; TextBox txtHex; StripPicker hueBar, shadeBar;
+        LinkSeg kbdModes; Seg granSeg; Border kbdHost, hexChip; TextBlock txtKbdStatus, txtKeySel, txtSpeed, txtLevel, txtLevel2, txtKbdInfo, btnWinLighting;
+        FrameworkElement selectRow, colorEditor, effectEditor, kbdInfo, levelInline;
+        Slider slSpeed, slLevel, slLevel2; TextBox txtHex; StripPicker hueBar, shadeBar;
         KeyboardView kbdMini, kbdBig; DispatcherTimer colorDebounce, levelDebounce, speedDebounce, floorDebounce; bool miniNeedsFrame;
         string gran = "Zone"; Rgb curColor; bool hexTyping;
         // settings
@@ -183,7 +183,7 @@ namespace Ohman {
             txtKbdStatus = F<TextBlock>("TxtKbdStatus"); selectRow = F<FrameworkElement>("SelectRow"); txtKeySel = F<TextBlock>("TxtKeySel"); kbdHost = F<Border>("KbdHost");
             colorEditor = F<FrameworkElement>("ColorEditor"); effectEditor = F<FrameworkElement>("EffectEditor"); kbdInfo = F<FrameworkElement>("KbdInfo");
             hexChip = F<Border>("HexChip"); txtHex = F<TextBox>("TxtHex"); slLevel = F<Slider>("SlLevel"); txtLevel = F<TextBlock>("TxtLevel");
-            speedInline = F<FrameworkElement>("SpeedInline"); slSpeed2 = F<Slider>("SlSpeed2"); txtSpeed2 = F<TextBlock>("TxtSpeed2");
+            levelInline = F<FrameworkElement>("LevelInline");
             slSpeed = F<Slider>("SlSpeed"); txtSpeed = F<TextBlock>("TxtSpeed"); slLevel2 = F<Slider>("SlLevel2"); txtLevel2 = F<TextBlock>("TxtLevel2");
             txtKbdInfo = F<TextBlock>("TxtKbdInfo"); btnWinLighting = F<TextBlock>("BtnWinLighting");
             txtMachine = F<TextBlock>("TxtMachine"); txtKeyInfo = F<TextBlock>("TxtKeyInfo"); keyDot = F<Ellipse>("KeyDot"); btnLearn = F<TextBlock>("BtnLearn"); keyCmdRow = F<FrameworkElement>("KeyCmdRow"); txtKeyCmd = F<TextBox>("TxtKeyCmd");
@@ -885,13 +885,10 @@ namespace Ohman {
             slLevel.ValueChanged += level; slLevel2.ValueChanged += level;
             speedDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
             speedDebounce.Tick += delegate { speedDebounce.Stop(); int sp = (int)slSpeed.Value; Bg(delegate { E.SetLightSpeed(sp); }); };
-            RoutedPropertyChangedEventHandler<double> speed = delegate(object o, RoutedPropertyChangedEventArgs<double> ev) {
-                bool was = syncing;
-                if (!was) { syncing = true; try { if (ReferenceEquals(o, slSpeed)) slSpeed2.Value = slSpeed.Value; else slSpeed.Value = slSpeed2.Value; } finally { syncing = false; } }
-                int v = (int)slSpeed.Value; txtSpeed.Text = v.ToString(CultureInfo.InvariantCulture); txtSpeed2.Text = v.ToString(CultureInfo.InvariantCulture);
-                if (!was) { speedDebounce.Stop(); speedDebounce.Start(); }
+            slSpeed.ValueChanged += delegate {
+                txtSpeed.Text = ((int)slSpeed.Value).ToString(CultureInfo.InvariantCulture);
+                if (!syncing) { speedDebounce.Stop(); speedDebounce.Start(); }
             };
-            slSpeed.ValueChanged += speed; slSpeed2.ValueChanged += speed;
             btnWinLighting.MouseLeftButtonUp += delegate { try { Process.Start(new ProcessStartInfo("ms-settings:personalization-lighting") { UseShellExecute = true }); } catch (Exception ex) { ShowToast("Cannot open Windows settings: " + ex.Message, true); } };
             // the drawings show the frames the keyboard actually received; the Home glyph only while the pointer is over the row
             E.FrameChanged += delegate(Rgb[] f) { Dispatcher.BeginInvoke((Action)delegate { OnFrame(f); }); };
@@ -989,8 +986,11 @@ namespace Ohman {
             kbdModes.Select(Choice.OfLight(m, fx), IsVisible && cur == Page.Keyboard);
             selectRow.Visibility = pick ? Visibility.Visible : Visibility.Collapsed;
             colorEditor.Visibility = pick ? Visibility.Visible : Visibility.Collapsed;
-            effectEditor.Visibility = effect && fx != 1 ? Visibility.Visible : Visibility.Collapsed;
-            speedInline.Visibility = fx == 1 && lit ? Visibility.Visible : Visibility.Collapsed;      // breathe: colours and a speed
+            // Breathe is the one mode that is both a colour and an effect, so it gets both blocks. Its brightness
+            // then comes from the effect row, and the inline one would be a second copy of the same slider.
+            effectEditor.Visibility = effect ? Visibility.Visible : Visibility.Collapsed;
+            effectEditor.Margin = new Thickness(0, pick ? 18 : 0, 0, 0);
+            levelInline.Visibility = pick && !effect ? Visibility.Visible : Visibility.Collapsed;
             kbdInfo.Visibility = lit ? Visibility.Collapsed : Visibility.Visible;
             btnWinLighting.Visibility = m == 2 ? Visibility.Visible : Visibility.Collapsed;
             // Reaching here means both ways in failed: HP's firmware answers and lights nothing, and this keyboard
@@ -1019,7 +1019,7 @@ namespace Ohman {
             bool was = syncing; syncing = true;
             try {
                 slLevel.Value = slLevel2.Value = Math.Max(5, S.LightLevel); txtLevel.Text = txtLevel2.Text = S.LightLevel + "%";
-                slSpeed.Value = slSpeed2.Value = S.LightSpeed; txtSpeed.Text = txtSpeed2.Text = S.LightSpeed.ToString(CultureInfo.InvariantCulture);
+                slSpeed.Value = S.LightSpeed; txtSpeed.Text = S.LightSpeed.ToString(CultureInfo.InvariantCulture);
             } finally { syncing = was; }
             if (cur != Page.Keyboard) SyncPickerFromSelection();
             string fxName = new[] { "Static", "Breathe", "Cycle", "Wave" }[Math.Max(0, Math.Min(3, S.LightEffect))];
