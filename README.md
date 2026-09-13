@@ -12,7 +12,7 @@ Don't you love paying $2,500 for a laptop and still having ads pushed down your 
 with no alternative? Ohman is the alternative. One executable, no services, no drivers, no account, no ads.
 Same firmware interface as OMEN Gaming Hub, same bytes, nothing else.
 
-Ohman interacts with the BIOS through the same commands OGH uses. Use at your own risk.
+Use at your own risk.
 
 ## Features
 
@@ -27,24 +27,21 @@ Ohman interacts with the BIOS through the same commands OGH uses. Use at your ow
 | **Lighting** | The keyboard drawn as it actually lights. Select a key, a row, a zone or the whole board, then pick a hue and a shade; or Breathe, Cycle, Wave, or hand it to Windows Dynamic Lighting. One zone, four zones or per key, whichever your keyboard has. |
 | **Display** | Refresh rate, and the lowest rate on battery if you want it. |
 | **Live** | CPU and GPU temperature, CPU package watts, fan speeds, load, clocks, chassis sensor, battery. CPU temperature on the tray icon. |
-| **Tray** | Every control above without opening the window: modes, fan mode, power gain, refresh rate, GPU power, graphics, lighting, brightness and all the switches. |
+| **Tray** | Modes, fan mode, the backlight, refresh rate and graphics, without opening the window. |
 | **OMEN key** | Opens the panel, cycles modes, toggles max fan, or runs a command of your choice. OGH's key handler is stopped, reversibly. Shift+F11 cycles modes; Ctrl+Alt+E/B/P/M/O for the rest. |
 | **Safety** | A thermal guard forces max fan on a hot CPU, a hot chassis or stalled fans. It can be switched off, with a warning. Fans are never set below 1800 rpm. |
 | **Extras** | Starts with Windows without a UAC prompt, Eco on battery, Windows power-mode sync, an on-screen flash when a key changes something, an update check that never installs anything for you. |
 
 Settings live in `ohman.state`, everything the app does goes to `ohman.log`. Both sit beside the executable.
 
-To remove it: turn off **Start with Windows** and **Take over the OMEN key** in Settings first, then delete the
-folder. Those two write outside it, to a scheduled task and to HP's own logon tasks, and deleting the exe on
-its own leaves both behind. If you changed the refresh rate or the graphics mode, those live in Windows and in
-the BIOS respectively and stay as you left them.
+To remove it: turn off **Start with Windows** and **Take over the OMEN key** in Settings, then delete the
+folder. Those two are the only things Ohman writes outside it.
 
 ## Install
 
 Download `Ohman.exe` from [Releases](../../releases/latest) and run it. It asks for administrator rights,
-because the firmware interface needs them, and it will ask again every time you start it by hand. On the first
-run it also registers a scheduled task so it starts with Windows without the prompt. One switch in Settings
-removes that task.
+because the firmware interface needs them. It starts with Windows from then on, which you can turn off in
+Settings.
 
 Or build it with the compiler that already ships inside Windows. No SDK, no NuGet, no toolchain:
 
@@ -52,8 +49,7 @@ Or build it with the compiler that already ships inside Windows. No SDK, no NuGe
 build.cmd
 ```
 
-`preview\Ohman.exe` is the same UI on simulated hardware and needs no administrator rights, which is what the
-screenshots above are.
+`preview\Ohman.exe` is the same UI on simulated hardware and needs no administrator rights.
 
 ## Your laptop
 
@@ -64,13 +60,12 @@ OMEN 15, 16 and 17 &middot; OMEN MAX 16 &middot; OMEN Transcend 14 and 16 &middo
 the S and R.
 
 Note: so far Ohman has been verified end to end on one machine, an HP OMEN Transcend 14 (2024, board 8C58).
-**[Help get your laptop verified](docs/laptops.md#verifying-your-laptop)**: it takes five minutes. Every model
-and its board ids are listed in [docs/laptops.md](docs/laptops.md).
+Every model and its board ids are in [docs/laptops.md](docs/laptops.md).
 
-> ### Verify yours
-> Run through [the checklist](docs/laptops.md#verifying-your-laptop), run `tools\support-info.cmd`, and open a
-> **Verify my laptop** issue with the file it writes. Your model moves to verified and everybody with that board
-> gets a profile that has been tested on a real machine.
+> ### Get yours verified
+> Five minutes: run [the checklist](docs/laptops.md#verifying-your-laptop) and `tools\support-info.cmd`, then
+> open a **Verify my laptop** issue with the file it writes. Everybody with that board then gets a profile
+> that has been tested on a real machine instead of worked out from the firmware.
 
 If a control is wrong on your model, open a **New laptop support** issue with the same file and, if you can get
 it, OGH's own log from a session where you clicked every mode:
@@ -85,11 +80,9 @@ mode (`0x52`), keyboard lighting (`0x20009`), plus read-only queries. The OMEN k
 (`hpqBEvnt`). Every byte and every measured firmware behaviour is written down in
 [docs/research.md](docs/research.md), including the things that are *not* safe to do and why.
 
-- The firmware forgets a user-defined fan state after about 120 seconds, so Ohman re-asserts it. When it
-  expires the firmware first re-applies the *last written level* before its own curve resumes, so handing the
-  fans back takes care. Ohman never writes a level below 1800 rpm.
-- The thermal guard is independent of everything else: it reads the fans and the chassis sensor every ten
-  seconds and forces maximum fan if the machine is running away, regardless of what mode you picked.
+- The firmware forgets a user-defined fan state after about 120 seconds, so Ohman keeps renewing it. That is
+  why it has to stay running to hold a curve. It never writes a level below 1800 rpm.
+- The thermal guard runs on its own ten-second timer and forces maximum fan whatever mode you picked.
 
 ## Adding a laptop in code
 
@@ -103,10 +96,9 @@ new PlatformProfile {
 }
 ```
 
-Everything else has a default on `PlatformProfile` or is read from the firmware at run time: the mode bytes,
-the fan curve and its units, the guard limits, the GPU payloads, the OMEN key event. Override only what the
-evidence says is different and put the evidence in `Notes`. The `add-laptop` skill in `.claude/skills/` turns a
-support issue into exactly that entry and a pull request; see [CONTRIBUTING.md](CONTRIBUTING.md).
+Everything else either has a default or is read from the firmware at run time. Override only what the evidence
+says is different, and put the evidence in `Notes`. The `add-laptop` skill turns a support issue into that
+entry and a pull request; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Tools
 
@@ -115,7 +107,7 @@ support issue into exactly that entry and a pull request; see [CONTRIBUTING.md](
 | `tools\support-info.cmd` | data for a support request |
 | `tools\verify.cmd` | read-only check of every query the app uses, plus a key-event capture |
 | `tools\powertest.ps1` | A/B the power-gain slider on GPU watts and clocks |
-| `tools\fantest.cmd` | firmware fan experiment. Holds the fans at zero for 60 s with an automatic abort; run it cool, idle and watching |
+| `tools\fantest.cmd` | holds the fans at zero for 60 s, then aborts on its own. Run it on a cool, idle machine |
 | `tools\omenprobe.cs` | CLI for raw BIOS calls |
 
 ## Layout
@@ -137,8 +129,8 @@ Pushing a `v*` tag builds on a Windows runner and attaches the binaries to a rel
 
 ## Later
 
-- **Benchmarking tab**: run a short load, record clocks, watts, temperatures and throttle events, and let you
-  compare two settings honestly instead of guessing whether +15 W did anything.
+- **Benchmarking tab**: run a short load and record clocks, watts, temperatures and throttling, so you can see
+  what +15 W actually did.
 - **Fan curve import/export** so a verified model's curve can be shared as a file.
 
 Ideas and issues are welcome.

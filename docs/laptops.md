@@ -18,7 +18,7 @@ did what it says. Its settings are then fixed rather than worked out at run time
 
 | Model | Board | Verified on | Notes |
 |---|---|---|---|
-| OMEN Transcend 14 (2024, 14-fb0xxx) | `8C58` | 2026-09-12 | Core Ultra 9 185H + RTX 4070. Modes, fans, power gain, GPU power and four-zone lighting all confirmed against OMEN Gaming Hub 1101.2608. Graphics switching writes correctly but the restart it needs was never taken, so it is unconfirmed. |
+| OMEN Transcend 14 (2024) | `8C58`, `8E41` | 2026-09-12 | Checklist run on `8C58`: Core Ultra 9 185H + RTX 4070. Modes, fans, power gain, GPU power and four-zone lighting all confirmed against OMEN Gaming Hub 1101.2608. Graphics switching writes correctly but the restart it needs was never taken, so it is unconfirmed. `8E41` is the same model and firmware generation and is driven the same way, but nobody has run the checklist on one. |
 
 See [Verifying your laptop](#verifying-your-laptop).
 
@@ -32,7 +32,6 @@ reuses a board across several SKUs.
 
 | Model | Board ids |
 |---|---|
-| OMEN Transcend 14 (2024, other SKU) | `8E41` |
 | OMEN Transcend 16 (2023–2025) | `8BB3`, `8C3B`, `8C4D`, `8E10` |
 
 ### OMEN 16 and OMEN MAX
