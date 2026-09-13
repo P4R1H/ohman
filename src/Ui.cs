@@ -274,7 +274,7 @@ namespace Ohman {
             };
             if (E.Light == null) lightRow.Visibility = Visibility.Collapsed;
             else {
-                var layout = KeyboardLayouts.Build(E.Light.Numpad, E.Light.Zones);
+                var layout = BuildLayout();
                 kbdMini = new KeyboardView { Interactive = false, Gap = 1.5, RowPitch = 9.5 }; kbdMini.SetLayout(layout); miniHost.Child = kbdMini;
                 lightRow.MouseLeftButtonUp += delegate { Navigate(Page.Keyboard, true); };
                 lightRow.MouseEnter += delegate { miniNeedsFrame = true; };
@@ -836,7 +836,7 @@ namespace Ohman {
         // ---------- keyboard lighting ----------
         void BuildKeyboard() {
             if (E.Light == null) return;
-            var layout = KeyboardLayouts.Build(E.Light.Numpad, E.Light.Zones);
+            var layout = BuildLayout();
             kbdBig = new KeyboardView { Interactive = true, Gap = 5, RowPitch = 39 }; kbdBig.SetLayout(layout); kbdHost.Child = kbdBig;
             kbdBig.KeyClicked += delegate(KeyDef k) { if (k != null) SelectGroup(k); };
             kbdBig.KeyHovered += delegate(KeyDef k) {
@@ -968,6 +968,15 @@ namespace Ohman {
         }
         /// <summary>Show only what the current mode can use: colour for the per-zone modes, speed and brightness for
         /// the effects that paint their own colours.</summary>
+        /// <summary>The drawn keyboard for this machine. Four zones come from the layout itself; on a per-key board
+        /// the keyboard says which of its lamps sits under each key, so the device decides and we do not carry a table.</summary>
+        List<KeyDef> BuildLayout() {
+            var layout = KeyboardLayouts.Build(E.Light.Numpad, E.Light.Zones);
+            var perKey = E.Light as PerKeyLighting;
+            if (perKey != null) KeyboardLayouts.BindLamps(layout, perKey.Device);
+            return layout;
+        }
+
         void ApplyEditorState() {
             if (kbdBig == null) return;
             var S = E.S; int m = S.Light, fx = S.LightEffect;

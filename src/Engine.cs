@@ -812,6 +812,13 @@ namespace Ohman {
         void InitLight() {
             try {
                 Light = Hw.IsDemo ? (ILighting)new DemoLighting() : (BiosOk && !ReadOnly ? BiosLighting.Detect() : null);
+                // A per-key board answers the firmware calls and lights nothing by them. Its colours live on the
+                // keyboard's own HID lighting interface, so look for that before giving up on it.
+                if (!Hw.IsDemo && Light != null && Light.Inert) {
+                    var la = LampArray.FindKeyboard();
+                    if (la != null) Light = new PerKeyLighting(la);
+                    else Log.Write("per-key board with no HID lighting interface we can drive; colours left to Windows");
+                }
                 if (Light == null) return;
                 var fw = Light.GetColors();
                 LightColors = ParseColors(S.LightColors, Light.Zones);

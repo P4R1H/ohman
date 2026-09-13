@@ -102,6 +102,21 @@ with `tools\support-info.txt` attached and a line per step above. The file conta
 version, the firmware's system-design bytes, the fan table and the OMEN key event id. No personal data, no
 serial numbers.
 
+## If your keyboard lights per key
+
+HP's firmware lighting interface answers on these boards and drives nothing at all, so Ohman uses the
+keyboard's own HID lighting interface instead. That part is written against a published standard but is
+**unverified** — nobody working on Ohman has a per-key machine. Run this, which writes nothing and changes
+nothing:
+
+```
+Ohman.exe --lamps
+```
+
+and open an issue with what it prints. It reports how many lamps your keyboard has, where each one is, and
+which key each one lights. That is everything needed to confirm the feature, and it is the exact data every
+other project working on this has asked for and never received.
+
 ## If a control is wrong on your model
 
 Open a [New laptop support](https://github.com/P4R1H/Ohman/issues/new?template=new-laptop-support.yml) issue

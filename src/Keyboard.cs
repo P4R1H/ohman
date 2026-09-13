@@ -12,6 +12,10 @@ namespace Ohman {
 
     public sealed class KeyDef {
         public string Label; public double X, Y, W, H = 1; public int Zone; public int Index;
+        public bool OnNumpad;
+        /// <summary>HID usage on the keyboard page (0x07), 0 when we have no name for this key. A LampArray
+        /// reports the usage of the key each of its lamps lights, which is how a lamp finds its key here.</summary>
+        public ushort Usage;
         public int Row { get { return (int)Y; } }
     }
 
@@ -49,8 +53,9 @@ namespace Ohman {
             if (numpad) {
                 double nx = 15.3; string[][] np = { new[] { "Num", "/", "*", "-" }, new[] { "7", "8", "9", "+" }, new[] { "4", "5", "6", "" }, new[] { "1", "2", "3", "Ent" }, new[] { "0:2", ".", "" } };
                 double ny = 1;
-                foreach (var row in np) { double x = nx; foreach (string spec in row) { string label = spec; double w = 1; int c = spec.LastIndexOf(':'); if (c > 0) { label = spec.Substring(0, c); w = double.Parse(spec.Substring(c + 1), CultureInfo.InvariantCulture); } if (label.Length > 0) keys.Add(new KeyDef { Label = label, X = x, Y = ny, W = w, H = 1, Index = idx++ }); x += w; } ny += 1; }
+                foreach (var row in np) { double x = nx; foreach (string spec in row) { string label = spec; double w = 1; int c = spec.LastIndexOf(':'); if (c > 0) { label = spec.Substring(0, c); w = double.Parse(spec.Substring(c + 1), CultureInfo.InvariantCulture); } if (label.Length > 0) keys.Add(new KeyDef { Label = label, X = x, Y = ny, W = w, H = 1, Index = idx++, OnNumpad = true }); x += w; } ny += 1; }
             }
+            foreach (var k in keys) k.Usage = UsageOf(k);
             foreach (var k in keys) {
                 if (zones != 4) { k.Zone = 0; continue; }
                 double mid = k.X + k.W / 2;
@@ -58,6 +63,76 @@ namespace Ohman {
                 k.Zone = wasd ? ZoneWasd : mid < 4.6 ? ZoneLeft : mid < 9.2 ? ZoneMiddle : ZoneRight;
             }
             return keys;
+        }
+
+        // HID Usage Tables, Keyboard/Keypad page (0x07). Only the keys this layout draws.
+        static readonly Dictionary<string, ushort> Usages = Build(
+            "Esc 29 Enter 28 Tab 2B Caps 39 Del 4C ` 35 - 2D = 2E [ 2F ] 30 \\ 31 ; 33 ' 34 , 36 . 37 / 38 " +
+            "F1 3A F2 3B F3 3C F4 3D F5 3E F6 3F F7 40 F8 41 F9 42 F10 43 F11 44 F12 45 " +
+            "1 1E 2 1F 3 20 4 21 5 22 6 23 7 24 8 25 9 26 0 27 " +
+            "Num 53 Ent 58 Win E3 Fn 00");
+        static Dictionary<string, ushort> Build(string pairs) {
+            var d = new Dictionary<string, ushort>(StringComparer.Ordinal);
+            string[] p = pairs.Split(' ');
+            for (int i = 0; i + 1 < p.Length; i += 2) d[p[i]] = ushort.Parse(p[i + 1], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            for (char c = 'A'; c <= 'Z'; c++) d[c.ToString()] = (ushort)(0x04 + (c - 'A'));
+            return d;
+        }
+        /// <summary>Point each drawn key at the lamp that lights it. The device says which key each of its lamps is
+        /// under, so the match is the hardware's own; any key the device did not name falls back to the nearest lamp by
+        /// position, which is what the bounding box is for. Afterwards a key's Zone is its lamp id and the rest of the
+        /// app — selection, painting, effect frames, drawing — carries on in zone indices exactly as it does with four.</summary>
+        public static void BindLamps(List<KeyDef> keys, LampArray la) {
+            double maxX = 0, maxY = 0;
+            foreach (var k in keys) { maxX = Math.Max(maxX, k.X + k.W); maxY = Math.Max(maxY, k.Y + k.H); }
+            if (maxX <= 0 || maxY <= 0 || la.LampCount <= 0) return;
+            var byUsage = new Dictionary<ushort, int>();
+            for (int i = 0; i < la.LampCount; i++) {
+                ushort u = la.KeyUsage[i];
+                if (u != 0 && u != 0xFFFF && !byUsage.ContainsKey(u)) byUsage[u] = i;
+            }
+            int named = 0;
+            foreach (var k in keys) {
+                int lamp;
+                if (k.Usage != 0 && byUsage.TryGetValue(k.Usage, out lamp)) { k.Zone = lamp; named++; continue; }
+                k.Zone = Nearest(la, (k.X + k.W / 2) / maxX, (k.Y + k.H / 2) / maxY);
+            }
+            Log.Write("lamparray: " + named + " of " + keys.Count + " drawn keys matched a lamp by HID usage; the rest by position");
+        }
+        /// <summary>The lamp closest to a point given as a fraction of the board, in the device's own bounding box.</summary>
+        static int Nearest(LampArray la, double fx, double fy) {
+            double want = fx * la.WidthMicrometres, wantY = fy * la.HeightMicrometres;
+            int best = 0; double bestD = double.MaxValue;
+            for (int i = 0; i < la.LampCount; i++) {
+                double dx = la.X[i] - want, dy = la.Y[i] - wantY, d = dx * dx + dy * dy;
+                if (d < bestD) { bestD = d; best = i; }
+            }
+            return best;
+        }
+
+        /// <summary>The HID usage for one drawn key. Labels alone are not enough: this layout has two Shifts, two
+        /// Ctrls, two Alts and a numpad that repeats every digit, so the key's place on the board decides.</summary>
+        static ushort UsageOf(KeyDef k) {
+            string l = k.Label;
+            if (k.OnNumpad) {
+                if (l.Length == 1 && l[0] >= '1' && l[0] <= '9') return (ushort)(0x59 + (l[0] - '1'));
+                if (l == "0") return 0x62;
+                if (l == ".") return 0x63;
+                if (l == "/") return 0x54;
+                if (l == "*") return 0x55;
+                if (l == "-") return 0x56;
+                if (l == "+") return 0x57;
+            }
+            bool left = k.X < 7;
+            if (l == "Shift") return left ? (ushort)0xE1 : (ushort)0xE5;
+            if (l == "Ctrl") return left ? (ushort)0xE0 : (ushort)0xE4;
+            if (l == "Alt") return left ? (ushort)0xE2 : (ushort)0xE6;
+            if (l == "\u232B") return 0x2A;                      // backspace
+            if (l == "\u25C0") return 0x50;                      // left
+            if (l == "\u25B6") return 0x4F;                      // right
+            if (l == "\u25B2\u25BC") return 0x52;               // one key for up and down on this shape; call it up
+            if (l.Length == 0) return 0x2C;                      // the space bar is drawn with a blank label
+            ushort u; return Usages.TryGetValue(l, out u) ? u : (ushort)0;
         }
     }
 

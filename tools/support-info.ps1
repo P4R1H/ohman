@@ -72,6 +72,15 @@ try {
     if ($seen.Count -eq 0) { L "  (no events)" } else { $seen | Select-Object -Unique | ForEach-Object { L ("  " + $_) } }
 } catch { L ("  watcher failed: " + $_.Exception.Message) }
 
+L ""; L "Keyboard HID lighting (what the keyboard itself reports; read-only):"
+# On a per-key board the firmware's colour table is inert and this is the interface that matters, so it is the
+# single most useful thing an owner of one can send us.
+try {
+    $exe = Join-Path (Split-Path $PSScriptRoot -Parent) 'Ohman.exe'
+    if (Test-Path $exe) { & $exe --lamps 2>&1 | ForEach-Object { L ("  " + $_) } }
+    else { L "  (Ohman.exe not found beside tools\; run this from the folder you unzipped)" }
+} catch { L ("  lamp query failed: " + $_.Exception.Message) }
+
 L ""; L "OGH platform file (which per-model JSON OGH loaded, if any):"
 try {
     $k = Get-ItemProperty 'HKCU:\Software\HP\OMEN Ally\Settings' -ErrorAction Stop
