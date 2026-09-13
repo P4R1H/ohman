@@ -93,7 +93,6 @@ namespace Ohman {
 
         // Thermal-policy v1 mode bytes (this machine reports policy v1 in system data byte 3).
         // OGH's own SetFanMode maps: Default->0x30, Performance->0x31, Cool->0x50, Eco->0x30 (Eco is software-side: Windows power mode + GPU/TDP).
-        public const byte MODE_DEFAULT = 0x30, MODE_PERFORMANCE = 0x31, MODE_COOL = 0x50;
 
         public bool IsDemo { get { return false; } }
 
@@ -190,12 +189,14 @@ namespace Ohman {
 
         public void SetMaxFan(bool on) { Call(OP_MAX_FAN_SET, new byte[] { (byte)(on ? 1 : 0) }, 0); }
 
-        public const int MinFanLevel = 18;                    // 1800 rpm, the lowest level OGH itself ever writes
+        // The lowest level any HP firmware has been measured to keep a fan actually spinning. This is a floor under
+        // the profiles, not the model's own floor: PlatformProfile.Curve.Floor is that, and may be higher.
+        public const int AbsoluteFloor = 18;
         public void SetFanLevels(int fan1, int fan2) {
             // OGH on this machine sends a 128-byte buffer with the two levels in front; mirror it exactly.
             var d = new byte[128];
             // Level 0 switches a fan off on this firmware (measured); the hardware layer refuses anything below the floor.
-            d[0] = (byte)Math.Max(MinFanLevel, Math.Min(255, fan1)); d[1] = (byte)Math.Max(MinFanLevel, Math.Min(255, fan2));
+            d[0] = (byte)Math.Max(AbsoluteFloor, Math.Min(255, fan1)); d[1] = (byte)Math.Max(AbsoluteFloor, Math.Min(255, fan2));
             Call(OP_FAN_LEVEL_SET, d, 0);
         }
 

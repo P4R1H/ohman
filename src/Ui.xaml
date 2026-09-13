@@ -1,459 +1,256 @@
 <Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      Background="#0E1014" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType" UseLayoutRounding="True">
+      x:Name="Root" Background="#161311" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType" UseLayoutRounding="True">
   <Grid.Resources>
-    <SolidColorBrush x:Key="Surface" Color="#161920"/>
-    <SolidColorBrush x:Key="Line" Color="#1F232C"/>
-    <SolidColorBrush x:Key="Text" Color="#ECEFF4"/>
-    <SolidColorBrush x:Key="Muted" Color="#A4ADBF"/>
-    <SolidColorBrush x:Key="Accent" Color="#5B8DEF"/>
-    <FontFamily x:Key="UiFont">Segoe UI Variable Text, Segoe UI</FontFamily>
-    <FontFamily x:Key="HeadFont">Segoe UI Variable Display, Segoe UI</FontFamily>
-    <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas</FontFamily>
+    <!-- Accent and the two font families are installed from code (DynamicResource): the accent follows the mode,
+         IBM Plex ships inside the exe. Every other value here comes straight from the panel design. -->
+    <SolidColorBrush x:Key="Accent" Color="#3F8CFF"/>
+    <FontFamily x:Key="UiFont">Segoe UI</FontFamily>
+    <FontFamily x:Key="MonoFont">Consolas</FontFamily>
+    <SolidColorBrush x:Key="Card" Color="#161311"/>
+    <SolidColorBrush x:Key="Sunken" Color="#0F0D0B"/>
+    <SolidColorBrush x:Key="Well" Color="#0D0B0A"/>
+    <SolidColorBrush x:Key="Pill" Color="#201C19"/>
+    <SolidColorBrush x:Key="Line" Color="#2C2825"/>
+    <SolidColorBrush x:Key="Line2" Color="#272320"/>
+    <SolidColorBrush x:Key="Edge" Color="#343029"/>
+    <SolidColorBrush x:Key="Track" Color="#312D2A"/>
+    <SolidColorBrush x:Key="SwitchOff" Color="#36322F"/>
+    <SolidColorBrush x:Key="KnobOff" Color="#8A8581"/>
+    <SolidColorBrush x:Key="Text" Color="#EDEAE8"/>
+    <SolidColorBrush x:Key="TextHi" Color="#F4F1EF"/>
+    <SolidColorBrush x:Key="SegText" Color="#A8A3A0"/>
+    <SolidColorBrush x:Key="Hex" Color="#A29D99"/>
+    <SolidColorBrush x:Key="Sub" Color="#96918D"/>
+    <SolidColorBrush x:Key="Desc" Color="#908B87"/>
+    <SolidColorBrush x:Key="Status" Color="#8A8581"/>
+    <SolidColorBrush x:Key="Axis" Color="#847F7B"/>
+    <SolidColorBrush x:Key="Foot" Color="#7E7976"/>
+    <SolidColorBrush x:Key="Section" Color="#787370"/>
 
-    <Style x:Key="Lbl" TargetType="TextBlock">
-      <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
-      <Setter Property="FontSize" Value="13.5"/>
-      <Setter Property="Foreground" Value="{StaticResource Text}"/>
-      <Setter Property="VerticalAlignment" Value="Center"/>
-    </Style>
-    <Style x:Key="Sub" TargetType="TextBlock">
-      <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
-      <Setter Property="FontSize" Value="11.5"/>
-      <Setter Property="Foreground" Value="{StaticResource Muted}"/>
-      <Setter Property="TextWrapping" Value="Wrap"/>
-      <Setter Property="Margin" Value="0,1,0,0"/>
-    </Style>
-    <Style x:Key="SubSm" TargetType="TextBlock" BasedOn="{StaticResource Sub}">
-      <Setter Property="FontSize" Value="10.5"/>
-      <Setter Property="Opacity" Value="0.9"/>
-    </Style>
-    <Style x:Key="Mono" TargetType="TextBlock">
-      <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
-      <Setter Property="FontSize" Value="13"/>
+    <Style x:Key="Title" TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="{DynamicResource UiFont}"/>
+      <Setter Property="FontSize" Value="15"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
       <Setter Property="Foreground" Value="{StaticResource Text}"/>
       <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style x:Key="Big" TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="{DynamicResource UiFont}"/>
+      <Setter Property="FontSize" Value="42"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="LineHeight" Value="46"/>
+      <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
+      <Setter Property="TextTrimming" Value="None"/>
+    </Style>
+    <Style x:Key="Row" TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="{DynamicResource UiFont}"/>
+      <Setter Property="FontSize" Value="14"/>
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style x:Key="RowSub" TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="{DynamicResource UiFont}"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Foreground" Value="{StaticResource Desc}"/>
+      <Setter Property="TextWrapping" Value="Wrap"/>
+      <Setter Property="Margin" Value="0,3,0,0"/>
+    </Style>
+    <Style x:Key="Cap" TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="{DynamicResource UiFont}"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="Foreground" Value="{StaticResource Sub}"/>
+      <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+    <Style x:Key="Hint" TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="{DynamicResource UiFont}"/>
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="Foreground" Value="{StaticResource Sub}"/>
+      <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+    <Style x:Key="Mono" TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="{DynamicResource MonoFont}"/>
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="Foreground" Value="{StaticResource Status}"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style x:Key="MonoFoot" TargetType="TextBlock" BasedOn="{StaticResource Mono}">
+      <Setter Property="Foreground" Value="{StaticResource Foot}"/>
+    </Style>
+    <Style x:Key="MonoVal" TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="{DynamicResource MonoFont}"/>
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
       <Setter Property="TextAlignment" Value="Right"/>
+      <Setter Property="Width" Value="52"/>
     </Style>
-    <Style x:Key="Divider" TargetType="Rectangle">
-      <Setter Property="Height" Value="1"/>
-      <Setter Property="Fill" Value="{StaticResource Line}"/>
-      <Setter Property="Margin" Value="0,14,0,14"/>
-    </Style>
-
-    <Style x:Key="SegBox" TargetType="Border">
-      <Setter Property="Background" Value="{StaticResource Surface}"/>
-      <Setter Property="CornerRadius" Value="9"/>
-      <Setter Property="Padding" Value="2"/>
-    </Style>
-    <Style x:Key="Seg" TargetType="RadioButton">
-      <Setter Property="Focusable" Value="False"/>
+    <Style x:Key="Link" TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="{DynamicResource UiFont}"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
       <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="MinWidth" Value="70"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="RadioButton">
-            <Border x:Name="B" CornerRadius="7" Background="Transparent" Padding="12,6">
-              <ContentPresenter x:Name="CP" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                TextElement.Foreground="#A4ADBF" TextElement.FontSize="12.5" TextElement.FontWeight="SemiBold"
-                                TextElement.FontFamily="Segoe UI Variable Text, Segoe UI"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="B" Property="Background" Value="#1E222B"/>
-                <Setter TargetName="CP" Property="TextElement.Foreground" Value="#ECEFF4"/>
-              </Trigger>
-              <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="B" Property="Background" Value="#2A3140"/>
-                <Setter TargetName="CP" Property="TextElement.Foreground" Value="White"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
+      <Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
 
-    <Style x:Key="SegTight" TargetType="RadioButton" BasedOn="{StaticResource Seg}">
-      <Setter Property="MinWidth" Value="0"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="RadioButton">
-            <Border x:Name="B" CornerRadius="7" Background="Transparent" Padding="4,7">
-              <ContentPresenter x:Name="CP" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                TextElement.Foreground="#A4ADBF" TextElement.FontSize="12.5" TextElement.FontWeight="SemiBold"
-                                TextElement.FontFamily="Segoe UI Variable Text, Segoe UI"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="B" Property="Background" Value="#1E222B"/>
-                <Setter TargetName="CP" Property="TextElement.Foreground" Value="#ECEFF4"/>
-              </Trigger>
-              <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="B" Property="Background" Value="#2A3140"/>
-                <Setter TargetName="CP" Property="TextElement.Foreground" Value="White"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
+    <!-- toggle: 38 x 21 in settings rows, 40 x 22 on the pages (the design uses both) -->
     <Style x:Key="Switch" TargetType="ToggleButton">
       <Setter Property="Focusable" Value="False"/>
       <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Margin" Value="0,4"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="ToggleButton">
-            <Grid Background="Transparent" MinHeight="36">
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-              </Grid.ColumnDefinitions>
-              <ContentPresenter VerticalAlignment="Center" Margin="0,0,16,0"/>
-              <Border x:Name="Track" Grid.Column="1" Width="38" Height="22" CornerRadius="11" Background="#2B3140" VerticalAlignment="Center">
-                <Ellipse x:Name="Knob" Width="14" Height="14" Fill="#A4ADBF" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="4,0,0,0">
-                  <Ellipse.RenderTransform>
-                    <TranslateTransform x:Name="KnobT" X="0"/>
-                  </Ellipse.RenderTransform>
-                </Ellipse>
-              </Border>
-            </Grid>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="Track" Property="Background" Value="#5B8DEF"/>
-                <Setter TargetName="Knob" Property="Fill" Value="White"/>
-                <Trigger.EnterActions>
-                  <BeginStoryboard>
-                    <Storyboard>
-                      <DoubleAnimation Storyboard.TargetName="KnobT" Storyboard.TargetProperty="X" To="16" Duration="0:0:0.15"/>
-                    </Storyboard>
-                  </BeginStoryboard>
-                </Trigger.EnterActions>
-                <Trigger.ExitActions>
-                  <BeginStoryboard>
-                    <Storyboard>
-                      <DoubleAnimation Storyboard.TargetName="KnobT" Storyboard.TargetProperty="X" To="0" Duration="0:0:0.15"/>
-                    </Storyboard>
-                  </BeginStoryboard>
-                </Trigger.ExitActions>
-              </Trigger>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Track" Property="Opacity" Value="0.85"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-
-    <Style x:Key="PillToggle" TargetType="ToggleButton">
-      <Setter Property="Focusable" Value="False"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="ToggleButton">
-            <Border x:Name="B" CornerRadius="8" Background="{StaticResource Surface}" Padding="9,6">
-              <ContentPresenter x:Name="CP" TextElement.Foreground="#A4ADBF" TextElement.FontSize="10.5" TextElement.FontWeight="Bold"
-                                TextElement.FontFamily="Segoe UI Variable Text, Segoe UI"/>
+            <Border x:Name="Track" Width="38" Height="21" CornerRadius="11" Background="{StaticResource SwitchOff}" VerticalAlignment="Center">
+              <Ellipse x:Name="Knob" Width="15" Height="15" Fill="{StaticResource KnobOff}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="3,0,0,0">
+                <Ellipse.RenderTransform><TranslateTransform x:Name="KnobT" X="0"/></Ellipse.RenderTransform>
+              </Ellipse>
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="B" Property="Background" Value="#5B8DEF"/>
-                <Setter TargetName="CP" Property="TextElement.Foreground" Value="White"/>
+                <Setter TargetName="Track" Property="Background" Value="{DynamicResource Accent}"/>
+                <Setter TargetName="Knob" Property="Fill" Value="White"/>
+                <Trigger.EnterActions>
+                  <BeginStoryboard><Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="KnobT" Storyboard.TargetProperty="X" To="17" Duration="0:0:0.16"><DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+                  </Storyboard></BeginStoryboard>
+                </Trigger.EnterActions>
+                <Trigger.ExitActions>
+                  <BeginStoryboard><Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="KnobT" Storyboard.TargetProperty="X" To="0" Duration="0:0:0.16"><DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+                  </Storyboard></BeginStoryboard>
+                </Trigger.ExitActions>
               </Trigger>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="B" Property="Opacity" Value="0.85"/>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Track" Property="Opacity" Value="0.85"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="SwitchBig" TargetType="ToggleButton" BasedOn="{StaticResource Switch}">
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ToggleButton">
+            <Border x:Name="Track" Width="40" Height="22" CornerRadius="11" Background="{StaticResource SwitchOff}" VerticalAlignment="Center">
+              <Ellipse x:Name="Knob" Width="16" Height="16" Fill="{StaticResource KnobOff}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="3,0,0,0">
+                <Ellipse.RenderTransform><TranslateTransform x:Name="KnobT" X="0"/></Ellipse.RenderTransform>
+              </Ellipse>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Track" Property="Background" Value="{DynamicResource Accent}"/>
+                <Setter TargetName="Knob" Property="Fill" Value="White"/>
+                <Trigger.EnterActions>
+                  <BeginStoryboard><Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="KnobT" Storyboard.TargetProperty="X" To="18" Duration="0:0:0.16"><DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+                  </Storyboard></BeginStoryboard>
+                </Trigger.EnterActions>
+                <Trigger.ExitActions>
+                  <BeginStoryboard><Storyboard>
+                    <DoubleAnimation Storyboard.TargetName="KnobT" Storyboard.TargetProperty="X" To="0" Duration="0:0:0.16"><DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction></DoubleAnimation>
+                  </Storyboard></BeginStoryboard>
+                </Trigger.ExitActions>
               </Trigger>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Track" Property="Opacity" Value="0.85"/></Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
         </Setter.Value>
       </Setter>
     </Style>
 
+    <!-- slider: 2 px rail, 14 px round thumb, both in the accent -->
     <Style x:Key="Sl" TargetType="Slider">
       <Setter Property="Focusable" Value="False"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Slider">
-            <Grid Height="26" Background="Transparent">
-              <Border Height="4" CornerRadius="2" Background="#262B36" VerticalAlignment="Center" Margin="7,0"/>
+            <Grid Height="16" Background="Transparent">
+              <Border Height="2" Background="{StaticResource Track}" VerticalAlignment="Center" Margin="7,0"/>
               <Track x:Name="PART_Track" VerticalAlignment="Center">
                 <Track.DecreaseRepeatButton>
                   <RepeatButton Focusable="False" IsTabStop="False">
-                    <RepeatButton.Template>
-                      <ControlTemplate TargetType="RepeatButton">
-                        <Grid Background="Transparent">
-                          <Border Height="4" CornerRadius="2" Background="#5B8DEF" VerticalAlignment="Center" Margin="7,0,0,0"/>
-                        </Grid>
-                      </ControlTemplate>
-                    </RepeatButton.Template>
+                    <RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Grid Background="Transparent"><Border Height="2" Background="{DynamicResource Accent}" VerticalAlignment="Center" Margin="7,0,0,0"/></Grid></ControlTemplate></RepeatButton.Template>
                   </RepeatButton>
                 </Track.DecreaseRepeatButton>
                 <Track.IncreaseRepeatButton>
                   <RepeatButton Focusable="False" IsTabStop="False">
-                    <RepeatButton.Template>
-                      <ControlTemplate TargetType="RepeatButton">
-                        <Grid Background="Transparent"/>
-                      </ControlTemplate>
-                    </RepeatButton.Template>
+                    <RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Grid Background="Transparent"/></ControlTemplate></RepeatButton.Template>
                   </RepeatButton>
                 </Track.IncreaseRepeatButton>
                 <Track.Thumb>
                   <Thumb Width="14" Height="14" Focusable="False" Cursor="Hand">
-                    <Thumb.Template>
-                      <ControlTemplate TargetType="Thumb">
-                        <Ellipse Fill="#ECEFF4" Stroke="#5B8DEF" StrokeThickness="2"/>
-                      </ControlTemplate>
-                    </Thumb.Template>
+                    <Thumb.Template><ControlTemplate TargetType="Thumb"><Ellipse Fill="{DynamicResource Accent}"/></ControlTemplate></Thumb.Template>
                   </Thumb>
                 </Track.Thumb>
               </Track>
             </Grid>
             <ControlTemplate.Triggers>
-              <Trigger Property="IsEnabled" Value="False">
-                <Setter Property="Opacity" Value="0.45"/>
-              </Trigger>
+              <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
         </Setter.Value>
       </Setter>
     </Style>
-
-    <Style x:Key="IconBtn" TargetType="Button">
-      <Setter Property="Width" Value="32"/>
-      <Setter Property="Height" Value="28"/>
-      <Setter Property="Focusable" Value="False"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Foreground" Value="{StaticResource Muted}"/>
-      <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets"/>
-      <Setter Property="FontSize" Value="11"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="B" CornerRadius="7" Background="Transparent">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="B" Property="Background" Value="#1E222B"/>
-                <Setter Property="Foreground" Value="{StaticResource Text}"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style x:Key="CloseBtn" TargetType="Button" BasedOn="{StaticResource IconBtn}">
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="B" CornerRadius="7" Background="Transparent">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="B" Property="Background" Value="#C03A3A"/>
-                <Setter Property="Foreground" Value="White"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style x:Key="TextBtn" TargetType="Button">
-      <Setter Property="Focusable" Value="False"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Foreground" Value="{StaticResource Text}"/>
-      <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="Padding" Value="11,6"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="B" CornerRadius="8" Background="{StaticResource Surface}" Padding="{TemplateBinding Padding}">
-              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="B" Property="Background" Value="#22272F"/>
-              </Trigger>
-              <Trigger Property="IsPressed" Value="True">
-                <Setter TargetName="B" Property="Background" Value="#2A3140"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style x:Key="LinkBtn" TargetType="Button">
-      <Setter Property="Focusable" Value="False"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Foreground" Value="{StaticResource Accent}"/>
-      <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
-      <Setter Property="FontSize" Value="11"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border Background="Transparent" Padding="4,0">
-              <ContentPresenter VerticalAlignment="Center"/>
-            </Border>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style x:Key="Swatch" TargetType="Button">
-      <Setter Property="Focusable" Value="False"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Width" Value="26"/>
-      <Setter Property="Height" Value="18"/>
-      <Setter Property="Margin" Value="0,0,4,0"/>
-      <Setter Property="BorderBrush" Value="Transparent"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="B" CornerRadius="5" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1.5"/>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="B" Property="Opacity" Value="0.85"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style x:Key="Dot" TargetType="Button">
-      <Setter Property="Focusable" Value="False"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Width" Value="18"/>
-      <Setter Property="Height" Value="18"/>
-      <Setter Property="Margin" Value="0,0,8,0"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Ellipse x:Name="E" Fill="{TemplateBinding Background}" Stroke="#30000000" StrokeThickness="1"/>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="E" Property="Stroke" Value="#ECEFF4"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style x:Key="SlHueV" TargetType="Slider">
-      <Setter Property="Focusable" Value="False"/>
-      <Setter Property="Orientation" Value="Vertical"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Slider">
-            <Grid Width="16" Background="Transparent">
-              <Border Width="12" CornerRadius="6" Margin="0,8,0,8">
-                <Border.Background>
-                  <LinearGradientBrush StartPoint="0,1" EndPoint="0,0">
-                    <GradientStop Color="#FF0000" Offset="0"/><GradientStop Color="#FFFF00" Offset="0.167"/><GradientStop Color="#00FF00" Offset="0.333"/>
-                    <GradientStop Color="#00FFFF" Offset="0.5"/><GradientStop Color="#0000FF" Offset="0.667"/><GradientStop Color="#FF00FF" Offset="0.833"/><GradientStop Color="#FF0000" Offset="1"/>
-                  </LinearGradientBrush>
-                </Border.Background>
-              </Border>
-              <Track x:Name="PART_Track" Orientation="Vertical">
-                <Track.DecreaseRepeatButton>
-                  <RepeatButton Focusable="False" IsTabStop="False"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Grid Background="Transparent"/></ControlTemplate></RepeatButton.Template></RepeatButton>
-                </Track.DecreaseRepeatButton>
-                <Track.IncreaseRepeatButton>
-                  <RepeatButton Focusable="False" IsTabStop="False"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Grid Background="Transparent"/></ControlTemplate></RepeatButton.Template></RepeatButton>
-                </Track.IncreaseRepeatButton>
-                <Track.Thumb>
-                  <Thumb Width="16" Height="16" Focusable="False" Cursor="Hand">
-                    <Thumb.Template><ControlTemplate TargetType="Thumb"><Ellipse Fill="Transparent" Stroke="White" StrokeThickness="2.5"/></ControlTemplate></Thumb.Template>
-                  </Thumb>
-                </Track.Thumb>
-              </Track>
-            </Grid>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-    <Style x:Key="Hex" TargetType="TextBox">
-      <Setter Property="Background" Value="{StaticResource Surface}"/>
+    <Style x:Key="Field" TargetType="TextBox">
+      <Setter Property="Background" Value="{StaticResource Sunken}"/>
       <Setter Property="Foreground" Value="{StaticResource Text}"/>
       <Setter Property="CaretBrush" Value="{StaticResource Text}"/>
       <Setter Property="BorderThickness" Value="0"/>
-      <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+      <Setter Property="FontFamily" Value="{DynamicResource MonoFont}"/>
       <Setter Property="FontSize" Value="12.5"/>
-      <Setter Property="Padding" Value="9,6"/>
+      <Setter Property="Padding" Value="10,7"/>
       <Setter Property="VerticalContentAlignment" Value="Center"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="TextBox">
-            <Border CornerRadius="8" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
-              <ScrollViewer x:Name="PART_ContentHost"/>
-            </Border>
+            <Border CornerRadius="8" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}"><ScrollViewer x:Name="PART_ContentHost"/></Border>
           </ControlTemplate>
         </Setter.Value>
       </Setter>
     </Style>
-    <Style x:Key="SlHue" TargetType="Slider" BasedOn="{StaticResource Sl}">
+    <Style x:Key="Bare" TargetType="TextBox">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="CaretBrush" Value="{StaticResource Text}"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="0"/>
+      <Setter Property="FontFamily" Value="{DynamicResource MonoFont}"/>
+      <Setter Property="FontSize" Value="13.5"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
       <Setter Property="Template">
         <Setter.Value>
-          <ControlTemplate TargetType="Slider">
-            <Grid Height="26" Background="Transparent">
-              <Border Height="6" CornerRadius="3" VerticalAlignment="Center" Margin="7,0">
-                <Border.Background>
-                  <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                    <GradientStop Color="#FF0000" Offset="0"/><GradientStop Color="#FFFF00" Offset="0.167"/><GradientStop Color="#00FF00" Offset="0.333"/>
-                    <GradientStop Color="#00FFFF" Offset="0.5"/><GradientStop Color="#0000FF" Offset="0.667"/><GradientStop Color="#FF00FF" Offset="0.833"/><GradientStop Color="#FF0000" Offset="1"/>
-                  </LinearGradientBrush>
-                </Border.Background>
-              </Border>
-              <Track x:Name="PART_Track" VerticalAlignment="Center">
-                <Track.DecreaseRepeatButton>
-                  <RepeatButton Focusable="False" IsTabStop="False">
-                    <RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Grid Background="Transparent"/></ControlTemplate></RepeatButton.Template>
-                  </RepeatButton>
-                </Track.DecreaseRepeatButton>
-                <Track.IncreaseRepeatButton>
-                  <RepeatButton Focusable="False" IsTabStop="False">
-                    <RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Grid Background="Transparent"/></ControlTemplate></RepeatButton.Template>
-                  </RepeatButton>
-                </Track.IncreaseRepeatButton>
-                <Track.Thumb>
-                  <Thumb Width="14" Height="14" Focusable="False" Cursor="Hand">
-                    <Thumb.Template><ControlTemplate TargetType="Thumb"><Ellipse Fill="#ECEFF4" Stroke="#0E1014" StrokeThickness="2"/></ControlTemplate></Thumb.Template>
-                  </Thumb>
-                </Track.Thumb>
-              </Track>
-            </Grid>
+          <ControlTemplate TargetType="TextBox"><Border Background="Transparent"><ScrollViewer x:Name="PART_ContentHost"/></Border></ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="IconBtn" TargetType="Button">
+      <Setter Property="Width" Value="20"/>
+      <Setter Property="Height" Value="20"/>
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Foreground" Value="{StaticResource Status}"/>
+      <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+      <Setter Property="FontSize" Value="8"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="B" CornerRadius="6" Background="Transparent"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+            <ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="B" Property="Background" Value="{StaticResource Pill}"/><Setter Property="Foreground" Value="{StaticResource Text}"/></Trigger></ControlTemplate.Triggers>
           </ControlTemplate>
         </Setter.Value>
       </Setter>
     </Style>
     <Style TargetType="ScrollBar">
-      <Setter Property="Width" Value="5"/>
+      <Setter Property="Width" Value="8"/>
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="ScrollBar">
-            <Grid Background="Transparent" Width="5" Margin="0,4">
+            <Grid Background="Transparent" Width="8">
               <Track x:Name="PART_Track" IsDirectionReversed="True">
-                <Track.DecreaseRepeatButton>
-                  <RepeatButton Focusable="False" IsTabStop="False" Opacity="0"/>
-                </Track.DecreaseRepeatButton>
-                <Track.IncreaseRepeatButton>
-                  <RepeatButton Focusable="False" IsTabStop="False" Opacity="0"/>
-                </Track.IncreaseRepeatButton>
-                <Track.Thumb>
-                  <Thumb Focusable="False">
-                    <Thumb.Template>
-                      <ControlTemplate TargetType="Thumb">
-                        <Border CornerRadius="2.5" Background="#3A4150"/>
-                      </ControlTemplate>
-                    </Thumb.Template>
-                  </Thumb>
-                </Track.Thumb>
+                <Track.DecreaseRepeatButton><RepeatButton Focusable="False" IsTabStop="False" Opacity="0"/></Track.DecreaseRepeatButton>
+                <Track.IncreaseRepeatButton><RepeatButton Focusable="False" IsTabStop="False" Opacity="0"/></Track.IncreaseRepeatButton>
+                <Track.Thumb><Thumb Focusable="False"><Thumb.Template><ControlTemplate TargetType="Thumb"><Border CornerRadius="3" Background="#3B3734" Margin="1,0"/></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
               </Track>
             </Grid>
           </ControlTemplate>
@@ -463,409 +260,535 @@
   </Grid.Resources>
 
   <Grid.ColumnDefinitions>
-    <ColumnDefinition Width="Auto"/>
+    <ColumnDefinition Width="62"/>
     <ColumnDefinition Width="*"/>
   </Grid.ColumnDefinitions>
 
-  <!-- keyboard editor: its own window, docked beside the panel (see BuildKeyboardWindow). 500 x 570, three 480-wide blocks. -->
-  <Border x:Name="KbdPanel" Grid.Column="0" Width="500" Visibility="Collapsed">
-    <Grid Margin="20,0,20,20">
+  <!-- the rail: mark on top, pages below it, settings at the bottom; the pill slides between them (code) -->
+  <Border x:Name="Rail" Background="{StaticResource Sunken}" BorderBrush="{StaticResource Line2}" BorderThickness="0,0,1,0">
+    <Grid x:Name="RailGrid">
       <Grid.RowDefinitions>
-        <RowDefinition Height="54"/>
-        <RowDefinition Height="40"/>
-        <RowDefinition Height="14"/>
         <RowDefinition Height="Auto"/>
-        <RowDefinition Height="18"/>
-        <RowDefinition Height="1"/>
-        <RowDefinition Height="18"/>
-        <RowDefinition Height="210"/>
+        <RowDefinition Height="*"/>
+        <RowDefinition Height="Auto"/>
       </Grid.RowDefinitions>
-      <Grid x:Name="KbdHeader" Background="Transparent" Cursor="SizeAll">
-        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-          <TextBlock Text="Keyboard" FontFamily="{StaticResource HeadFont}" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Text}"/>
-          <TextBlock x:Name="TxtKbdKind" Style="{StaticResource SubSm}" Margin="8,3,0,0" VerticalAlignment="Center"/>
-        </StackPanel>
-        <Button x:Name="BtnKbdClose" Style="{StaticResource IconBtn}" Content="&#xE8BB;" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,-8,0" ToolTip="Close"/>
+      <Canvas x:Name="RailCanvas" Grid.RowSpan="3">
+        <Border x:Name="RailPill" Width="42" Height="42" CornerRadius="12" Background="{StaticResource Pill}" Opacity="0">
+          <Border.RenderTransform><TranslateTransform/></Border.RenderTransform>
+        </Border>
+      </Canvas>
+      <Grid x:Name="LogoHost" Background="Transparent" ToolTip="Home" Cursor="Hand" Margin="0,20,0,16">
+        <Border x:Name="Mark" Width="13" Height="13" CornerRadius="2" Background="{DynamicResource Accent}" RenderTransformOrigin="0.5,0.5">
+          <Border.RenderTransform><RotateTransform Angle="45"/></Border.RenderTransform>
+        </Border>
       </Grid>
-      <Border Grid.Row="1" Style="{StaticResource SegBox}">
-        <UniformGrid Rows="1">
-          <RadioButton x:Name="KOff" Style="{StaticResource SegTight}" GroupName="kbd" Content="Off"/>
-          <RadioButton x:Name="KStatic" Style="{StaticResource SegTight}" GroupName="kbd" Content="Static"/>
-          <RadioButton x:Name="KBreathe" Style="{StaticResource SegTight}" GroupName="kbd" Content="Breathe"/>
-          <RadioButton x:Name="KCycle" Style="{StaticResource SegTight}" GroupName="kbd" Content="Cycle"/>
-          <RadioButton x:Name="KWave" Style="{StaticResource SegTight}" GroupName="kbd" Content="Wave"/>
-          <RadioButton x:Name="KWin" Style="{StaticResource SegTight}" GroupName="kbd" Content="Windows" ToolTip="Hand the keyboard to Windows Dynamic Lighting"/>
-        </UniformGrid>
-      </Border>
-      <Border x:Name="KbdHost" Grid.Row="3"/>
-      <Rectangle Grid.Row="5" Height="1" Fill="{StaticResource Line}"/>
-      <Border x:Name="KbdCard" Grid.Row="7" Background="{StaticResource Surface}" CornerRadius="12" Padding="18">
-        <Grid x:Name="CardInner">
-          <!-- composition A: Static / Breathe (Speed and Level rows are shared with Cycle / Wave) -->
-          <Grid x:Name="CardStatic">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="174"/>
-              <ColumnDefinition Width="10"/>
-              <ColumnDefinition Width="16"/>
-              <ColumnDefinition Width="20"/>
-              <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <Grid x:Name="SvBox" Width="174" Height="174" Cursor="Cross" Background="Transparent">
-              <Rectangle x:Name="SvHue" RadiusX="8" RadiusY="8" Fill="#FF0000"/>
-              <Rectangle RadiusX="8" RadiusY="8">
-                <Rectangle.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="1,0"><GradientStop Color="#FFFFFFFF" Offset="0"/><GradientStop Color="#00FFFFFF" Offset="1"/></LinearGradientBrush></Rectangle.Fill>
-              </Rectangle>
-              <Rectangle RadiusX="8" RadiusY="8">
-                <Rectangle.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#00000000" Offset="0"/><GradientStop Color="#FF000000" Offset="1"/></LinearGradientBrush></Rectangle.Fill>
-              </Rectangle>
-              <Canvas x:Name="SvCanvas" ClipToBounds="False">
-                <Ellipse x:Name="SvMarkerRing" Width="14" Height="14" Stroke="#80000000" StrokeThickness="1" Fill="Transparent"/>
-                <Ellipse x:Name="SvMarker" Width="12" Height="12" Stroke="White" StrokeThickness="2" Fill="Transparent"/>
-              </Canvas>
-            </Grid>
-            <Slider x:Name="SlHue" Grid.Column="2" Style="{StaticResource SlHueV}" Minimum="0" Maximum="359" IsSnapToTickEnabled="True" TickFrequency="1" Height="174" VerticalAlignment="Top"/>
-            <Grid Grid.Column="4">
-              <Grid.RowDefinitions>
-                <RowDefinition Height="22"/>
-                <RowDefinition Height="12"/>
-                <RowDefinition Height="34"/>
-                <RowDefinition Height="19"/>
-                <RowDefinition Height="1"/>
-                <RowDefinition Height="30"/>
-                <RowDefinition Height="26"/>
-                <RowDefinition Height="4"/>
-                <RowDefinition Height="26"/>
-              </Grid.RowDefinitions>
-              <StackPanel x:Name="ZoneHead" Orientation="Horizontal" VerticalAlignment="Center">
-                <TextBlock x:Name="TxtKbdSel" Style="{StaticResource Lbl}"/>
-                <Button x:Name="BtnAllZones" Style="{StaticResource LinkBtn}" Content="All zones" Margin="8,1,0,0" VerticalAlignment="Center" ToolTip="Colour every zone at once (Ctrl-click keys to add zones one by one)"/>
+      <StackPanel x:Name="NavHost" Grid.Row="1"/>
+      <StackPanel x:Name="NavBottom" Grid.Row="2" Margin="0,0,0,20"/>
+    </Grid>
+  </Border>
+
+  <!-- the pages: one host, one visible at a time; its natural size drives the window (code) -->
+  <Grid Grid.Column="1" ClipToBounds="True">
+    <Grid x:Name="PageHost" HorizontalAlignment="Left" VerticalAlignment="Top" Width="398">
+
+      <!-- ============ HOME ============ -->
+      <StackPanel x:Name="PageHome" Margin="24,24,24,20">
+        <Grid x:Name="HeadHome" Background="Transparent">
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock x:Name="TxtHomeTitle" Style="{StaticResource Title}" Text="Balanced"/>
+            <Border x:Name="DemoBadge" Visibility="Collapsed" Margin="8,1,0,0" CornerRadius="4" Background="#33F3821D" Padding="5,1" VerticalAlignment="Center" ToolTip="Not running as administrator: hardware is simulated">
+              <TextBlock Text="DEMO" FontSize="9" FontWeight="Bold" Foreground="#F3821D" FontFamily="{DynamicResource UiFont}"/>
+            </Border>
+          </StackPanel>
+          <TextBlock x:Name="TxtHomeStatus" Style="{StaticResource Mono}" HorizontalAlignment="Right"/>
+        </Grid>
+
+        <Border x:Name="ErrBanner" Visibility="Collapsed" Background="#26FF5C5C" CornerRadius="8" Padding="10,8" Margin="0,20,0,0">
+          <TextBlock x:Name="TxtErr" Style="{StaticResource Cap}" Foreground="#FF9A9A"/>
+        </Border>
+        <Border x:Name="InfoBanner" Visibility="Collapsed" Background="#1F3F8CFF" CornerRadius="8" Padding="10,8" Margin="0,20,0,0">
+          <TextBlock x:Name="TxtInfo" Style="{StaticResource Cap}" Foreground="#B9CDF7"/>
+        </Border>
+
+        <Grid Margin="0,24,0,0">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <StackPanel Margin="0,0,0,18">
+            <TextBlock Style="{StaticResource Big}"><Run x:Name="BigCpu" Text="--"/><Run Text="°C" FontSize="18" FontWeight="Normal" Foreground="#96918D"/></TextBlock>
+            <TextBlock x:Name="SubCpu" Style="{StaticResource Cap}" Text="CPU" Margin="0,6,0,0"/>
+          </StackPanel>
+          <StackPanel Grid.Column="1" Margin="20,0,0,18">
+            <TextBlock Style="{StaticResource Big}"><Run x:Name="BigGpu" Text="--"/><Run Text="°C" FontSize="18" FontWeight="Normal" Foreground="#96918D"/></TextBlock>
+            <TextBlock x:Name="SubGpu" Style="{StaticResource Cap}" Text="GPU" Margin="0,6,0,0"/>
+          </StackPanel>
+          <Border Grid.Row="1" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,18,0,0">
+            <StackPanel>
+              <TextBlock Style="{StaticResource Big}"><Run x:Name="BigFan1" Text="--"/><Run Text=" rpm" FontSize="15" FontWeight="Normal" Foreground="#96918D"/></TextBlock>
+              <TextBlock Text="CPU fan" Style="{StaticResource Cap}" Margin="0,6,0,0"/>
+            </StackPanel>
+          </Border>
+          <Border Grid.Row="1" Grid.Column="1" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="20,18,0,0">
+            <StackPanel>
+              <TextBlock Style="{StaticResource Big}"><Run x:Name="BigFan2" Text="--"/><Run Text=" rpm" FontSize="15" FontWeight="Normal" Foreground="#96918D"/></TextBlock>
+              <TextBlock Text="GPU fan" Style="{StaticResource Cap}" Margin="0,6,0,0"/>
+            </StackPanel>
+          </Border>
+        </Grid>
+
+        <Border x:Name="ModeHost" Margin="0,24,0,0"/>
+
+        <Grid x:Name="FanRow" Margin="0,24,0,0">
+          <TextBlock Text="Fans" Style="{StaticResource Row}"/>
+          <Border x:Name="FanLinksHost" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+        </Grid>
+        <Grid x:Name="PowerRow" Margin="0,20,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <TextBlock Text="Power gain" Style="{StaticResource Row}" ToolTip="What OMEN Gaming Hub calls Smart Performance Gain: a bigger shared CPU + GPU power budget"/>
+          <Slider x:Name="SlPower" Grid.Column="1" Style="{StaticResource Sl}" Minimum="0" Maximum="15" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="18,0,18,0"/>
+          <TextBlock x:Name="TxtPower" Grid.Column="2" Style="{StaticResource MonoVal}" Width="46" Text="+0 W"/>
+        </Grid>
+        <Grid x:Name="LightRow" Margin="0,20,0,0" Background="Transparent" Cursor="Hand">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <StackPanel VerticalAlignment="Center">
+            <TextBlock Text="Lighting" Style="{StaticResource Row}"/>
+            <TextBlock x:Name="TxtLightSub" Style="{StaticResource Cap}" Text="Static · 4 zones" Margin="0,3,0,0"/>
+          </StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+            <Border x:Name="MiniHost" Width="145" VerticalAlignment="Center"/>
+            <TextBlock Text="→" FontFamily="{DynamicResource UiFont}" FontSize="15" Foreground="{DynamicResource Accent}" Margin="12,0,0,0" VerticalAlignment="Center"/>
+          </StackPanel>
+        </Grid>
+
+        <Border Margin="0,24,0,0" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,14,0,0">
+          <Grid>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <Ellipse x:Name="DotHb" Width="6" Height="6" Fill="#4AC06C" VerticalAlignment="Center" Margin="0,0,8,0"/>
+              <TextBlock x:Name="TxtFoot" Style="{StaticResource MonoFoot}"/>
+            </StackPanel>
+            <TextBlock x:Name="TxtFootRight" Style="{StaticResource MonoFoot}" HorizontalAlignment="Right"/>
+          </Grid>
+        </Border>
+      </StackPanel>
+
+      <!-- ============ FANS ============ -->
+      <StackPanel x:Name="PageFans" Margin="24,24,24,20" Visibility="Collapsed">
+        <Grid x:Name="HeadFans" Background="Transparent">
+          <TextBlock Text="Fans" Style="{StaticResource Title}"/>
+          <TextBlock x:Name="TxtFansStatus" Style="{StaticResource Mono}" HorizontalAlignment="Right"/>
+        </Grid>
+        <Border x:Name="FanSegHost" Margin="0,24,0,0"/>
+
+        <!-- Auto and Curve: the graph -->
+        <StackPanel x:Name="CurveBlock" Margin="0,24,0,0">
+          <Grid>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <TextBlock x:Name="TxtCurveTitle" Style="{StaticResource Row}" Text="CPU curve"/>
+              <Border x:Name="CurveWhichHost" Margin="14,0,0,0" VerticalAlignment="Center" Visibility="Collapsed"/>
+            </StackPanel>
+            <TextBlock x:Name="TxtCurveHint" Style="{StaticResource Mono}" FontSize="11.5" Foreground="{StaticResource Desc}" HorizontalAlignment="Right"/>
+          </Grid>
+          <Border x:Name="CurveHost" Margin="0,14,0,0"/>
+        </StackPanel>
+
+        <!-- Max: what it is doing and for how long -->
+        <Grid x:Name="MaxBlock" Margin="0,24,0,0" Visibility="Collapsed">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <StackPanel Margin="0,0,0,18">
+            <TextBlock Style="{StaticResource Big}"><Run x:Name="MaxFan1" Text="--"/><Run Text=" rpm" FontSize="15" FontWeight="Normal" Foreground="#96918D"/></TextBlock>
+            <TextBlock x:Name="MaxFan1Sub" Style="{StaticResource Cap}" Text="CPU fan" Margin="0,6,0,0"/>
+          </StackPanel>
+          <StackPanel Grid.Column="1" Margin="20,0,0,18">
+            <TextBlock Style="{StaticResource Big}"><Run x:Name="MaxFan2" Text="--"/><Run Text=" rpm" FontSize="15" FontWeight="Normal" Foreground="#96918D"/></TextBlock>
+            <TextBlock x:Name="MaxFan2Sub" Style="{StaticResource Cap}" Text="GPU fan" Margin="0,6,0,0"/>
+          </StackPanel>
+          <Border Grid.Row="1" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,18,0,0">
+            <StackPanel>
+              <TextBlock Style="{StaticResource Big}"><Run x:Name="MaxTemp" Text="--"/><Run Text="°C" FontSize="18" FontWeight="Normal" Foreground="#96918D"/></TextBlock>
+              <TextBlock x:Name="MaxTempSub" Style="{StaticResource Cap}" Text="CPU" Margin="0,6,0,0"/>
+            </StackPanel>
+          </Border>
+          <Border Grid.Row="1" Grid.Column="1" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="20,18,0,0">
+            <StackPanel>
+              <TextBlock Style="{StaticResource Big}"><Run x:Name="MaxMins" Text="0"/><Run x:Name="MaxMinsUnit" Text=" min" FontSize="15" FontWeight="Normal" Foreground="#96918D"/></TextBlock>
+              <TextBlock x:Name="MaxMinsSub" Style="{StaticResource Cap}" Text="Running at max" Margin="0,6,0,0"/>
+            </StackPanel>
+          </Border>
+        </Grid>
+
+        <!-- Manual: the two levels as percentages -->
+        <Grid x:Name="ManualBlock" Margin="0,24,0,0" Visibility="Collapsed">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <StackPanel>
+            <TextBlock Style="{StaticResource Big}"><Run x:Name="ManPct1" Text="--"/><Run Text="%" FontSize="18" FontWeight="Normal" Foreground="#96918D"/></TextBlock>
+            <TextBlock x:Name="ManSub1" Style="{StaticResource Cap}" Text="CPU fan" Margin="0,6,0,0"/>
+          </StackPanel>
+          <StackPanel Grid.Column="1" Margin="20,0,0,0">
+            <TextBlock Style="{StaticResource Big}"><Run x:Name="ManPct2" Text="--"/><Run Text="%" FontSize="18" FontWeight="Normal" Foreground="#96918D"/></TextBlock>
+            <TextBlock x:Name="ManSub2" Style="{StaticResource Cap}" Text="GPU fan" Margin="0,6,0,0"/>
+          </StackPanel>
+        </Grid>
+
+        <!-- per-mode controls -->
+        <Grid x:Name="OptsAuto" Margin="0,24,0,0" Visibility="Collapsed">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <StackPanel VerticalAlignment="Center" Margin="0,0,20,0">
+            <TextBlock Text="Quieter policy for Eco" Style="{StaticResource Row}"/>
+            <TextBlock Text="Cool profile instead of the default" Style="{StaticResource Cap}" Margin="0,3,0,0"/>
+          </StackPanel>
+          <ToggleButton x:Name="TgEcoCool2" Grid.Column="1" Style="{StaticResource SwitchBig}"/>
+        </Grid>
+
+        <StackPanel x:Name="OptsCurve" Margin="0,24,0,0" Visibility="Collapsed">
+          <Grid>
+            <TextBlock Text="Link GPU fan to CPU curve" Style="{StaticResource Row}"/>
+            <ToggleButton x:Name="TgLink" Style="{StaticResource SwitchBig}" HorizontalAlignment="Right" ToolTip="On: one curve, both fans follow the hotter chip. Off: a curve per fan."/>
+          </Grid>
+          <Grid Margin="0,20,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock Text="Floor" Style="{StaticResource Row}" ToolTip="The lowest speed the curve may hold, whatever the temperature"/>
+            <Slider x:Name="SlFloor" Grid.Column="1" Style="{StaticResource Sl}" Minimum="18" Maximum="45" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center" Margin="18,0,18,0"/>
+            <TextBlock x:Name="TxtFloor" Grid.Column="2" Style="{StaticResource MonoVal}"/>
+          </Grid>
+          <Grid Margin="0,20,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock Text="Ramp delay" Style="{StaticResource Row}" ToolTip="How gently the fans follow the curve: seconds per 300 rpm step"/>
+            <Slider x:Name="SlRamp" Grid.Column="1" Style="{StaticResource Sl}" Minimum="1" Maximum="10" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center" Margin="18,0,18,0"/>
+            <TextBlock x:Name="TxtRamp" Grid.Column="2" Style="{StaticResource MonoVal}"/>
+          </Grid>
+        </StackPanel>
+
+        <StackPanel x:Name="OptsMax" Margin="0,24,0,0" Visibility="Collapsed">
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel VerticalAlignment="Center" Margin="0,0,20,0">
+              <TextBlock Text="Back to Auto when cool" Style="{StaticResource Row}"/>
+              <TextBlock x:Name="TxtMaxCoolSub" Style="{StaticResource Cap}" Margin="0,3,0,0"/>
+            </StackPanel>
+            <ToggleButton x:Name="TgMaxCool" Grid.Column="1" Style="{StaticResource SwitchBig}"/>
+          </Grid>
+          <Grid Margin="0,20,0,0">
+            <TextBlock Text="Stop after" Style="{StaticResource Row}"/>
+            <Border x:Name="StopAfterHost" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+          </Grid>
+        </StackPanel>
+
+        <StackPanel x:Name="OptsManual" Margin="0,24,0,0" Visibility="Collapsed">
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock Text="CPU fan" Style="{StaticResource Row}"/>
+            <Slider x:Name="SlFan1" Grid.Column="1" Style="{StaticResource Sl}" Minimum="18" Maximum="57" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center" Margin="18,0,18,0"/>
+            <TextBlock x:Name="TxtFan1" Grid.Column="2" Style="{StaticResource MonoVal}"/>
+          </Grid>
+          <Grid Margin="0,20,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock Text="GPU fan" Style="{StaticResource Row}"/>
+            <Slider x:Name="SlFan2" Grid.Column="1" Style="{StaticResource Sl}" Minimum="18" Maximum="57" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center" Margin="18,0,18,0"/>
+            <TextBlock x:Name="TxtFan2" Grid.Column="2" Style="{StaticResource MonoVal}"/>
+          </Grid>
+          <Grid Margin="0,20,0,0">
+            <TextBlock Text="Move both together" Style="{StaticResource Row}"/>
+            <ToggleButton x:Name="TgManualLink" Style="{StaticResource SwitchBig}" HorizontalAlignment="Right"/>
+          </Grid>
+          <StackPanel Orientation="Horizontal" Margin="0,20,0,0">
+            <Ellipse Width="6" Height="6" Fill="#F3821D" VerticalAlignment="Center" Margin="0,0,9,0"/>
+            <TextBlock x:Name="TxtGuardNote" Style="{StaticResource Cap}" Foreground="{StaticResource Hex}" TextWrapping="NoWrap" Text="For your safety, Ohman forces max fan above 90°"/>
+          </StackPanel>
+        </StackPanel>
+
+        <Border Margin="0,24,0,0" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,14,0,0">
+          <Grid>
+            <TextBlock x:Name="TxtFanApplied" Style="{StaticResource MonoFoot}" Text="Applied to Balanced"/>
+            <TextBlock x:Name="TxtFanRight" Style="{StaticResource MonoFoot}" HorizontalAlignment="Right"/>
+            <TextBlock x:Name="BtnFanAction" Style="{StaticResource Link}" FontFamily="{DynamicResource MonoFont}" FontSize="11" HorizontalAlignment="Right" Text="Edit as curve"/>
+          </Grid>
+        </Border>
+      </StackPanel>
+
+      <!-- ============ KEYBOARD ============ -->
+      <StackPanel x:Name="PageKbd" Margin="24,24,24,24" Visibility="Collapsed">
+        <Grid x:Name="HeadKbd" Background="Transparent">
+          <TextBlock Text="Keyboard" Style="{StaticResource Title}"/>
+          <TextBlock x:Name="TxtKbdStatus" Style="{StaticResource Mono}" HorizontalAlignment="Right"/>
+        </Grid>
+        <Border x:Name="KbdModeHost" Margin="0,24,0,0" HorizontalAlignment="Left"/>
+
+        <Grid x:Name="SelectRow" Margin="0,22,0,0">
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock Text="Select" Style="{StaticResource Row}" FontSize="13" Foreground="{StaticResource SegText}" Margin="0,0,10,0"/>
+            <Border x:Name="GranHost" VerticalAlignment="Center"/>
+          </StackPanel>
+          <TextBlock x:Name="TxtKeySel" Style="{StaticResource Mono}" Foreground="{StaticResource Desc}" HorizontalAlignment="Right" Text="Click the map to select"/>
+        </Grid>
+
+        <Border x:Name="KbdHost" Margin="0,22,0,0"/>
+
+        <!-- the editor: colour for the per-zone modes, speed + brightness for the firmware effects -->
+        <Border x:Name="EditorRow" Margin="0,22,0,0" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,18,0,0">
+          <Grid>
+            <Grid x:Name="ColorEditor">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="176"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+              <StackPanel>
+                <Grid Height="26">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                  <TextBlock Text="&#xE790;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" Foreground="{StaticResource Status}" VerticalAlignment="Center" Margin="0,0,9,0" ToolTip="Colour"/>
+                  <Border Grid.Column="1" Height="26" Background="{StaticResource Well}" BorderBrush="{StaticResource Edge}" BorderThickness="1" CornerRadius="7" ClipToBounds="True">
+                    <Grid>
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                      <Border x:Name="HexChip" Background="#3F8CFF"/>
+                      <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="9,0,0,0">
+                        <TextBlock Text="#" FontFamily="{DynamicResource MonoFont}" FontSize="13.5" Foreground="#7E7976" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <TextBox x:Name="TxtHex" Style="{StaticResource Bare}" MaxLength="6" Width="70" VerticalAlignment="Center"/>
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                </Grid>
+                <Grid Height="26" Margin="0,6,0,0">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <TextBlock Text="&#xE706;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" Foreground="{StaticResource Status}" VerticalAlignment="Center" Margin="0,0,9,0" ToolTip="Brightness"/>
+                  <Slider x:Name="SlLevel" Grid.Column="1" Style="{StaticResource Sl}" Minimum="5" Maximum="100" IsSnapToTickEnabled="True" TickFrequency="5" VerticalAlignment="Center"/>
+                  <TextBlock x:Name="TxtLevel" Grid.Column="2" Style="{StaticResource Mono}" FontSize="11.5" Foreground="{StaticResource Hex}" Width="34" TextAlignment="Right"/>
+                </Grid>
+                <Grid x:Name="SpeedInline" Height="26" Margin="0,6,0,0" Visibility="Collapsed">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <TextBlock Text="&#xE916;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" Foreground="{StaticResource Status}" VerticalAlignment="Center" Margin="0,0,9,0" ToolTip="Speed"/>
+                  <Slider x:Name="SlSpeed2" Grid.Column="1" Style="{StaticResource Sl}" Minimum="1" Maximum="5" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center"/>
+                  <TextBlock x:Name="TxtSpeed2" Grid.Column="2" Style="{StaticResource Mono}" FontSize="11.5" Foreground="{StaticResource Hex}" Width="34" TextAlignment="Right"/>
+                </Grid>
               </StackPanel>
-              <TextBox x:Name="TxtHex" Grid.Row="2" Style="{StaticResource Hex}" Background="#1B1F27" FontSize="13" MaxLength="7" TextAlignment="Center" Padding="6,0" VerticalContentAlignment="Center"/>
-              <Rectangle x:Name="CardHairline" Grid.Row="4" Height="1" Fill="#232833"/>
-              <Grid x:Name="SpeedRow" Grid.Row="6" Visibility="Collapsed">
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="52"/>
-                  <ColumnDefinition Width="*"/>
-                  <ColumnDefinition Width="52"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Text="Speed" Style="{StaticResource Sub}" VerticalAlignment="Center" Margin="0"/>
-                <Slider x:Name="SlSpeed" Grid.Column="1" Style="{StaticResource Sl}" Minimum="1" Maximum="5" IsSnapToTickEnabled="True" TickFrequency="1"/>
-                <TextBlock x:Name="TxtSpeed" Grid.Column="2" Style="{StaticResource Mono}" FontSize="12.5"/>
+              <Border Grid.Column="2" CornerRadius="7" ClipToBounds="True" VerticalAlignment="Top">
+                <StackPanel>
+                  <Border x:Name="HueHost" Height="26"/>
+                  <Border x:Name="ShadeHost" Height="26"/>
+                </StackPanel>
+              </Border>
+            </Grid>
+
+            <Grid x:Name="EffectEditor" Visibility="Collapsed">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="32"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <TextBlock Text="Speed" Style="{StaticResource Row}" FontSize="13"/>
+                <Slider x:Name="SlSpeed" Grid.Column="1" Style="{StaticResource Sl}" Minimum="1" Maximum="5" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center" Margin="12,0,12,0"/>
+                <TextBlock x:Name="TxtSpeed" Grid.Column="2" Style="{StaticResource Mono}" FontSize="12.5" Foreground="{StaticResource Hex}" Width="32" TextAlignment="Right"/>
               </Grid>
-              <Grid x:Name="LevelRow" Grid.Row="8">
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="52"/>
-                  <ColumnDefinition Width="*"/>
-                  <ColumnDefinition Width="52"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Text="Level" Style="{StaticResource Sub}" VerticalAlignment="Center" Margin="0"/>
-                <Slider x:Name="SlLevel" Grid.Column="1" Style="{StaticResource Sl}" Minimum="5" Maximum="100" IsSnapToTickEnabled="True" TickFrequency="5"/>
-                <TextBlock x:Name="TxtLevel" Grid.Column="2" Style="{StaticResource Mono}" FontSize="12.5"/>
+              <Grid Grid.Column="2">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <TextBlock Text="Brightness" Style="{StaticResource Row}" FontSize="13"/>
+                <Slider x:Name="SlLevel2" Grid.Column="1" Style="{StaticResource Sl}" Minimum="5" Maximum="100" IsSnapToTickEnabled="True" TickFrequency="5" VerticalAlignment="Center" Margin="12,0,12,0"/>
+                <TextBlock x:Name="TxtLevel2" Grid.Column="2" Style="{StaticResource Mono}" FontSize="12.5" Foreground="{StaticResource Hex}" Width="32" TextAlignment="Right"/>
               </Grid>
             </Grid>
+
+            <StackPanel x:Name="KbdInfo" Visibility="Collapsed">
+              <TextBlock x:Name="TxtKbdInfo" Style="{StaticResource Hint}"/>
+              <TextBlock x:Name="BtnWinLighting" Style="{StaticResource Link}" FontSize="13" Text="Open Windows lighting settings" HorizontalAlignment="Left" Margin="0,10,0,0" Visibility="Collapsed"/>
+            </StackPanel>
           </Grid>
-          <!-- composition B: the one line that explains Off, Windows, Cycle or Wave -->
-          <StackPanel x:Name="InfoBlock" Visibility="Collapsed" VerticalAlignment="Center">
-            <TextBlock x:Name="TxtKbdInfo" FontFamily="{StaticResource UiFont}" FontSize="13.5" Foreground="{StaticResource Text}" LineHeight="20" TextWrapping="Wrap"/>
-            <Button x:Name="BtnWinLighting" Style="{StaticResource LinkBtn}" Content="Open Windows lighting settings" HorizontalAlignment="Left" Margin="-4,8,0,0" Visibility="Collapsed"/>
-          </StackPanel>
+        </Border>
+      </StackPanel>
+
+      <!-- ============ SETTINGS ============ -->
+      <Grid x:Name="PageSettings" Height="640" Visibility="Collapsed">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="*"/>
+          <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid x:Name="HeadSettings" Background="Transparent" Margin="24,24,24,16">
+          <TextBlock Text="Settings" Style="{StaticResource Title}"/>
+          <TextBlock x:Name="TxtMachine" Style="{StaticResource Mono}" HorizontalAlignment="Right"/>
         </Grid>
-      </Border>
-    </Grid>
-  </Border>
+        <ScrollViewer x:Name="Scroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False" Padding="24,4,16,8">
+          <StackPanel>
 
-  <!-- the panel: header, body, footer -->
-  <Grid Grid.Column="1">
-  <Grid.RowDefinitions>
-    <RowDefinition Height="Auto"/>
-    <RowDefinition Height="*"/>
-    <RowDefinition Height="Auto"/>
-  </Grid.RowDefinitions>
+            <TextBlock x:Name="SecKey" Text="OMEN KEY" Margin="0,0,0,12"/>
+            <TextBlock Text="Opens" Style="{StaticResource Row}"/>
+            <Border x:Name="KeySegHost" Margin="0,8,0,0"/>
+            <Grid Margin="0,8,0,0">
+              <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Ellipse x:Name="KeyDot" Width="6" Height="6" Fill="#4AC06C" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBlock x:Name="TxtKeyInfo" Style="{StaticResource Cap}" Text="OMEN key auto-detected"/>
+              </StackPanel>
+              <TextBlock x:Name="BtnLearn" Style="{StaticResource Link}" Text="Relearn" HorizontalAlignment="Right" ToolTip="Click, then press the key you want to bind"/>
+            </Grid>
+            <Grid x:Name="KeyCmdRow" Visibility="Collapsed" Margin="0,10,0,0">
+              <TextBox x:Name="TxtKeyCmd" Style="{StaticResource Field}" FontFamily="{DynamicResource UiFont}" MaxLength="500" ToolTip="Command line the OMEN key starts, e.g. a game launcher or a script"/>
+              <TextBlock x:Name="TxtKeyCmdHint" Text="Command line, e.g. steam://open/bigpicture" Style="{StaticResource Cap}" Margin="10,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
+            </Grid>
 
-  <!-- header -->
-  <Grid x:Name="Header" Height="54" Background="Transparent">
-    <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="*"/>
-      <ColumnDefinition Width="Auto"/>
-    </Grid.ColumnDefinitions>
-    <StackPanel Orientation="Horizontal" Margin="18,0,0,0" VerticalAlignment="Center">
-      <Grid Width="28" Height="28">
-        <Border x:Name="Mark" Width="19" Height="19" CornerRadius="4.5" Background="#5B8DEF" RenderTransformOrigin="0.5,0.5">
-          <Border.RenderTransform>
-            <RotateTransform Angle="45"/>
-          </Border.RenderTransform>
-          <Border Width="7.5" Height="7.5" CornerRadius="1.8" Background="#0E1014"/>
+            <Border BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14" Margin="0,12,0,0">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <TextBlock Text="Take over the OMEN key" Style="{StaticResource Row}"/>
+                  <TextBlock Text="Stops the vendor key handler and its logon task" Style="{StaticResource RowSub}"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgSuppress" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
+            <Border BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <TextBlock Text="Hotkeys" Style="{StaticResource Row}"/>
+                  <TextBlock Text="Shift+F11 cycles · Ctrl+Alt+E/B/P modes · Ctrl+Alt+M max fan · Ctrl+Alt+O panel" Style="{StaticResource RowSub}" FontFamily="{DynamicResource MonoFont}" FontSize="11"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgHotkeys" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
+
+            <TextBlock x:Name="SecPower" Text="POWER" Margin="0,26,0,6"/>
+            <Border x:Name="GpuRow" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <TextBlock Text="GPU power" Style="{StaticResource Row}"/>
+                  <TextBlock x:Name="TxtGpuSub" Text="Follows the mode" Style="{StaticResource RowSub}"/>
+                </StackPanel>
+                <Border x:Name="GpuSegHost" Grid.Column="1" VerticalAlignment="Center"/>
+              </Grid>
+            </Border>
+            <Border BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <TextBlock Text="Eco on battery" Style="{StaticResource Row}"/>
+                  <TextBlock Text="Restores your mode when plugged in" Style="{StaticResource RowSub}"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgEcoBattery" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
+            <Border BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <TextBlock Text="Quieter fan policy for Eco" Style="{StaticResource Row}"/>
+                  <TextBlock Text="BIOS cool policy (0x50) instead of the vendor default" Style="{StaticResource RowSub}"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgEcoCool" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
+            <Border BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <TextBlock Text="Sync Windows power mode" Style="{StaticResource Row}"/>
+                  <TextBlock Text="Efficiency · Balanced · Best performance" Style="{StaticResource RowSub}"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgSyncPower" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
+            <Border BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <TextBlock Text="Thermal guard" Style="{StaticResource Row}"/>
+                  <TextBlock x:Name="TxtGuardSub" Style="{StaticResource RowSub}"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgGuard" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
+
+            <TextBlock x:Name="SecDisplay" Text="DISPLAY" Margin="0,26,0,6"/>
+            <Border x:Name="GfxRow" Visibility="Collapsed" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <TextBlock Text="Graphics" Style="{StaticResource Row}"/>
+                  <TextBlock x:Name="TxtGfxSub" Text="Takes effect after a restart" Style="{StaticResource RowSub}"/>
+                </StackPanel>
+                <Border x:Name="GfxSegHost" Grid.Column="1" VerticalAlignment="Center"/>
+              </Grid>
+            </Border>
+            <Border x:Name="HzRow" Visibility="Collapsed" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <TextBlock Text="Refresh rate" Style="{StaticResource Row}"/>
+                  <TextBlock Text="Built-in display" Style="{StaticResource RowSub}"/>
+                </StackPanel>
+                <Border x:Name="HzSegHost" Grid.Column="1" VerticalAlignment="Center"/>
+              </Grid>
+            </Border>
+            <Border x:Name="LowHzRow" Visibility="Collapsed" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <TextBlock Text="Lowest refresh rate on battery" Style="{StaticResource Row}"/>
+                  <TextBlock Text="Back to your choice when plugged in" Style="{StaticResource RowSub}"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgLowHzBattery" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
+
+            <TextBlock x:Name="SecApp" Text="APP" Margin="0,26,0,6"/>
+            <Border BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <TextBlock Text="Temperature in the tray" Style="{StaticResource Row}"/>
+                  <TextBlock Text="CPU temperature drawn on the tray icon" Style="{StaticResource RowSub}"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgTrayTemp" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
+            <Border BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <TextBlock Text="Start with Windows" Style="{StaticResource Row}"/>
+                  <TextBlock Text="Scheduled task, no prompt at logon" Style="{StaticResource RowSub}"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgAutostart" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
+            <Border BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <TextBlock Text="Update check" Style="{StaticResource Row}"/>
+                  <TextBlock x:Name="TxtUpdate" Style="{StaticResource RowSub}" FontFamily="{DynamicResource MonoFont}" FontSize="11"/>
+                </StackPanel>
+                <TextBlock x:Name="BtnUpdate" Grid.Column="1" Style="{StaticResource Link}" Text="Check now"/>
+              </Grid>
+            </Border>
+            <Border BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <TextBlock Text="Check on launch" Style="{StaticResource Row}"/>
+                  <TextBlock Text="Asks GitHub for the latest release once a day. Nothing is installed for you." Style="{StaticResource RowSub}"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgUpdateAuto" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
+            <TextBlock x:Name="TxtDiag" Style="{StaticResource Mono}" FontSize="10.5" Margin="0,14,0,0" Visibility="Collapsed" TextWrapping="Wrap"/>
+          </StackPanel>
+        </ScrollViewer>
+        <Border Grid.Row="2" Background="{StaticResource Card}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="24,16">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock x:Name="BtnDiag" Style="{StaticResource Link}" FontSize="13" Foreground="{StaticResource SegText}" Text="Diagnostics"/>
+            <TextBlock x:Name="BtnLog" Style="{StaticResource Link}" FontSize="13" Foreground="{StaticResource SegText}" Text="Log" Margin="22,0,0,0"/>
+            <TextBlock x:Name="BtnExit" Style="{StaticResource Link}" FontSize="13" Text="Exit Ohman" Margin="22,0,0,0"/>
+          </StackPanel>
         </Border>
       </Grid>
-      <TextBlock x:Name="TxtTitle" Text="Ohman" FontFamily="{StaticResource HeadFont}" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Text}" Margin="9,0,0,1" VerticalAlignment="Center"/>
-      <Border x:Name="DemoBadge" Visibility="Collapsed" Margin="8,0,0,0" CornerRadius="5" Background="#33FFB84D" Padding="6,1" VerticalAlignment="Center" ToolTip="Not running as administrator: hardware is simulated">
-        <TextBlock Text="DEMO" FontSize="9.5" FontWeight="Bold" Foreground="#FFB84D" FontFamily="{StaticResource UiFont}"/>
-      </Border>
-    </StackPanel>
-    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
-      <Button x:Name="BtnSettings" Style="{StaticResource IconBtn}" ToolTip="Settings"/>
-      <Button x:Name="BtnMin" Style="{StaticResource IconBtn}" Content="&#xE921;" ToolTip="Minimize to tray"/>
-      <Button x:Name="BtnClose" Style="{StaticResource CloseBtn}" Content="&#xE8BB;" ToolTip="Hide (keeps running in the tray)"/>
-    </StackPanel>
-  </Grid>
-
-  <!-- body -->
-  <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
-    <StackPanel Margin="18,4,18,16">
-
-      <Border x:Name="ErrBanner" Visibility="Collapsed" Background="#26FF5C5C" CornerRadius="8" Padding="10,7" Margin="0,0,0,12">
-        <TextBlock x:Name="TxtErr" Style="{StaticResource Sub}" Foreground="#FF9A9A" Margin="0"/>
-      </Border>
-      <Border x:Name="InfoBanner" Visibility="Collapsed" Background="#1F5B8DEF" CornerRadius="8" Padding="10,7" Margin="0,0,0,12">
-        <TextBlock x:Name="TxtInfo" Style="{StaticResource Sub}" Foreground="#B9CDF7" Margin="0"/>
-      </Border>
-
-      <StackPanel x:Name="MainPanel">
-        <!-- mode -->
-        <Border Style="{StaticResource SegBox}" Padding="3">
-          <UniformGrid x:Name="ModeGrid" Rows="1"/>
-        </Border>
-        <TextBlock x:Name="TxtModeSub" Style="{StaticResource Sub}" Margin="4,8,0,0"/>
-
-        <!-- metrics -->
-        <UniformGrid x:Name="TileGrid" Columns="4" Margin="0,16,0,0"/>
-        <TextBlock x:Name="TxtSensors" Style="{StaticResource Sub}" Margin="4,8,0,0" Text=""/>
-
-        <Rectangle Style="{StaticResource Divider}"/>
-
-        <!-- fans -->
-        <Grid>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="Auto"/>
-          </Grid.ColumnDefinitions>
-          <StackPanel VerticalAlignment="Center">
-            <TextBlock Text="Fans" Style="{StaticResource Lbl}"/>
-            <TextBlock x:Name="TxtFanSub" Style="{StaticResource Sub}"/>
-          </StackPanel>
-          <Border Grid.Column="1" Style="{StaticResource SegBox}" VerticalAlignment="Center">
-            <UniformGrid Rows="1">
-              <RadioButton x:Name="FanAuto" Style="{StaticResource Seg}" GroupName="fan" Content="Auto" IsChecked="True"/>
-              <RadioButton x:Name="FanMax" Style="{StaticResource Seg}" GroupName="fan" Content="Max"/>
-              <RadioButton x:Name="FanManual" Style="{StaticResource Seg}" GroupName="fan" Content="Manual"/>
-            </UniformGrid>
-          </Border>
-        </Grid>
-        <StackPanel x:Name="FanPanel" Visibility="Collapsed" Margin="0,10,0,0">
-          <Grid>
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="64"/>
-              <ColumnDefinition Width="*"/>
-              <ColumnDefinition Width="74"/>
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="CPU" Style="{StaticResource Sub}" Margin="4,0,0,0" VerticalAlignment="Center"/>
-            <Slider x:Name="SlFan1" Grid.Column="1" Style="{StaticResource Sl}" Minimum="18" Maximum="57" IsSnapToTickEnabled="True" TickFrequency="1"/>
-            <TextBlock x:Name="TxtFan1" Grid.Column="2" Style="{StaticResource Mono}" FontSize="12"/>
-          </Grid>
-          <Grid>
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="64"/>
-              <ColumnDefinition Width="*"/>
-              <ColumnDefinition Width="74"/>
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="GPU" Style="{StaticResource Sub}" Margin="4,0,0,0" VerticalAlignment="Center"/>
-            <Slider x:Name="SlFan2" Grid.Column="1" Style="{StaticResource Sl}" Minimum="18" Maximum="57" IsSnapToTickEnabled="True" TickFrequency="1"/>
-            <TextBlock x:Name="TxtFan2" Grid.Column="2" Style="{StaticResource Mono}" FontSize="12"/>
-          </Grid>
-        </StackPanel>
-
-        <Rectangle x:Name="PowerDivider" Style="{StaticResource Divider}"/>
-
-        <!-- cpu power -->
-        <Grid x:Name="PowerRow">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="172"/>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="62"/>
-          </Grid.ColumnDefinitions>
-          <StackPanel VerticalAlignment="Center">
-            <TextBlock Text="Power gain" Style="{StaticResource Lbl}"/>
-            <TextBlock x:Name="TxtPowerSub" Style="{StaticResource Sub}" Text="Dynamic Boost · 30 W"/>
-          </StackPanel>
-          <Slider x:Name="SlPower" Grid.Column="1" Style="{StaticResource Sl}" Minimum="0" Maximum="15" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="6,0"
-                  ToolTip="What OMEN Gaming Hub calls Smart Performance Gain: raises the shared CPU + GPU power budget so NVIDIA Dynamic Boost has more headroom. Affects the GPU more than the CPU."/>
-          <TextBlock x:Name="TxtPower" Grid.Column="2" Style="{StaticResource Mono}" FontSize="14" Text="+0 W"/>
-        </Grid>
-
-        <Rectangle x:Name="GpuDivider" Style="{StaticResource Divider}"/>
-
-        <!-- gpu power -->
-        <Grid x:Name="GpuRow">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="Auto"/>
-          </Grid.ColumnDefinitions>
-          <StackPanel VerticalAlignment="Center">
-            <TextBlock Text="GPU power" Style="{StaticResource Lbl}"/>
-            <TextBlock x:Name="TxtGpuSub" Style="{StaticResource Sub}"/>
-          </StackPanel>
-          <Border Grid.Column="1" Style="{StaticResource SegBox}" VerticalAlignment="Center">
-            <UniformGrid Rows="1">
-              <RadioButton x:Name="GpuBase" Style="{StaticResource Seg}" GroupName="gpu" Content="Base"/>
-              <RadioButton x:Name="GpuBoost" Style="{StaticResource Seg}" GroupName="gpu" Content="Boost"/>
-              <RadioButton x:Name="GpuMax" Style="{StaticResource Seg}" GroupName="gpu" Content="Max"/>
-            </UniformGrid>
-          </Border>
-          <ToggleButton x:Name="TgGpuAuto" Grid.Column="2" Style="{StaticResource PillToggle}" Content="AUTO" Margin="6,0,0,0" VerticalAlignment="Center" ToolTip="Follow the mode: Eco → Base, Balanced → Boost, Performance → Max"/>
-        </Grid>
-
-        <Rectangle x:Name="LightDivider" Style="{StaticResource Divider}"/>
-
-        <!-- keyboard lighting: a live glyph, the whole row opens the editor -->
-        <Border x:Name="LightRowHost" CornerRadius="10" Padding="8,6" Margin="-8,-6" Background="Transparent" Cursor="Hand" ToolTip="Open the keyboard editor">
-          <Grid x:Name="LightRow">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="*"/>
-              <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-            <StackPanel VerticalAlignment="Center">
-              <TextBlock Text="Lighting" Style="{StaticResource Lbl}"/>
-              <TextBlock x:Name="TxtLightSub" Style="{StaticResource Sub}"/>
-            </StackPanel>
-            <Border x:Name="MiniHost" Grid.Column="1" Width="164" VerticalAlignment="Center"/>
-          </Grid>
-        </Border>
-      </StackPanel>
-
-      <!-- settings page -->
-      <StackPanel x:Name="SettingsPanel" Visibility="Collapsed">
-        <Grid Margin="0,4,0,12">
-          <TextBlock Text="Settings" FontFamily="{StaticResource HeadFont}" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Text}"/>
-          <TextBlock x:Name="TxtMachine" Style="{StaticResource SubSm}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0"/>
-        </Grid>
-
-        <Grid>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="Auto"/>
-          </Grid.ColumnDefinitions>
-          <StackPanel VerticalAlignment="Center">
-            <TextBlock Text="OMEN key" Style="{StaticResource Lbl}"/>
-            <StackPanel Orientation="Horizontal">
-              <TextBlock x:Name="TxtKeyInfo" Style="{StaticResource SubSm}" VerticalAlignment="Center"/>
-              <Button x:Name="BtnLearn" Style="{StaticResource LinkBtn}" Content="Learn" Margin="4,1,0,0" ToolTip="Click, then press the key you want to bind"/>
-            </StackPanel>
-          </StackPanel>
-          <Border Grid.Column="1" Style="{StaticResource SegBox}" VerticalAlignment="Center">
-            <UniformGrid Rows="1">
-              <RadioButton x:Name="KeyCycle" Style="{StaticResource SegTight}" GroupName="key" Content="Cycle"/>
-              <RadioButton x:Name="KeyShow" Style="{StaticResource SegTight}" GroupName="key" Content="Panel"/>
-              <RadioButton x:Name="KeyMax" Style="{StaticResource SegTight}" GroupName="key" Content="Max fan"/>
-              <RadioButton x:Name="KeyRun" Style="{StaticResource SegTight}" GroupName="key" Content="Run" ToolTip="Start a command of your choice"/>
-              <RadioButton x:Name="KeyOff" Style="{StaticResource SegTight}" GroupName="key" Content="Off"/>
-            </UniformGrid>
-          </Border>
-        </Grid>
-        <Grid x:Name="KeyCmdRow" Visibility="Collapsed" Margin="0,8,0,0">
-          <TextBox x:Name="TxtKeyCmd" Style="{StaticResource Hex}" FontFamily="{StaticResource UiFont}" TextAlignment="Left" MaxLength="500" ToolTip="Command line the OMEN key starts, e.g. a game launcher or a script"/>
-          <TextBlock x:Name="TxtKeyCmdHint" Text="Command line, e.g. steam://open/bigpicture or C:\Games\launcher.exe" Style="{StaticResource SubSm}" Margin="10,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
-        </Grid>
-
-        <Rectangle Style="{StaticResource Divider}"/>
-
-        <ToggleButton x:Name="TgSuppress" Style="{StaticResource Switch}">
-          <StackPanel>
-            <TextBlock Text="Take over the OMEN key" Style="{StaticResource Lbl}"/>
-            <TextBlock Text="Stops OMEN Gaming Hub's key handler and its logon task" Style="{StaticResource SubSm}"/>
-          </StackPanel>
-        </ToggleButton>
-        <ToggleButton x:Name="TgHotkeys" Style="{StaticResource Switch}">
-          <StackPanel>
-            <TextBlock Text="Hotkeys" Style="{StaticResource Lbl}"/>
-            <TextBlock Text="Shift+F11 cycles modes · Ctrl+Alt+E / B / P modes · Ctrl+Alt+M max fan · Ctrl+Alt+O panel" Style="{StaticResource SubSm}"/>
-          </StackPanel>
-        </ToggleButton>
-        <ToggleButton x:Name="TgEcoBattery" Style="{StaticResource Switch}">
-          <StackPanel>
-            <TextBlock Text="Eco on battery" Style="{StaticResource Lbl}"/>
-            <TextBlock Text="Restores your mode when plugged in" Style="{StaticResource SubSm}"/>
-          </StackPanel>
-        </ToggleButton>
-        <Grid x:Name="GfxRow" Visibility="Collapsed" Margin="0,4,0,4" MinHeight="36">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="Auto"/>
-          </Grid.ColumnDefinitions>
-          <StackPanel VerticalAlignment="Center">
-            <TextBlock Text="Graphics" Style="{StaticResource Lbl}"/>
-            <TextBlock x:Name="TxtGfxSub" Text="Takes effect after a restart" Style="{StaticResource SubSm}" TextWrapping="NoWrap"/>
-          </StackPanel>
-          <Border Grid.Column="1" Style="{StaticResource SegBox}" VerticalAlignment="Center">
-            <UniformGrid x:Name="GfxGrid" Rows="1"/>
-          </Border>
-        </Grid>
-        <Grid x:Name="HzRow" Visibility="Collapsed" Margin="0,4,0,4" MinHeight="36">
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="Auto"/>
-          </Grid.ColumnDefinitions>
-          <StackPanel VerticalAlignment="Center">
-            <TextBlock Text="Refresh rate" Style="{StaticResource Lbl}"/>
-            <TextBlock Text="Built-in display" Style="{StaticResource SubSm}" TextWrapping="NoWrap"/>
-          </StackPanel>
-          <Border Grid.Column="1" Style="{StaticResource SegBox}" VerticalAlignment="Center">
-            <UniformGrid x:Name="HzGrid" Rows="1"/>
-          </Border>
-        </Grid>
-        <ToggleButton x:Name="TgLowHzBattery" Style="{StaticResource Switch}" Visibility="Collapsed">
-          <StackPanel>
-            <TextBlock Text="Lowest refresh rate on battery" Style="{StaticResource Lbl}"/>
-            <TextBlock Text="Back to your choice when plugged in" Style="{StaticResource SubSm}"/>
-          </StackPanel>
-        </ToggleButton>
-        <ToggleButton x:Name="TgEcoCool" Style="{StaticResource Switch}">
-          <StackPanel>
-            <TextBlock Text="Quieter fan policy for Eco" Style="{StaticResource Lbl}"/>
-            <TextBlock Text="BIOS 'cool' policy (0x50) instead of the default curve OGH sends" Style="{StaticResource SubSm}"/>
-          </StackPanel>
-        </ToggleButton>
-        <ToggleButton x:Name="TgSyncPower" Style="{StaticResource Switch}">
-          <StackPanel>
-            <TextBlock Text="Sync Windows power mode" Style="{StaticResource Lbl}"/>
-            <TextBlock Text="Efficiency · Balanced · Best performance" Style="{StaticResource SubSm}"/>
-          </StackPanel>
-        </ToggleButton>
-        <ToggleButton x:Name="TgTrayTemp" Style="{StaticResource Switch}">
-          <StackPanel>
-            <TextBlock Text="Temperature in the tray" Style="{StaticResource Lbl}"/>
-            <TextBlock Text="CPU temperature drawn on the tray icon" Style="{StaticResource SubSm}"/>
-          </StackPanel>
-        </ToggleButton>
-        <ToggleButton x:Name="TgAutostart" Style="{StaticResource Switch}">
-          <StackPanel>
-            <TextBlock Text="Start with Windows" Style="{StaticResource Lbl}"/>
-            <TextBlock Text="Scheduled task, no UAC prompt at logon" Style="{StaticResource SubSm}"/>
-          </StackPanel>
-        </ToggleButton>
-
-        <Rectangle Style="{StaticResource Divider}"/>
-
-        <StackPanel Orientation="Horizontal">
-          <Button x:Name="BtnDiag" Style="{StaticResource TextBtn}" Content="Diagnostics"/>
-          <Button x:Name="BtnLog" Style="{StaticResource TextBtn}" Content="Log" Margin="8,0,0,0"/>
-          <Button x:Name="BtnExit" Style="{StaticResource TextBtn}" Content="Exit Ohman" Margin="8,0,0,0"/>
-        </StackPanel>
-        <TextBlock x:Name="TxtDiag" Style="{StaticResource SubSm}" FontFamily="{StaticResource MonoFont}" FontSize="10.5" Margin="0,10,0,0" Visibility="Collapsed"/>
-      </StackPanel>
-    </StackPanel>
-  </ScrollViewer>
-
-  <!-- footer -->
-  <Border Grid.Row="2" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0">
-    <Grid Height="38" Margin="18,0,18,0">
-      <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-        <Ellipse x:Name="DotHb" Width="6" Height="6" Fill="#3DDC84" VerticalAlignment="Center"/>
-        <TextBlock x:Name="TxtFoot" Style="{StaticResource Sub}" Margin="8,0,0,0" VerticalAlignment="Center"/>
-      </StackPanel>
-      <TextBlock x:Name="TxtKeyFoot" Style="{StaticResource Sub}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0"/>
     </Grid>
-  </Border>
 
+    <!-- hide to tray: invisible until the pointer is over the window, so the pages stay exactly as designed -->
+    <Button x:Name="BtnClose" Style="{StaticResource IconBtn}" Content="&#xE8BB;" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,6,6,0" Opacity="0" ToolTip="Hide (keeps running in the tray) · Esc"/>
+
+    <!-- transient status, over the page bottom -->
+    <Border x:Name="Toast" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="24,0,24,14" CornerRadius="8" Background="#D4100D0B" BorderBrush="#2C2825" BorderThickness="1" Padding="12,7" Opacity="0" IsHitTestVisible="False">
+      <TextBlock x:Name="TxtToast" Style="{StaticResource Cap}" Foreground="{StaticResource Text}" TextWrapping="NoWrap"/>
+    </Border>
   </Grid>
 </Grid>

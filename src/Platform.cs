@@ -18,7 +18,9 @@ namespace Ohman {
         // Features that not every OMEN has. A model without one keeps the row hidden and never sends the command.
         public bool HasPowerGain = true;    // 0x29 concurrent CPU+GPU budget ("Smart Performance Gain")
         public bool HasGpuPower = true;     // 0x22 cTGP / PPAB (discrete NVIDIA GPU with Dynamic Boost)
-        public FanCurve Curve = new FanCurve();
+        public FanCurve Curve = FanCurve.Transcend14();
+        public int RpmPerLevel = 100;       // what one fan level is worth on screen; 0 = the levels are already a percentage
+        public GuardLimits Guard = new GuardLimits();
         public bool Verified = true;        // false = built at run time from the firmware's answers (generic mode)
         public string Notes;
     }
@@ -28,6 +30,17 @@ namespace Ohman {
     /// Auto mode drives the fans with this because the firmware's own fallback is not reliable after software control:
     /// measured 2026-09-08, after max fan expired the firmware first reapplied the last written level (0) for minutes.
     /// </summary>
+    /// <summary>When to stop trusting the curve and force the fans, and when it is safe to stop forcing them. The
+    /// chassis numbers belong to this board's 0x23 sensor, so they are model data like the curve itself.</summary>
+    public sealed class GuardLimits {
+        public int CpuHot = 90, ChassisHot = 56;        // engage at or above either
+        public int CpuSafe = 78, ChassisSafe = 48;      // release after SafeSeconds below both
+        public int SafeSeconds = 60;
+        public int StallCpu = 70, StallLevelSum = 10;   // warm, but both fans reading under ~500 rpm
+        public int MaxFanCoolBelow = 60, MaxFanCoolSeconds = 120;   // when a max-fan session hands itself back
+        public int WarnAt = 80;                         // the amber temperature on the Home page
+    }
+
     public sealed class FanCurve {
         public int[] CpuTemps = { 50, 55, 60, 65, 70, 75, 80, 85, 90 };
         public int[] CpuLevels = { 23, 23, 25, 32, 39, 46, 46, 46, 49 };
@@ -69,6 +82,9 @@ namespace Ohman {
         }
 
         public int Clamp(int level) { return Math.Max(Floor, Math.Min(Ceiling, level)); }
+        /// <summary>OGH's own curve for the Transcend 14, read out of its profiles.json. Every unverified OMEN
+        /// inherits it and rescales it to whatever its own fan table tops out at, which is the best guess available.</summary>
+        public static FanCurve Transcend14() { return new FanCurve(); }
         /// <summary>Stretch the level tables to a different ceiling (models whose levels are percent rather than rpm/100).</summary>
         public void Rescale(int newCeiling) {
             if (newCeiling == Ceiling || newCeiling <= 0) return;
@@ -98,6 +114,7 @@ namespace Ohman {
         public static PlatformProfile Generic(string board, SystemInfo info) {
             if (info == null || !info.Valid) return null;
             var p = new PlatformProfile { Name = "Generic OMEN/Victus (board " + board + ")", Boards = new[] { board }, Verified = false, ThermalPolicy = info.ThermalPolicy };
+            p.Curve = FanCurve.Transcend14();
             if (Families.In(Families.Victus, board)) { p.ModeEco = 0x03; p.ModeBalanced = 0x00; p.ModePerformance = 0x01; p.ModeCool = 0x03; p.Notes = "Victus family (hp-wmi victus_thermal_profile_boards)"; }
             else if (Families.In(Families.VictusS, board)) { p.ModeEco = 0x00; p.ModeBalanced = 0x00; p.ModePerformance = 0x01; p.ModeCool = 0x00; p.Notes = "Victus S family"; }
             else if (Families.In(Families.OmenForceV0, board) || info.ThermalPolicy == 0) { p.ModeEco = 0x00; p.ModeBalanced = 0x00; p.ModePerformance = 0x01; p.ModeCool = 0x02; p.ThermalPolicy = 0; p.Notes = "thermal policy v0"; }
@@ -108,10 +125,18 @@ namespace Ohman {
             return p;
         }
 
+        // A verified laptop is one entry here. Everything a profile does not say has a default on PlatformProfile,
+        // and anything the firmware can answer for itself (zone count, graphics modes, base TDP) is read at run time.
         public static readonly PlatformProfile[] Known = {
             new PlatformProfile {
                 Name = "HP OMEN Transcend 14 (2024, 14-fb0xxx)",
                 Boards = new[] { "8C58" },
+                ThermalPolicy = 1,
+                ModeEco = 0x30, ModeBalanced = 0x30, ModePerformance = 0x31, ModeCool = 0x50,
+                TdpBase = 30, TdpGainMax = 15,
+                GpuBase = new byte[] { 0, 0, 1, 75 }, GpuBoost = new byte[] { 0, 1, 1, 87 }, GpuMax = new byte[] { 1, 1, 1, 87 },
+                KeyEventId = 29, KeyEventData = 8613,
+                RpmPerLevel = 100,
                 Notes = "Core Ultra 9 185H + RTX 4070. Modes, fans, power and GPU verified 2026-09-08 against OMEN Gaming Hub 1101.2608 logs and code; four-zone keyboard lighting verified on the device 2026-09-12."
             }
         };
@@ -136,8 +161,13 @@ namespace Ohman {
         }
 
         public static PlatformProfile Find(string board) {
-            foreach (var p in Known) foreach (var b in p.Boards) if (string.Equals(b, board, StringComparison.OrdinalIgnoreCase)) return p;
+            foreach (var p in Known) foreach (var b in p.Boards) if (string.Equals(b, board, StringComparison.OrdinalIgnoreCase)) { Floor(p); return p; }
             return null;
+        }
+        /// <summary>No profile may drive a fan below the lowest level any HP firmware has been measured to keep spinning.</summary>
+        public static PlatformProfile Floor(PlatformProfile p) {
+            if (p != null && p.Curve != null && p.Curve.Floor < Bios.AbsoluteFloor) p.Curve.Floor = Bios.AbsoluteFloor;
+            return p;
         }
     }
 }

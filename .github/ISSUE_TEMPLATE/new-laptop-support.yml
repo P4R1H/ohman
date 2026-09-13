@@ -1,0 +1,53 @@
+name: New laptop support
+description: A control is missing or wrong on your OMEN or Victus
+title: "Support: <model> (board XXXX)"
+labels: ["new laptop"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ohman already runs on every OMEN and Victus; this is for making it *exact* on yours.
+        Run `tools\support-info.cmd` first (press the OMEN key when it asks). No personal data goes in that file.
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      placeholder: HP Victus 16-r0xxx (2023)
+    validations:
+      required: true
+  - type: input
+    id: board
+    attributes:
+      label: Board id
+      placeholder: 8BD4
+    validations:
+      required: true
+  - type: textarea
+    id: wrong
+    attributes:
+      label: What is wrong
+      description: Which control, what you expected, what happened. If a fan number looks wrong, say what OGH shows for the same thing.
+    validations:
+      required: true
+  - type: textarea
+    id: supportinfo
+    attributes:
+      label: tools\support-info.txt
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: oghlog
+    attributes:
+      label: OMEN Gaming Hub's own log (optional, but it is what makes a profile exact)
+      description: |
+        From a session where you clicked every mode:
+        `%LOCALAPPDATA%\Packages\AD2F1837.OMENCommandCenter_v10z8vjag6ke6\LocalCache\Local\HPOMEN\`
+        Drag the newest file in here.
+  - type: checkboxes
+    id: ack
+    attributes:
+      label: Before you post
+      options:
+        - label: I understand this writes to my laptop's firmware and I accept the risk
+          required: true

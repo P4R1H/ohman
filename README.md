@@ -1,104 +1,123 @@
 <p align="center"><img src="docs/logo.webp" width="120" alt=""></p>
 <h1 align="center">Ohman</h1>
-<p align="center">OMEN Gaming Hub's performance controls, without OMEN Gaming Hub.</p>
-<p align="center"><a href="https://github.com/P4R1H/Ohman/releases/latest/download/Ohman.exe"><img src="https://img.shields.io/badge/Download%20for%20Windows-Ohman.exe-5B8DEF?style=for-the-badge" alt="Download Ohman.exe"></a><br><a href="https://p4r1h.github.io/ohman/">p4r1h.github.io/ohman</a></p>
+<p align="center">OMEN Gaming Hub's controls, without OMEN Gaming Hub.</p>
+<p align="center">
+<a href="https://github.com/P4R1H/Ohman/releases/latest/download/Ohman.exe"><img src="https://img.shields.io/badge/Download-Ohman.exe-3F8CFF?style=for-the-badge" alt="Download Ohman.exe"></a>
+</p>
+<p align="center">
+<a href="https://p4r1h.github.io/ohman/">p4r1h.github.io/ohman</a> &middot;
+<a href="docs/laptops.md">Supported laptops</a> &middot;
+<a href="docs/research.md">How the firmware works</a>
+</p>
 
-Don't you love paying $2,500 for a laptop and still having ads pushed down your throat by mandatory
-software with no alternative? Ohman is the alternative. One executable, no services, no drivers, no account,
-no ads. Same firmware interface as OMEN Gaming Hub, same bytes, nothing else.
-
-**Verified on the HP OMEN Transcend 14 (2024, board 8C58).** Every other OMEN and Victus laptop runs in generic
-mode: the mode bytes the Linux driver documents for its firmware generation, fan control with the same floor
-and thermal guard, and power or GPU controls only where the firmware answers. A banner asks you to report
-back so the board can be marked verified; see [Adding your laptop](#adding-your-laptop).
+Don't you love paying $2,500 for a laptop and still having ads pushed down your throat by mandatory software
+with no alternative? Ohman is the alternative. One executable, no services, no drivers, no account, no ads.
+Same firmware interface as OMEN Gaming Hub, same bytes, nothing else.
 
 Ohman interacts with the BIOS through the same commands OGH uses. Use at your own risk.
 
-<p align="center"><img src="docs/screenshot.png" width="440" alt="The Ohman panel"></p>
+<p align="center"><img src="docs/home.png" width="460" alt="The Ohman panel: Balanced selected, live CPU and GPU temperatures and fan speeds, rows for fans, power gain and keyboard lighting."></p>
 
 ## Features
 
 | | |
 |---|---|
-| **Modes** | Eco · Balanced · Performance, one tap or Fn+F12. Eco also sets the Windows power mode and GPU base power, as OGH does. |
-| **Fans** | Auto (OGH's own curve for this model, 1800 to 5700 rpm), Max, or Manual per fan. |
-| **Power gain** | OGH's "Smart Performance Gain": +0 to +15 W on the CPU+GPU budget that NVIDIA Dynamic Boost draws from. |
+| **Modes** | Eco · Balanced · Performance, one click, the OMEN key, or a hotkey. Each mode remembers its own fans, power gain and GPU choice, and the whole window takes that mode's colour. |
+| **Fans** | Auto (this model's own curve), Max, Manual per fan, or your own curve: seven points you drag, a floor, a ramp delay, and a separate GPU curve if you unlink it. The live reading rides the curve. |
+| **Max fan** | Full speed with a way back: it returns to Auto once the chips are below 60° for two minutes, or after 15, 30 or 60 minutes. |
+| **Power gain** | OGH's "Smart Performance Gain": +0 to +15 W on the CPU+GPU budget NVIDIA Dynamic Boost draws from. |
 | **GPU power** | Base · Boost · Max, or follow the mode. |
-| **Per mode** | Fan, power gain and GPU choices are remembered per mode. |
-| **Graphics** | Hybrid, Discrete or iGPU-only, whichever the firmware offers, with the restart it needs. |
-| **Display** | Refresh rate (60 Hz or the panel's maximum, lowest on battery if you like), display off from the tray. |
-| **Live** | CPU and GPU temperature, fan speeds, load, clocks, GPU watts, battery. |
-| **OMEN key** | Fn+F12 opens the panel (or cycles modes, or toggles max fan). Shift+F11 cycles modes. OGH's key handler is stopped, reversibly. |
-| **Safety** | A thermal guard forces max fan on a hot CPU, a hot chassis or stalled fans. Fans are never set below 1800 rpm. |
-| **Lighting** | A live keyboard in the panel; click it and an editor slides open beside it: pick zones on the keyboard, a proper colour picker, presets, brightness, Breathe / Cycle / Wave effects, or hand the keyboard to Windows Dynamic Lighting. One-zone and four-zone keyboards; per-key editing is next. |
-| **Extras** | CPU temperature on the tray icon, hotkeys (Shift+F11 cycles modes, Ctrl+Alt+E/B/P/M/O), the OMEN key can run any command, starts with Windows without a UAC prompt (on by default, one switch to turn off), Eco on battery, on-screen flash on key presses. |
+| **Graphics** | Hybrid, Discrete (the MUX) or iGPU only, whichever the firmware offers, with the restart it needs. |
+| **Lighting** | The keyboard drawn as it actually lights. Select a key, a row, a zone or the whole board, then pick a hue and a shade; or Breathe, Cycle, Wave, or hand it to Windows Dynamic Lighting. |
+| **Display** | Refresh rate, and the lowest rate on battery if you want it. |
+| **Live** | CPU and GPU temperature, CPU package watts, fan speeds, load, clocks, chassis sensor, battery. CPU temperature on the tray icon. |
+| **Tray** | Every control above without opening the window: modes, fan mode, refresh rate, GPU power, graphics, lighting, brightness and all the switches. |
+| **OMEN key** | Opens the panel, cycles modes, toggles max fan, or runs a command of your choice. OGH's key handler is stopped, reversibly. Shift+F11 cycles modes; Ctrl+Alt+E/B/P/M/O for the rest. |
+| **Safety** | A thermal guard forces max fan on a hot CPU, a hot chassis or stalled fans. It can be switched off, with a warning. Fans are never set below 1800 rpm. |
+| **Extras** | Starts with Windows without a UAC prompt, Eco on battery, Windows power-mode sync, an on-screen flash when a key changes something, an update check that never installs anything for you. |
 
-Settings live in `ohman.state`, everything the app does goes to `ohman.log`.
+Settings live in `ohman.state`, everything the app does goes to `ohman.log`. Both sit beside the executable.
+Uninstalling is deleting it.
 
-<details>
-<summary>Keyboard editor</summary>
-<p align="center"><img src="docs/keyboard.png" width="720" alt="The keyboard editor open beside the panel"></p>
-</details>
-<details>
-<summary>Settings panel</summary>
-<p align="center"><img src="docs/settings.png" width="440" alt="Settings panel"></p>
-</details>
+<table>
+<tr>
+<td width="50%"><img src="docs/fans.png" alt="The Fans page with a draggable seven-point curve, the current temperature marked on it, and floor and ramp controls."></td>
+<td width="50%"><img src="docs/settings.png" alt="The Settings page in sections: OMEN key, power, display, app."></td>
+</tr>
+<tr>
+<td align="center"><em>Your own curve, remembered per mode</em></td>
+<td align="center"><em>Settings, in sections</em></td>
+</tr>
+</table>
+
+<p align="center"><img src="docs/keyboard.png" width="700" alt="The keyboard page: the board drawn in its real zone colours, a Key / Row / Zone / All selector, a hex field, brightness, and hue and shade strips."></p>
 
 ## Install
 
-Grab `Ohman.exe` from [Releases](../../releases), or build it with the compiler that ships inside Windows:
+Download `Ohman.exe` from [Releases](../../releases/latest) and run it. It asks for administrator rights once,
+because the firmware interface needs them, and adds itself to your startup apps so it is there after a reboot
+(one switch in Settings turns that off).
+
+Or build it with the compiler that already ships inside Windows — no SDK, no NuGet, no toolchain:
 
 ```
 build.cmd
 ```
 
-Run it (it asks for administrator rights once, the firmware interface needs them), then turn on
-**Settings > Start with Windows**. `preview\Ohman.exe` is the same UI on simulated hardware, no admin needed.
+`preview\Ohman.exe` is the same UI on simulated hardware and needs no administrator rights, which is what the
+screenshots above are.
+
+## Your laptop
+
+**Verified on the HP OMEN Transcend 14 (2024, board 8C58).** Every other OMEN and Victus laptop is *supported*:
+Ohman asks the firmware what generation it is, drives it with the mode bytes documented for that generation,
+and enables power, GPU and lighting controls only where the firmware answers.
+
+The full table is in **[docs/laptops.md](docs/laptops.md)**.
+
+> ### Verify your laptop
+> If your machine is not marked verified, this is the most useful thing you can contribute, and it takes five
+> minutes. Run through [the checklist](docs/laptops.md#verifying-your-laptop), run `tools\support-info.cmd`, and
+> open a **Verify my laptop** issue with the file it writes. Your model moves to verified and everybody with that
+> board gets a tested profile instead of a deduced one.
+
+If a control is wrong on your model, open a **New laptop support** issue with the same file and, if you can get
+it, OGH's own log from a session where you clicked every mode:
+`%LOCALAPPDATA%\Packages\AD2F1837.OMENCommandCenter_v10z8vjag6ke6\LocalCache\Local\HPOMEN\`. That log is what
+made the Transcend 14 profile exact.
 
 ## How it works
 
 HP exposes a BIOS mailbox as the WMI class `hpqBIntM`. Ohman uses the commands OGH uses: performance mode
-(`0x1A`), max fan (`0x27`), fan levels (`0x2E`), CPU+GPU power budget (`0x29`), GPU power (`0x22`), keyboard
-lighting (`0x20009`), plus read-only queries. The OMEN key arrives as a WMI event (`hpqBEvnt`). The bytes and the measured firmware
-behaviour are in [docs/research.md](docs/research.md).
+(`0x1A`), max fan (`0x27`), fan levels (`0x2E`), CPU+GPU power budget (`0x29`), GPU power (`0x22`), graphics
+mode (`0x52`), keyboard lighting (`0x20009`), plus read-only queries. The OMEN key arrives as a WMI event
+(`hpqBEvnt`). Every byte and every measured firmware behaviour is written down in
+[docs/research.md](docs/research.md), including the things that are *not* safe to do and why.
 
-## Laptops
+Two of those are worth knowing about:
 
-Three tiers. Verified means somebody ran the checklist on that machine. Listed means the board id is in the Linux
-HP driver's tables, so the mode bytes for its firmware generation are known and generic mode uses them. Anything
-else gets generic mode when the firmware reports a known thermal-policy version, and read-only when it does not.
+- The firmware forgets a user-defined fan state after about 120 seconds, so Ohman re-asserts it. When it
+  expires the firmware first re-applies the *last written level* before its own curve resumes, so handing the
+  fans back is not as simple as it sounds. Ohman never writes a level below 1800 rpm.
+- The thermal guard is independent of everything else: it reads the fans and the chassis sensor every ten
+  seconds and forces maximum fan if the machine is running away, regardless of what mode you picked.
 
-| Model | Board ids | Status |
-|---|---|---|
-| OMEN Transcend 14 (2024) | `8C58` | Verified on the machine |
-| OMEN Transcend 14 (2024, other SKU) | `8E41` | Generic, board known to the Linux HP driver |
-| OMEN 15 (2019, 15-dc / 15-dh) | `8574, 8600` | Generic, board known to the Linux HP driver |
-| OMEN 17 (2019, 17-cb0) | `8603` | Generic, board known to the Linux HP driver |
-| OMEN 15 (2020) | `8A15` | Generic, board known to the Linux HP driver |
-| OMEN 15 / 17 (2021) | `8BAD` | Generic, board known to the Linux HP driver |
-| OMEN 16 / 17 (2021 to 2022) | `8A42, 8A43` | Generic, board known to the Linux HP driver |
-| Victus 16 (2021 to 2023) | `88F8, 8A25` | Generic, board known to the Linux HP driver |
-| Victus 16 S / R (2023 to 2024) | `8A3D, 8B2F, 8BBE, 8BD4, 8BD5, 8C99, 8C9C` | Generic, board known to the Linux HP driver |
-| Other OMEN 15 / 17 boards in the driver's table (2018 to 2021 generations) | `84DA to 84DC, 8572 to 8575, 8601 to 860A, 8746 to 874A, 8786 to 878C, 87B5, 886B, 886C, 88C8 to 88D2, 88F4 to 88F7, 88FD to 8902, 8912, 8917, 8918, 8949, 894A, 89EB` | Generic, board known to the Linux HP driver |
-| OMEN 16 (2023 to 2025) | `8BAA, 8BAB, 8BCA, 8BCD, 8C76 to 8C78, 8D24, 8D26, 8D2F, 8E35` | Generic, from the firmware's own answers |
-| OMEN MAX 16 (2025) | `8D41, 8D87` | Generic, from the firmware's own answers |
-| OMEN Transcend 16, OMEN 17 (2025) | `8BB3, 8C3B, 8C4D, 8E10` | Generic, from the firmware's own answers |
-| Victus 15 | `88D9, 88DA, 8A3E, 8C2F, 8C30, 8C3F, 8D07, 8DCD, 8E5E` | Generic, from the firmware's own answers |
+## Adding a laptop in code
 
-Board id: `Settings > Diagnostics` in Ohman, or `wmic baseboard get product`. Not listed is not unsupported; open a
-support issue with `tools\support-info.cmd` and it moves up a tier.
+A verified laptop is one entry in [`src/Platform.cs`](src/Platform.cs):
 
-## Adding your laptop
+```csharp
+new PlatformProfile {
+    Name = "HP OMEN 16 (2023, 16-wf0xxx)",
+    Boards = new[] { "8BAA" },
+    Notes  = "Verified 2026-09-20 against OGH 1101.x logs."
+}
+```
 
-1. Run `tools\support-info.cmd` and press the OMEN key when it asks. It writes `tools\support-info.txt`:
-   model, board id, BIOS, system-design data, fan table, key event. No personal data.
-2. Open a **New laptop support** issue with that file, what OGH shows on your model, and ideally OGH's
-   background log (`%LOCALAPPDATA%\Packages\AD2F1837.OMENCommandCenter_v10z8vjag6ke6\LocalCache\Local\HPOMEN\`)
-   from a session where you clicked every mode.
-
-A verified platform is one entry in `src/Platform.cs`; the board families and firmware probes behind generic
-mode live in the same file. Nothing else is model-specific. The `add-laptop` skill in
-`.claude/skills/` turns an issue into that entry and a pull request, see [CONTRIBUTING.md](CONTRIBUTING.md).
+Everything else has a default on `PlatformProfile` or is read from the firmware at run time: the mode bytes,
+the fan curve and its units, the guard limits, the GPU payloads, the OMEN key event. Override only what the
+evidence says is different and put the evidence in `Notes`. The `add-laptop` skill in `.claude/skills/` turns a
+support issue into exactly that entry and a pull request; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Tools
 
@@ -113,15 +132,29 @@ mode live in the same file. Nothing else is model-specific. The `add-laptop` ski
 ## Layout
 
 ```
-src\Platform.cs   platform profiles (the only model-specific file)
-src\Hardware.cs   WMI/BIOS layer + simulated hardware
-src\Lighting.cs   keyboard lighting (BIOS 0x20009) + Windows Dynamic Lighting hand-over
-src\Engine.cs     apply logic, keep-alive, thermal guard, OMEN key, OGH takeover
+src\Platform.cs   platform profiles: the only model-specific file
+src\Hardware.cs   the WMI/BIOS mailbox + simulated hardware
+src\Lighting.cs   keyboard lighting (0x20009) + the Windows Dynamic Lighting hand-over
+src\Engine.cs     settings, apply logic, keep-alive, thermal guard, OMEN key, OGH takeover
 src\Sensors.cs    perf counters + nvidia-smi
-src\Ui.xaml, .cs  window, tray, hotkeys, on-screen flash
+src\Curve.cs      the fan-curve graph
+src\Keyboard.cs   the keyboard drawing
+src\Ui.xaml, .cs  window, pages, tray, hotkeys, on-screen flash
 src\Program.cs    entry point
+fonts\            IBM Plex, embedded in the exe (OFL, see fonts\OFL.txt)
 ```
 
-Pushing a `v*` tag builds the binaries on a Windows runner and attaches them to a release.
+Pushing a `v*` tag builds on a Windows runner and attaches the binaries to a release.
 
-OMEN is a trademark of HP Inc. This project is not affiliated with HP.
+## Later
+
+- **Benchmarking tab**: run a short load, record clocks, watts, temperatures and throttle events, and let you
+  compare two settings honestly instead of guessing whether +15 W did anything.
+- **Per-key lighting** on the boards that have it — the UI is already built for it; it needs the HID path.
+- **Fan curve import/export** so a verified model's curve can be shared as a file.
+
+Ideas and issues are welcome.
+
+## Licence
+
+GPL-3.0-or-later. OMEN is a trademark of HP Inc. This project is not affiliated with HP.

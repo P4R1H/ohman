@@ -13,7 +13,7 @@ shows the evidence. Never guess a byte; when a value is unknown, keep the safe d
 
 ## Inputs you need
 
-From the GitHub issue (template `.github/ISSUE_TEMPLATE/new-laptop-support.md`):
+From the GitHub issue (template `.github/ISSUE_TEMPLATE/new-laptop-support.yml`):
 
 1. `support-info.txt` output: model, **board id** (`Win32_BaseBoard.Product`, e.g. `8C58`), BIOS,
    the WMI class check, and the read-only BIOS queries:
@@ -56,16 +56,22 @@ the documented thermal-policy tables (v1: `0x30/0x31/0x50`; v0: `0x00/0x01/0x02`
        KeyEventId = 29, KeyEventData = 8613,
        HasPowerGain = true, HasGpuPower = true,   // false when the support-info shows system-data byte 8 = 0 / 0x21 rc != 0
        Verified = true,
+       RpmPerLevel = 100,                       // what one fan level is worth on screen; 0 when the levels are already a percentage
        Curve = new FanCurve { Floor = 18, Ceiling = 57 /* CpuTemps/CpuLevels, GpuTemps/GpuLevels, IrTemps/IrLevels from OGH's profiles.json; omitted = the Transcend 14 curve is inherited, say so in Notes */ },
+       Guard = new GuardLimits { ChassisHot = 56, ChassisSafe = 48 },   // only when the model's 0x23 sensor reads on a different scale
        Notes = "Verified <date> from issue #<n>: <what was verified, what is inferred>."
    }
    ```
+
+   Every field has a default that is the Transcend 14's, so a profile only states what the evidence says is
+   different. `Guard` is the safety envelope: leave it alone unless the support-info shows the chassis sensor
+   idling far from the low 40s, in which case the thresholds need to move with it.
 
    Keep the engine and UI untouched. If the model needs something the profile cannot express, stop and
    say what is missing rather than special-casing it elsewhere.
 3. **Build**: `build.cmd preview` must succeed. Run `preview\Ohman.exe --demo --board <id>` once and check
    `preview\ohman.log` shows the new profile being picked (not a generic one). The real build needs no change.
-4. **Update the README** "Built for" line to list the new model.
+4. **Update the tables**: add the model to `docs/laptops.md` under Verified, and to the table in `docs/index.html`.
 5. **Commit** on a branch named `platform/<board id>` with a message like
    `Add <model> (<board id>) platform profile` and the issue reference.
 6. **Open the PR** with `gh pr create`. The body must contain:

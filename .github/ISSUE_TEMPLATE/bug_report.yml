@@ -1,0 +1,40 @@
+name: Bug report
+description: Something in Ohman does not work
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Ohman version
+      description: Settings, bottom of the page, or the file properties of Ohman.exe
+      placeholder: v2.0
+    validations:
+      required: true
+  - type: input
+    id: machine
+    attributes:
+      label: Model and board id
+      description: Both are in Settings
+      placeholder: OMEN Transcend 14, board 8C58
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: ohman.log
+      description: The file sits beside Ohman.exe; Settings has a Log link that opens it. The last hundred lines are usually enough.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: OMEN Gaming Hub is not running at the same time
+        - label: I am running Ohman as administrator (the title bar does not say DEMO)

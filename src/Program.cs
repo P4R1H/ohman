@@ -9,17 +9,23 @@ using System.Security.Principal;
 using System.Threading;
 using System.Windows;
 
+// WPF only leaves its "do not scale for DPI changes" quirk behind when the assembly says it targets 4.6.2 or later.
+// Without this the PerMonitorV2 declaration in app.manifest would stop Windows scaling the window without WPF
+// taking over, and the window would be the wrong physical size on a display with a different scale factor.
+[assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8", FrameworkDisplayName = ".NET Framework 4.8")]
+
 namespace Ohman {
     public static class Program {
         // To rename the app: change AppName here and the /out: names in build.cmd. Everything else follows
         // (window title, tray, scheduled task, single-instance names, log/state file names).
         public const string AppName = "Ohman";                 // internal id: file names, mutex, scheduled task
         public static string DisplayName = AppName;           // what the UI shows; override with Name=... in ohman.state
-        public const string Version = "1.2";
+        public const string Version = "2.0";
         public static string FileStem { get { return AppName.ToLowerInvariant(); } }
         public static EventWaitHandle ShowEvent, ExitEvent;   // named events: another instance can ask us to show or exit
         public static bool FlashTest;                         // --flash: show the key OSD at start (preview/screenshot aid)
-        public static bool KeyboardTest;                      // --keyboard: open the keyboard editor at start (screenshot aid)
+        public static bool KeyboardTest;                      // --keyboard: open the keyboard page at start (screenshot aid)
+        public static string StartPage = "";                  // --page home|fans|keyboard|settings
 
         [STAThread]
         public static int Main(string[] args) {
@@ -34,6 +40,7 @@ namespace Ohman {
                 else if (a == "--set" && i + 1 < args.Length) overrides.Add(args[++i]);   // --set Key=Value: override for this run only (nothing is written back)
                 else if (a == "--flash") FlashTest = true;
                 else if (a == "--keyboard") KeyboardTest = true;
+                else if (a == "--page" && i + 1 < args.Length) StartPage = args[++i].ToLowerInvariant();
                 else if (a == "--board" && i + 1 < args.Length) Platforms.BoardOverride = args[++i];   // pretend to be another board (with --demo: see what generic mode would build)
             }
             for (int i = 0; i + 1 < args.Length; i++)
@@ -41,15 +48,17 @@ namespace Ohman {
             bool wantExit = false;
             foreach (string a0 in args) if (a0.ToLowerInvariant() == "--exit") wantExit = true;   // Ohman.exe --exit: stop the running instance (used when updating)
             bool created;
-            var mutex = new Mutex(true, AppName + "_SingleInstance", out created);
             if (shot != null) demo = true;                                         // screenshots never touch firmware and may run beside a live instance
+            // a simulated instance is its own app: it can sit next to the real one, and --exit aimed at one never stops the other
+            string instance = AppName + (demo ? "_Demo" : "");
+            var mutex = new Mutex(true, instance + "_SingleInstance", out created);
             if (!created && shot == null) {
-                try { EventWaitHandle.OpenExisting(AppName + (wantExit ? "_Exit" : "_ShowPanel")).Set(); } catch { }
+                try { EventWaitHandle.OpenExisting(instance + (wantExit ? "_Exit" : "_ShowPanel")).Set(); } catch { }
                 return 0;
             }
             if (wantExit) return 0;
-            try { ShowEvent = new EventWaitHandle(false, EventResetMode.AutoReset, AppName + "_ShowPanel"); } catch { }
-            try { ExitEvent = new EventWaitHandle(false, EventResetMode.AutoReset, AppName + "_Exit"); } catch { }
+            try { ShowEvent = new EventWaitHandle(false, EventResetMode.AutoReset, instance + "_ShowPanel"); } catch { }
+            try { ExitEvent = new EventWaitHandle(false, EventResetMode.AutoReset, instance + "_Exit"); } catch { }
 
             bool elevated = false;
             try { elevated = new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator); } catch { }

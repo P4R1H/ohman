@@ -141,7 +141,7 @@ namespace Ohman {
         public void SetBacklight(bool on, int level) { light = Math.Max(0, Math.Min(100, level)) | (on ? 0x80 : 0); }
     }
 
-    /// <summary>Windows 11 Dynamic Lighting owns the keyboard when its per-device "ambient" switch is on; OGH and Ohman
+    /// <summary>Windows Dynamic Lighting owns the keyboard when its per-device "ambient" switch is on; OGH and Ohman
     /// take the keyboard by clearing that switch (the same registry value the Settings toggle writes) and give it back
     /// by setting it. Only HP's virtual lighting device (VHF) is touched, never external LampArray peripherals.</summary>
     public static class WinLighting {

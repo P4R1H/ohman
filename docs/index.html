@@ -5,20 +5,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>Ohman</title>
-<meta name="description" content="Ohman replaces OMEN Gaming Hub's performance controls on Windows: modes, fans, power gain, GPU power. One executable, no services, no drivers, no account, no ads.">
+<meta name="description" content="Ohman replaces OMEN Gaming Hub on Windows: modes, fan curves, power gain, GPU power, graphics switching and keyboard lighting. One executable, no services, no drivers, no account, no ads.">
 <link rel="icon" href="logo.webp" type="image/webp">
+<meta property="og:title" content="Ohman">
+<meta property="og:description" content="OMEN Gaming Hub's controls, without OMEN Gaming Hub. One executable, no services, no ads.">
+<meta property="og:image" content="https://p4r1h.github.io/ohman/home.png">
+<meta name="twitter:card" content="summary_large_image">
 <style>
-/* ---------- palette and tokens: dark only, one accent ---------- */
+/* ---------- palette and tokens: dark only, one accent, warm neutrals to match the app ---------- */
 :root{
-  --bg:#0B0E14;        /* canvas */
-  --surface:#10141B;   /* chips, code, quiet fills */
-  --border:#1E2430;    /* the single 1px hairline */
-  --border-hi:#2C3444; /* hairline on hover */
+  --bg:#100E0C;        /* canvas */
+  --surface:#161311;   /* chips, code, quiet fills */
+  --border:#272320;    /* the single 1px hairline */
+  --border-hi:#37322E; /* hairline on hover */
   --text:#FFFFFF;      /* primary */
-  --muted:#A4ADBF;     /* secondary, 8.5:1 on --bg */
-  --dim:#C7CEDB;       /* inline code */
-  --accent:#5B8DEF;
-  --accent-hi:#7BA4F3;
+  --muted:#A29D99;     /* secondary, 8.4:1 on --bg */
+  --dim:#CFC9C4;       /* inline code */
+  --accent:#3F8CFF;
+  --accent-hi:#6BA6FF;
+  --ok:#4AC06C;
   --r:10px;            /* surface radius */
   --t:120ms ease;
   --mono:ui-monospace,"Cascadia Mono","Segoe UI Mono",Consolas,monospace;
@@ -36,11 +41,11 @@ body{
   line-height:1.62;
   -webkit-font-smoothing:antialiased;
 }
-.wrap{max-width:680px;margin:0 auto;padding:0 24px}
+.wrap{max-width:750px;margin:0 auto;padding:0 24px}
 a{
   color:var(--accent);
   text-decoration:underline;
-  text-decoration-color:rgba(91,141,239,.34);
+  text-decoration-color:rgba(63,140,255,.34);
   text-underline-offset:3px;
   transition:color var(--t),text-decoration-color var(--t);
 }
@@ -52,19 +57,29 @@ img{display:block}
 .bar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-top:24px}
 .brand{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:600;letter-spacing:-.01em}
 .brand img{width:28px;height:28px}
-.bar .out{padding:6px 0 6px 14px;color:var(--muted);font-size:14px;text-decoration:none}
-.bar .out:hover{color:var(--text)}
+.bar nav{display:flex;align-items:center;gap:6px}
+.bar .out{padding:6px 10px;color:var(--muted);font-size:14px;text-decoration:none;border-radius:8px}
+.bar .out:hover{color:var(--text);background:var(--surface)}
+.bar .dl{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:7px 14px;border-radius:8px;
+  background:var(--accent);color:#0B0E14;
+  font-size:14px;font-weight:600;text-decoration:none;
+  transition:background-color var(--t);
+}
+.bar .dl:hover{background:var(--accent-hi)}
+.bar .dl svg{width:13px;height:13px;flex:none}
 
 /* ---------- 2. hero ---------- */
 .hero{padding-top:72px}
 h1{
   margin:0 0 20px;
-  font-size:clamp(29px,7.4vw,40px);
+  font-size:clamp(29px,7.4vw,42px);
   font-weight:600;
   line-height:1.14;
   letter-spacing:-.028em;
 }
-.lede{margin:0;max-width:54ch;color:var(--muted);font-size:16px}
+.lede{margin:0;max-width:56ch;color:var(--muted);font-size:16px}
 
 /* ---------- 3. buttons and meta ---------- */
 .cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}
@@ -76,7 +91,7 @@ h1{
   text-decoration:none;white-space:nowrap;
   transition:background-color var(--t),border-color var(--t),color var(--t);
 }
-.btn-primary{background:var(--accent);color:#0B0E14}      /* dark label keeps 6.8:1 on the accent */
+.btn-primary{background:var(--accent);color:#0B0E14}      /* dark label keeps 6.9:1 on the accent */
 .btn-primary:hover{background:var(--accent-hi)}
 .btn-secondary{border-color:var(--border);color:var(--text)}
 .btn-secondary:hover{border-color:var(--border-hi);background:var(--surface)}
@@ -84,14 +99,18 @@ h1{
 .count{color:var(--muted);font-weight:500;font-variant-numeric:tabular-nums}
 .meta{margin:16px 0 0;color:var(--muted);font-size:13px}
 
-/* ---------- 4. screenshot ---------- */
-.shot.wide{max-width:680px;margin-top:34px}
+/* ---------- 4. screenshots ---------- */
 .shot{
-  width:100%;max-width:440px;height:auto;
+  width:100%;max-width:460px;height:auto;
   margin:60px auto 0;
-  border:1px solid var(--border);border-radius:var(--r);
+  border:1px solid var(--border);border-radius:14px;
   box-shadow:0 18px 44px rgba(0,0,0,.55);
 }
+.shot.wide{max-width:702px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:34px;align-items:start}
+.pair .shot{margin:0;max-width:100%}
+figure{margin:0}
+figcaption{margin-top:10px;color:var(--muted);font-size:13px;text-align:center}
 
 /* ---------- sections ---------- */
 section{margin-top:68px}
@@ -101,7 +120,7 @@ p{margin:0 0 14px}
 p:last-child{margin-bottom:0}
 
 /* ---------- 5. what it does: two columns ---------- */
-.dl{display:grid;grid-template-columns:118px 1fr;column-gap:28px;margin:0}
+.dl{display:grid;grid-template-columns:126px 1fr;column-gap:28px;margin:0}
 .dl dt{padding:11px 0;font-weight:600}
 .dl dd{margin:0;padding:11px 0;color:var(--muted)}
 .dl dt:not(:first-of-type),.dl dd:not(:first-of-type){border-top:1px solid var(--border)}
@@ -124,7 +143,7 @@ pre{
 }
 pre code{font-size:13px;color:var(--dim)}
 code{font-family:var(--mono)}
-p code,li code{
+p code,li code,td code{
   padding:1px 5px;
   background:var(--surface);border:1px solid var(--border);border-radius:6px;
   font-size:12.5px;color:var(--dim);
@@ -138,13 +157,23 @@ ol li:last-child{margin-bottom:0}
 /* ---------- 7b. laptops table ---------- */
 .tablewrap{overflow-x:auto;margin-top:6px}
 .models{width:100%;border-collapse:collapse;font-size:14px}
-.models th{text-align:left;font-weight:600;padding:8px 10px 8px 0;border-bottom:1px solid var(--border);color:var(--muted);font-size:12.5px;letter-spacing:.02em}
-.models td{padding:9px 10px 9px 0;border-bottom:1px solid var(--border);vertical-align:top}
-.models td.ids{font-family:var(--mono);font-size:12px;color:var(--dim)}
-.tier{display:inline-block;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:600;border:1px solid var(--border);color:var(--muted)}
-.tier.verified{color:#0B0E14;background:var(--accent);border-color:var(--accent)}
-.tier.listed{color:var(--text)}
-.note{margin-top:14px;color:var(--muted);font-size:13px}
+.models th{text-align:left;font-weight:600;padding:8px 12px 8px 0;border-bottom:1px solid var(--border);color:var(--muted);font-size:12.5px;letter-spacing:.02em}
+.models td{padding:10px 12px 10px 0;border-bottom:1px solid var(--border);vertical-align:top}
+.models td:last-child,.models th:last-child{padding-right:0;white-space:nowrap}
+.models td.ids{font-family:var(--mono);font-size:12px;color:var(--dim);line-height:1.5}
+.tier{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--border);color:var(--muted)}
+.tier::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.tier.verified{color:var(--ok);border-color:rgba(74,192,108,.4);background:rgba(74,192,108,.1)}
+.tier.supported{color:var(--accent);border-color:rgba(63,140,255,.4);background:rgba(63,140,255,.1)}
+.note{margin-top:16px;color:var(--muted);font-size:13px}
+
+/* the verify callout */
+.callout{
+  margin-top:22px;padding:16px 18px;
+  background:var(--surface);border:1px solid var(--border);border-left:2px solid var(--accent);
+  border-radius:var(--r);color:var(--muted);font-size:14px;
+}
+.callout b{color:var(--text)}
 
 /* ---------- 8. footer ---------- */
 footer{
@@ -155,11 +184,15 @@ footer{
 footer p{margin:0 0 8px}
 
 /* ---------- responsive: 360px up, no horizontal scroll ---------- */
+@media (max-width:640px){
+  .pair{grid-template-columns:1fr;gap:28px}
+}
 @media (max-width:560px){
   .dl{grid-template-columns:1fr}
   .dl dt{padding:14px 0 0;border-top:1px solid var(--border)}
   .dl dt:first-of-type{border-top:0;padding-top:0}
   .dl dd{padding:2px 0 0;border-top:0}
+  .bar .out{display:none}
 }
 @media (max-width:420px){
   .wrap{padding:0 18px}
@@ -178,7 +211,14 @@ footer p{margin:0 0 8px}
   <!-- 1. header -->
   <header class="bar">
     <span class="brand"><img src="logo.webp" width="28" height="28" alt="">Ohman</span>
-    <a class="out" href="https://github.com/P4R1H/Ohman">GitHub</a>
+    <nav>
+      <a class="out" href="#laptops">Laptops</a>
+      <a class="out" href="https://github.com/P4R1H/Ohman">GitHub</a>
+      <a class="dl" href="https://github.com/P4R1H/Ohman/releases/latest/download/Ohman.exe">
+        <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 1v8.2M4.6 6.2L8 9.6l3.4-3.4" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 11.5v2A1.5 1.5 0 0 0 4 15h8a1.5 1.5 0 0 0 1.5-1.5v-2" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/></svg>
+        Download
+      </a>
+    </nav>
   </header>
 
   <main>
@@ -186,7 +226,7 @@ footer p{margin:0 0 8px}
     <!-- 2. hero -->
     <div class="hero">
       <h1>OMEN Gaming Hub's controls. Without OMEN Gaming Hub.</h1>
-      <p class="lede">One executable, no services, no drivers, no account, no ads. Same firmware interface as OMEN Gaming Hub, same bytes, nothing else.</p>
+      <p class="lede">Modes, fan curves, power, graphics switching and keyboard lighting in one 400 KB executable. No services, no drivers, no account, no ads. Same firmware interface as OMEN Gaming Hub, same bytes, nothing else.</p>
 
       <!-- 3. actions -->
       <div class="cta">
@@ -196,95 +236,119 @@ footer p{margin:0 0 8px}
           Star on GitHub <span class="count" id="stars" hidden></span>
         </a>
       </div>
-      <p class="meta"><span id="ver">v1.1</span> &middot; <span id="size">273 KB</span> &middot; Windows 11 &middot; nothing to install</p>
+      <p class="meta"><span id="ver">v2.0</span> &middot; <span id="size">400 KB</span> &middot; Windows 10/11 &middot; nothing to install</p>
     </div>
 
     <!-- 4. the app -->
-    <img class="shot" src="screenshot.png" width="880" height="952"
-         alt="The Ohman panel: Eco, Balanced and Performance buttons, live CPU and GPU temperatures and fan speeds, and rows for fans, power gain, GPU power and keyboard lighting.">
+    <img class="shot" src="home.png" width="920" height="1082"
+         alt="The Ohman panel: Eco, Balanced and Performance buttons, live CPU and GPU temperatures and fan speeds, and rows for fans, power gain and keyboard lighting.">
 
     <!-- 5. what it does -->
     <section aria-labelledby="what">
       <h2 id="what">What it does</h2>
       <dl class="dl">
         <dt>Modes</dt>
-        <dd>Eco &middot; Balanced &middot; Performance, one tap or Fn+F12. Eco also sets the Windows power mode and GPU base power, as OGH does.</dd>
+        <dd>Eco &middot; Balanced &middot; Performance, one click, the OMEN key, or a hotkey. Each mode remembers its own fans, power gain and GPU choice, and the whole app takes that mode's colour.</dd>
         <dt>Fans</dt>
-        <dd>Auto (OGH's own curve for this model, 1800 to 5700 rpm), Max, or Manual per fan.</dd>
+        <dd>Auto (this model's own curve), Max, Manual per fan, or your own curve: seven points you drag, a floor, a ramp delay, and a separate GPU curve if you unlink it. The live reading rides the curve so you can see what it is about to do.</dd>
+        <dt>Max fan</dt>
+        <dd>Full speed with a way back: it returns to Auto once the chips are below 60&deg; for two minutes, or after 15, 30 or 60 minutes.</dd>
         <dt>Power gain</dt>
-        <dd>OGH's "Smart Performance Gain": +0 to +15 W on the CPU+GPU budget that NVIDIA Dynamic Boost draws from.</dd>
+        <dd>OGH's "Smart Performance Gain": +0 to +15&nbsp;W on the CPU+GPU budget that NVIDIA Dynamic Boost draws from.</dd>
         <dt>GPU power</dt>
         <dd>Base &middot; Boost &middot; Max, or follow the mode.</dd>
-        <dt>Per mode</dt>
-        <dd>Fan, power gain and GPU choices are remembered per mode.</dd>
-        <dt>Live</dt>
-        <dd>CPU and GPU temperature, fan speeds, load, clocks, GPU watts, battery.</dd>
-        <dt>OMEN key</dt>
-        <dd>Fn+F12 opens the panel (or cycles modes, or toggles max fan). Shift+F11 cycles modes. OGH's key handler is stopped, reversibly.</dd>
-        <dt>Safety</dt>
-        <dd>A thermal guard forces max fan on a hot CPU, a hot chassis or stalled fans. Fans are never set below 1800 rpm.</dd>
+        <dt>Graphics</dt>
+        <dd>Hybrid, Discrete (the MUX) or iGPU&nbsp;only &mdash; whichever your firmware offers &mdash; written the way OGH writes it, with the restart it needs.</dd>
         <dt>Lighting</dt>
-        <dd>A live keyboard in the panel; click it and an editor slides open beside it: zones, a real colour picker, presets, brightness, Breathe / Cycle / Wave, or hand the keyboard to Windows Dynamic Lighting.</dd>
+        <dd>The keyboard drawn as it actually lights. Pick a key, a row, a zone or the whole board, then a hue and a shade; or Breathe, Cycle, Wave, or hand it to Windows Dynamic Lighting. Per-key selection is there for the boards that have it.</dd>
+        <dt>Display</dt>
+        <dd>Refresh rate, and the lowest rate on battery if you want it.</dd>
+        <dt>Live</dt>
+        <dd>CPU and GPU temperature, package watts, fan speeds, load, clocks, chassis sensor, battery. CPU temperature on the tray icon.</dd>
+        <dt>Tray</dt>
+        <dd>Everything above without opening the window: modes, fan mode, refresh rate, GPU power, graphics, lighting, brightness and every switch.</dd>
+        <dt>OMEN key</dt>
+        <dd>Opens the panel, cycles modes, toggles max fan, or runs a command of your choice. OGH's key handler is stopped, reversibly.</dd>
+        <dt>Safety</dt>
+        <dd>A thermal guard forces max fan on a hot CPU, a hot chassis or stalled fans, and can be switched off. Fans are never set below 1800&nbsp;rpm.</dd>
         <dt>Extras</dt>
-        <dd>Tray, hotkeys, start with Windows without a UAC prompt, Eco on battery, on-screen flash on key presses.</dd>
+        <dd>Starts with Windows without a UAC prompt, Eco on battery, Windows power mode sync, hotkeys, an on-screen flash when a key changes something, and an update check that never installs anything for you.</dd>
       </dl>
-      <img class="shot wide" src="keyboard.png" width="1900" height="1143" alt="The keyboard editor open beside the panel: zones on a drawn keyboard, effects, colour picker, presets and level.">
+
+      <div class="pair">
+        <figure>
+          <img class="shot" src="fans.png" width="920" height="1208" alt="The Fans page: Auto, Max, Curve and Manual, a draggable seven-point fan curve with the current temperature marked on it, a link switch, floor and ramp delay.">
+          <figcaption>Your own curve, remembered per mode</figcaption>
+        </figure>
+        <figure>
+          <img class="shot" src="settings.png" width="920" height="1280" alt="The Settings page: what the OMEN key opens, taking over the key, hotkeys, GPU power, Eco on battery, quieter Eco fan policy and more.">
+          <figcaption>Settings, in sections</figcaption>
+        </figure>
+      </div>
+
+      <img class="shot wide" src="keyboard.png" width="1400" height="1038" alt="The keyboard page: the keyboard drawn in its real zone colours, a Key / Row / Zone / All selector, a hex field, brightness, and hue and shade strips.">
     </section>
 
     <!-- 6. how it works -->
     <section aria-labelledby="how">
       <h2 id="how">How it works</h2>
-      <p>HP exposes a BIOS mailbox as the WMI class <code>hpqBIntM</code>. Ohman uses the commands OGH uses: performance mode, max fan, fan levels, CPU+GPU power budget, GPU power, plus read-only queries. The OMEN key arrives as a WMI event (<code>hpqBEvnt</code>). The bytes and the measured firmware behaviour are in <a href="https://github.com/P4R1H/Ohman/blob/main/docs/research.md">docs/research.md</a>.</p>
+      <p>HP exposes a BIOS mailbox as the WMI class <code>hpqBIntM</code>. Ohman uses the commands OGH uses: performance mode, max fan, fan levels, CPU+GPU power budget, GPU power, graphics mode, keyboard lighting, plus read-only queries. The OMEN key arrives as a WMI event (<code>hpqBEvnt</code>). Every byte and every measured firmware behaviour is written down in <a href="https://github.com/P4R1H/Ohman/blob/main/docs/research.md">docs/research.md</a>.</p>
       <ul class="chips">
         <li><b>0x1A</b> mode</li>
         <li><b>0x27</b> max fan</li>
         <li><b>0x2E</b> fan levels</li>
         <li><b>0x29</b> power budget</li>
         <li><b>0x22</b> GPU power</li>
+        <li><b>0x52</b> graphics mode</li>
         <li><b>0x20009</b> lighting</li>
       </ul>
-    </section>
-
-    <!-- 7. your laptop -->
-    <section aria-labelledby="laptop">
-      <h2 id="laptop">Your laptop</h2>
-      <p>Verified on the HP OMEN Transcend 14 (2024, board 8C58). Every other OMEN and Victus laptop runs in generic mode: the mode bytes the Linux driver documents for its firmware generation, fan control with the same floor and thermal guard, and power or GPU controls only where the firmware answers. A banner asks you to report back so the board can be marked verified.</p>
-      <h3>Adding your laptop</h3>
-      <ol>
-        <li>Run the support-info tool and press the OMEN key when it asks.
-          <pre><code>tools\support-info.cmd</code></pre>
-          It writes <code>tools\support-info.txt</code>: model, board id, BIOS, system-design data, fan table, key event. No personal data.</li>
-        <li>Open a <a href="https://github.com/P4R1H/Ohman/issues/new?template=new-laptop-support.md">New laptop support</a> issue with that file, what OGH shows on your model, and ideally OGH's background log (<code class="path">%LOCALAPPDATA%\Packages\AD2F1837.OMENCommandCenter_v10z8vjag6ke6\LocalCache\Local\HPOMEN\</code>) from a session where you clicked every mode.</li>
-        <li>A platform is one entry in <a href="https://github.com/P4R1H/Ohman/blob/main/src/Platform.cs">src/Platform.cs</a>; nothing else is model-specific.</li>
-      </ol>
+      <p class="note">Nothing is installed. One executable, a settings file and a log beside it. Uninstalling is deleting it.</p>
     </section>
 
     <!-- 7b. laptops -->
-    <section aria-labelledby="models">
-      <h2 id="models">Laptops</h2>
-      <p>Three tiers. <b>Verified</b>: somebody ran the checklist on that machine. <b>Listed</b>: the board id is in the Linux HP driver's tables, so the mode bytes for its firmware generation are known and generic mode uses them. <b>Generic</b>: everything else, driven by what the firmware reports about itself; read-only when it reports nothing usable.</p>
+    <section aria-labelledby="laptops">
+      <h2 id="laptops">Laptops</h2>
+      <p>Two states. <b>Verified</b> means somebody ran the checklist on that exact machine and every control did what it says. <b>Supported</b> means Ohman drives it with the mode bytes documented for its firmware generation, and enables power, GPU and lighting controls only where the firmware answers. Supported is the normal case and it works; verified is supported plus a human who confirmed it.</p>
+
       <div class="tablewrap">
       <table class="models">
         <thead><tr><th>Model</th><th>Board ids</th><th>Status</th></tr></thead>
         <tbody>
-        <tr><td>OMEN Transcend 14 (2024)</td><td class="ids">8C58</td><td><span class="tier verified">Verified</span></td></tr>
-        <tr><td>OMEN Transcend 14 (2024, other SKU)</td><td class="ids">8E41</td><td><span class="tier listed">Listed</span></td></tr>
-        <tr><td>OMEN 15 (2019, 15-dc / 15-dh)</td><td class="ids">8574, 8600</td><td><span class="tier listed">Listed</span></td></tr>
-        <tr><td>OMEN 17 (2019, 17-cb0)</td><td class="ids">8603</td><td><span class="tier listed">Listed</span></td></tr>
-        <tr><td>OMEN 15 (2020)</td><td class="ids">8A15</td><td><span class="tier listed">Listed</span></td></tr>
-        <tr><td>OMEN 15 / 17 (2021)</td><td class="ids">8BAD</td><td><span class="tier listed">Listed</span></td></tr>
-        <tr><td>OMEN 16 / 17 (2021 to 2022)</td><td class="ids">8A42, 8A43</td><td><span class="tier listed">Listed</span></td></tr>
-        <tr><td>Victus 16 (2021 to 2023)</td><td class="ids">88F8, 8A25</td><td><span class="tier listed">Listed</span></td></tr>
-        <tr><td>Victus 16 S / R (2023 to 2024)</td><td class="ids">8A3D, 8B2F, 8BBE, 8BD4, 8BD5, 8C99, 8C9C</td><td><span class="tier listed">Listed</span></td></tr>
-        <tr><td>Other OMEN 15 / 17 boards in the driver's table (2018 to 2021 generations)</td><td class="ids">84DA to 84DC, 8572 to 8575, 8601 to 860A, 8746 to 874A, 8786 to 878C, 87B5, 886B, 886C, 88C8 to 88D2, 88F4 to 88F7, 88FD to 8902, 8912, 8917, 8918, 8949, 894A, 89EB</td><td><span class="tier listed">Listed</span></td></tr>
-        <tr><td>OMEN 16 (2023 to 2025)</td><td class="ids">8BAA, 8BAB, 8BCA, 8BCD, 8C76 to 8C78, 8D24, 8D26, 8D2F, 8E35</td><td><span class="tier generic">Generic</span></td></tr>
-        <tr><td>OMEN MAX 16 (2025)</td><td class="ids">8D41, 8D87</td><td><span class="tier generic">Generic</span></td></tr>
-        <tr><td>OMEN Transcend 16, OMEN 17 (2025)</td><td class="ids">8BB3, 8C3B, 8C4D, 8E10</td><td><span class="tier generic">Generic</span></td></tr>
-        <tr><td>Victus 15</td><td class="ids">88D9, 88DA, 8A3E, 8C2F, 8C30, 8C3F, 8D07, 8DCD, 8E5E</td><td><span class="tier generic">Generic</span></td></tr>
+        <tr><td>OMEN Transcend 14 (2024, 14-fb0xxx)</td><td class="ids">8C58</td><td><span class="tier verified">Verified</span></td></tr>
+        <tr><td>OMEN Transcend 14 (2024, other SKU)</td><td class="ids">8E41</td><td><span class="tier supported">Supported</span></td></tr>
+        <tr><td>OMEN 15 (2019, 15-dc / 15-dh)</td><td class="ids">8574, 8600</td><td><span class="tier supported">Supported</span></td></tr>
+        <tr><td>OMEN 17 (2019, 17-cb0)</td><td class="ids">8603</td><td><span class="tier supported">Supported</span></td></tr>
+        <tr><td>OMEN 15 (2020)</td><td class="ids">8A15</td><td><span class="tier supported">Supported</span></td></tr>
+        <tr><td>OMEN 15 / 17 (2021)</td><td class="ids">8BAD</td><td><span class="tier supported">Supported</span></td></tr>
+        <tr><td>OMEN 16 / 17 (2021&ndash;2022)</td><td class="ids">8A42, 8A43</td><td><span class="tier supported">Supported</span></td></tr>
+        <tr><td>Victus 16 (2021&ndash;2023)</td><td class="ids">88F8, 8A25</td><td><span class="tier supported">Supported</span></td></tr>
+        <tr><td>Victus 16 S / R (2023&ndash;2024)</td><td class="ids">8A3D, 8B2F, 8BBE, 8BD4, 8BD5, 8C99, 8C9C</td><td><span class="tier supported">Supported</span></td></tr>
+        <tr><td>OMEN 15 / 17, 2018&ndash;2021 generations</td><td class="ids">84DA&ndash;84DC, 8572&ndash;8575, 8601&ndash;860A, 8746&ndash;874A, 8786&ndash;878C, 87B5, 886B, 886C, 88C8&ndash;88D2, 88F4&ndash;88F7, 88FD&ndash;8902, 8912, 8917, 8918, 8949, 894A, 89EB</td><td><span class="tier supported">Supported</span></td></tr>
+        <tr><td>OMEN 16 (2023&ndash;2025)</td><td class="ids">8BAA, 8BAB, 8BCA, 8BCD, 8C76&ndash;8C78, 8D24, 8D26, 8D2F, 8E35</td><td><span class="tier supported">Supported</span></td></tr>
+        <tr><td>OMEN MAX 16 (2025)</td><td class="ids">8D41, 8D87</td><td><span class="tier supported">Supported</span></td></tr>
+        <tr><td>OMEN Transcend 16, OMEN 17 (2025)</td><td class="ids">8BB3, 8C3B, 8C4D, 8E10</td><td><span class="tier supported">Supported</span></td></tr>
+        <tr><td>Victus 15</td><td class="ids">88D9, 88DA, 8A3E, 8C2F, 8C30, 8C3F, 8D07, 8DCD, 8E5E</td><td><span class="tier supported">Supported</span></td></tr>
         </tbody>
       </table>
       </div>
-      <p class="note">Board id: Settings, Diagnostics in Ohman, or <code>wmic baseboard get product</code>. Not listed is not unsupported: open a support issue and it moves up a tier.</p>
+      <p class="note">Your board id is in Ohman under Settings, or from <code>wmic baseboard get product</code>. A board that is not in this table still runs: Ohman asks the firmware what it is and uses what it answers.</p>
+
+      <div class="callout">
+        <b>Verify your laptop.</b> If you are running Ohman on something that is not marked verified, this is the one thing worth doing.
+        Check that each mode changes the fans, that the fan modes do what they say, and that nothing is stuck when you exit.
+        Then run <code>tools\support-info.cmd</code> and open a
+        <a href="https://github.com/P4R1H/Ohman/issues/new?template=verify-laptop.yml">Verify my laptop</a> issue with the file it writes.
+        Your model moves to verified and everybody with that board gets the tested profile.
+      </div>
+
+      <h3>If something is wrong on your model</h3>
+      <ol>
+        <li>Run the support-info tool and press the OMEN key when it asks.
+          <pre><code>tools\support-info.cmd</code></pre>
+          It writes <code>tools\support-info.txt</code>: model, board id, BIOS, system-design data, fan table, key event. No personal data.</li>
+        <li>Open a <a href="https://github.com/P4R1H/Ohman/issues/new?template=new-laptop-support.yml">New laptop support</a> issue with that file, what OGH shows on your model, and ideally OGH's own log (<code class="path">%LOCALAPPDATA%\Packages\AD2F1837.OMENCommandCenter_v10z8vjag6ke6\LocalCache\Local\HPOMEN\</code>) from a session where you clicked every mode.</li>
+        <li>A laptop is one entry in <a href="https://github.com/P4R1H/Ohman/blob/main/src/Platform.cs">src/Platform.cs</a>. Nothing else in the app is model-specific.</li>
+      </ol>
     </section>
 
   </main>
@@ -293,7 +357,7 @@ footer p{margin:0 0 8px}
   <footer>
     <p>Ohman interacts with the BIOS through the same commands OGH uses. Use at your own risk.</p>
     <p>OMEN is a trademark of HP Inc. This project is not affiliated with HP.</p>
-    <p><a href="https://github.com/P4R1H/Ohman">Source on GitHub</a></p>
+    <p><a href="https://github.com/P4R1H/Ohman">Source on GitHub</a> &middot; <a href="https://github.com/P4R1H/Ohman/blob/main/docs/laptops.md">Full laptop list</a></p>
   </footer>
 
 </div>

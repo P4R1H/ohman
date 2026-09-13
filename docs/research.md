@@ -120,7 +120,7 @@ Same mailbox, second command id. Layout from OGH's own lighting module (`HP.Omen
 - OGH factory colours: `0F84FA`, `710FFA`, `F9350F`, `FAAC0F` (zones 0..3); NvStudio SKUs white.
 - Transcend 14 (8C58): four zones. HP's `OMENLighting.sys` (a KMDF lower filter on the virtual HID framework, talking to
   `ACPI\PNP0C14`, i.e. the same WMI mailbox) publishes the keyboard to Windows as a LampArray with four lamps
-  (VID 0x0461 PID 0 = "FourZone" in OGH's own device table) so Windows 11 Dynamic Lighting can paint it.
+  (VID 0x0461 PID 0 = "FourZone" in OGH's own device table) so Windows Dynamic Lighting can paint it.
 - Arbitration: Windows owns the keyboard while `HKCU\Software\Microsoft\Lighting\Devices\<VHF id>\AmbientLightingEnabled`
   is 1 (and the global value). OGH flips that value to take or return control; Ohman does the same and only for HP's
   virtual device, never for external LampArray peripherals.
@@ -158,3 +158,25 @@ own fan table when that is above 57. The fan floor, the keep-alive rule and the 
 - The exact sensor behind `0x23` and what Windows' `\_TZ.TZ01` zone measures relative to the CPU package.
 - What launches the OGH main app on Fn+F12 when `OmenCommandCenterBackground` is not running (observed once;
   HP's `OMENKeyboardRemapper` and the `OmenOverlay` tasks are candidates).
+
+## Measured: what the app itself costs (2026-09-13)
+
+Two findings from profiling Ohman on the Transcend 14, both now handled in code.
+
+**Polling nvidia-smi keeps the discrete GPU awake.** Every `nvidia-smi` invocation wakes the dGPU out of its
+idle power state. Ohman used to ask every other sensor tick: every 4 s with the window open, every 10 s with it
+hidden. On a hybrid machine that is often enough that the GPU never reaches its deepest idle state, and the log
+showed it sitting at 54–55 °C with nothing running. That is several watts inside a shared thermal budget, which
+raises the chassis reading and makes the fan curve ask for more. `Sensors` now backs off to one read every two
+minutes after three consecutive idle readings (GPU utilisation ≤ 1 % and package under 12 W), and skips the read
+entirely when the graphics mode is iGPU-only. A busy GPU is still sampled at the normal rate, because the fan
+curve needs it.
+
+Ohman's own CPU cost, measured over 3.7 hours of normal use: 261 s of CPU time, which is 1.95 % of one core, or
+about 0.12 % of the whole 16-thread package. That is not enough to change a temperature; the GPU wake is.
+
+**The curve was chasing sensor noise.** The CPU temperature swings several degrees every few seconds at idle. Fed
+straight into the curve, the target moved every 5 s tick and the fans hunted audibly between roughly 2600 and
+3500 rpm while the machine did nothing. `AutoTick` now follows a smoothed reading (rising temperatures are taken
+immediately; falling ones decay at 40 % per tick) and ignores a downward change smaller than two levels. Upward
+moves and the 30 s keep-alive are unaffected, so nothing about the safety behaviour changes.

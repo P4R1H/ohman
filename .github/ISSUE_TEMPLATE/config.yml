@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Supported laptops
+    url: https://github.com/P4R1H/Ohman/blob/main/docs/laptops.md
+    about: Is your model listed, and how to get it marked verified
+  - name: How the firmware interface works
+    url: https://github.com/P4R1H/Ohman/blob/main/docs/research.md
+    about: Every command, byte and measured behaviour Ohman relies on
