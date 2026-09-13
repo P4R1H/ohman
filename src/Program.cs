@@ -98,26 +98,29 @@ namespace Ohman {
         /// On a four-zone laptop this finds HP's virtual device with its four lamps; on a per-key one it should find
         /// the keyboard itself with a lamp per key, which is what Ohman would drive.</summary>
         static int ListLamps() {
+            // Also goes to the log: this is launched from support-info.cmd and from shortcuts as often as from a
+            // prompt, and a windows-subsystem process started without a console has nowhere to print.
+            Action<string> say = delegate(string s) { Console.WriteLine(s); Log.Write("lamps| " + s); };
             var all = Hid.Enumerate();
             int lighting = 0;
-            Console.WriteLine(AppName + " " + Version + " — HID lighting devices");
-            Console.WriteLine(all.Count + " HID collections present");
+            say(AppName + " " + Version + " — HID lighting devices");
+            say(all.Count + " HID collections present");
             foreach (var info in all) {
                 if (info.UsagePage != LampArray.UsagePageLighting) continue;
                 lighting++;
-                Console.WriteLine();
-                Console.WriteLine("  " + info);
-                Console.WriteLine("  " + info.Path);
+                say("");
+                say("  " + info);
+                say("  " + info.Path);
             }
-            if (lighting == 0) { Console.WriteLine("\nNo HID Lighting And Illumination collection (usage page 0x59) on this machine."); return 0; }
+            if (lighting == 0) { say(""); say("No HID Lighting And Illumination collection (usage page 0x59) on this machine."); return 0; }
             foreach (var la in LampArray.All()) {
-                Console.WriteLine();
-                Console.WriteLine("LampArray VID_" + la.VendorId.ToString("X4") + " PID_" + la.ProductId.ToString("X4") + "  " + la.Product);
-                Console.WriteLine("  " + la.Describe);
-                Console.WriteLine("  usable for per-key painting: " + (la.UsableAsPerKey ? "yes" : "no"));
-                Console.WriteLine("  lamp   x(mm)   y(mm)  prog  key usage");
+                say("");
+                say("LampArray VID_" + la.VendorId.ToString("X4") + " PID_" + la.ProductId.ToString("X4") + "  " + la.Product);
+                say("  " + la.Describe);
+                say("  usable for per-key painting: " + (la.UsableAsPerKey ? "yes" : "no"));
+                say("  lamp   x(mm)   y(mm)  prog  key usage");
                 for (int i = 0; i < la.LampCount; i++)
-                    Console.WriteLine("  " + i.ToString().PadLeft(4) + "  " + (la.X[i] / 1000.0).ToString("0.0").PadLeft(6) +
+                    say("  " + i.ToString().PadLeft(4) + "  " + (la.X[i] / 1000.0).ToString("0.0").PadLeft(6) +
                         "  " + (la.Y[i] / 1000.0).ToString("0.0").PadLeft(6) +
                         "  " + (la.Programmable(i) ? " yes" : "  no") + "   0x" + la.KeyUsage[i].ToString("X2"));
                 la.Dispose();
