@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman — extra sensors that do not need the BIOS: ACPI thermal zone + CPU utilisation (perf counters)
 // and NVIDIA GPU stats via nvidia-smi. All reads are best-effort and never throw.
 using System;

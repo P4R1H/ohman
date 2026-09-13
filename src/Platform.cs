@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman — platform profiles. Everything model-specific lives here so that adding a laptop means adding a profile,
 // not touching the engine or the UI. A board that is not listed still runs: Platforms.Generic builds a profile
 // from what the firmware reports about itself.

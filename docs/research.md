@@ -154,8 +154,8 @@ frame is acked `EC AC` (parsed) or `EC FA` (refused) — an ack does not mean an
 LEDs, 176–179 padding; index order is contiguous physical raster order with the numpad interleaved per row.
 `0x0A` is a real flash write and must never run per animation frame. Sources: `theantipopau/omencore`
 (`DojoKeyboardMcu.cs`, MIT, from a decompile of OGH's `McuSDK2.dll` plus a USB capture on board `8D87`) and
-`arfelious/omen-rgb-linux` (`driver.py` + `data/keys.json`, GPL-3.0 — readable as evidence, not copyable into
-this GPL-3.0 project). They cross-confirm the numbering: one predicts LEDs 137, 138 and 146 are the `.` key and
+`arfelious/omen-rgb-linux` (`driver.py` + `data/keys.json`, GPL-3.0). Both were read as evidence; neither was
+copied — this file is the protocol, and the code here was written from it. They cross-confirm the numbering: one predicts LEDs 137, 138 and 146 are the `.` key and
 the last cell of right shift; the other's independently-built map says exactly that.
 
 The same device also exposes `MI_04` as a **standard HID LampArray** (usage page `0x59`): 120 lamps, each

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman — hardware layer.
 // HP OMEN BIOS control through the WMI class root\wmi:hpqBIntM (requires elevation).
 // Every opcode below was verified against three independent sources on 2026-09-08:

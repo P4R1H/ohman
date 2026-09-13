@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman — WPF main window (layout in the embedded Ui.xaml): a rail on the left with Home, Fans, Keyboard and
 // Settings, one page visible at a time; the window morphs to each page's size. Also the tray icon, hotkeys and the
 // live readouts. Every size and colour here comes from the panel design.

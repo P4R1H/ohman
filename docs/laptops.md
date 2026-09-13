@@ -54,16 +54,20 @@ reuses a board across several SKUs.
 
 ### Victus
 
-| Model | Board ids |
-|---|---|
-| Victus 16 (2021–2023) | `88F8`, `8A25` |
-| Victus 16 S / R (2023–2024) | `8A3D`, `8B2F`, `8BBE`, `8BD4`, `8BD5`, `8C99`, `8C9C` |
-| Victus 15 | `88D9`, `88DA`, `8A3E`, `8C2F`, `8C30`, `8C3F`, `8D07`, `8DCD`, `8E5E` |
+Victus firmware uses different mode bytes from OMEN: `0x00` default, `0x01` performance, `0x03` quiet. Ohman
+writes those bytes only for the boards the Linux `hp-wmi` driver names, because that is the only place they
+are written down:
 
-Victus firmware uses different mode bytes from OMEN: `0x00` default, `0x01` performance, `0x03` quiet on the
-2021–2023 boards, and no quiet mode on the S/R boards. Ohman uses those bytes for the boards named in the
-Linux `hp-wmi` driver's Victus tables. Any other board, Victus or not, is driven from the generation the
-firmware reports, which is the same path every unlisted OMEN takes.
+| Model | Board ids | Mode bytes |
+|---|---|---|
+| Victus 16 (2021–2023) | `88F8`, `8A25` | from `hp-wmi` |
+| Victus 16 S / R (2023–2024) | `8A3D`, `8B2F`, `8BBE`, `8BD4`, `8BD5`, `8C99`, `8C9C` | from `hp-wmi`, no quiet mode |
+| Victus 15 | `88D9`, `88DA`, `8A3E`, `8C2F`, `8C30`, `8C3F`, `8D07`, `8DCD`, `8E5E` | from the firmware |
+
+"from the firmware" is the same path every unlisted OMEN takes: Ohman asks the board which firmware generation
+it is and drives it with that generation's bytes. It works, and nobody has yet confirmed on a Victus 15 that
+the quiet mode is the byte we think it is. The kernel's own Victus 16-r0xxx entry takes OMEN bytes despite the
+name, so the badge on the lid does not decide this — only a readback from the machine does.
 
 ## Finding your board id
 

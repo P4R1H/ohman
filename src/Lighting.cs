@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman — keyboard lighting.
 // HP laptops expose the keyboard backlight through the same BIOS mailbox as the performance controls, under a
 // second command id (0x20009). Zone colours sit in a 128-byte table, brightness/backlight in one byte whose bit 7

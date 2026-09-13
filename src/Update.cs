@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman — update check: asks GitHub for the newest release tag of the project's own repository.
 // Nothing is sent but the request itself; no identifiers, no telemetry. Runs at most once a day, or on demand.
 using System;

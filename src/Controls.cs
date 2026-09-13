@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman — the small controls the pages are built from: a letter-spaced label, the two colour strips,
 // the filled segment and the underlined link row, a rail button, and the on-screen flash.
 using System;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman — the look: the palette, the fonts that ship inside the exe, the animation curves, and the one
 // accent colour every control shares. Nothing here knows about the window or the hardware.
 using System;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman — keyboard drawing. One control renders both the small glyph on the Home page and the Keyboard page's map:
 // flat coloured keys, nothing more. The layout is a list of keys in key units; zones follow HP's four-zone firmware
 // order (0 right, 1 middle, 2 left, 3 WASD), which is also the order of the colour table.

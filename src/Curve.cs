@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman — the fan curve graph: seven points on a temperature axis, dragged vertically. The y axis is percent of the
 // fan's top speed. What the chip reads right now is a dot on the curve with a label above it, so the number the fans
 // are following is always legible. Read-only it shows a curve without handles (Auto and Max).

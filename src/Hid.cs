@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman — raw HID, and the HID Lighting And Illumination ("LampArray") interface on top of it.
 //
 // Why this file exists: HP's BIOS mailbox cannot light a per-key keyboard. On those machines the firmware still
