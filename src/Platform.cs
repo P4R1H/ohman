@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+﻿// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman — platform profiles. Everything model-specific lives here so that adding a laptop means adding a profile,
 // not touching the engine or the UI. A board that is not listed still runs: Platforms.Generic builds a profile
 // from what the firmware reports about itself.
@@ -101,10 +101,14 @@ namespace Ohman {
     /// <summary>Board families the Linux hp-wmi driver drives through the same 0x1A mode command. Used to build a
     /// generic profile for a board that has no verified entry yet; the firmware's system-design data decides the rest.</summary>
     public static class Families {
-        // omen_thermal_profile_boards[] in drivers/platform/x86/hp/hp-wmi.c: mode bytes by thermal-policy version (system data byte 3)
+        // Boards the Linux hp-wmi driver recognises as OMEN, from BOTH of its tables: omen_thermal_profile_boards[]
+        // and the later hp_wmi_feature_boards[] DMI table, whose omen_v1 entries use the same profile set
+        // (HP_OMEN_V1_THERMAL_PROFILE_COOL = 0x50). Checked against drivers/platform/x86/hp/hp-wmi.c on 2026-09-13.
         public static readonly string[] Omen = { "84DA", "84DB", "84DC", "8572", "8573", "8574", "8575", "8600", "8601", "8602", "8603", "8604", "8605", "8606", "8607", "860A",
             "8746", "8747", "8748", "8749", "874A", "8786", "8787", "8788", "878A", "878B", "878C", "87B5", "886B", "886C", "88C8", "88CB", "88D1", "88D2", "88F4", "88F5",
-            "88F6", "88F7", "88FD", "88FE", "88FF", "8900", "8901", "8902", "8912", "8917", "8918", "8949", "894A", "89EB", "8A15", "8A42", "8A43", "8BAD", "8C58", "8E41" };
+            "88F6", "88F7", "88FD", "88FE", "88FF", "8900", "8901", "8902", "8912", "8917", "8918", "8949", "894A", "89EB", "8A15", "8A42", "8A43", "8BAD", "8C58", "8E41",
+            // hp_wmi_feature_boards[]: driven with omen_v1 / omen_v1_legacy / omen_v1_no_ec params
+            "8A44", "8A4D", "8BA9", "8BAA", "8BAB", "8BB3", "8BC2", "8BCA", "8BCD", "8C76", "8C77", "8C78", "8D26", "8D41", "8D87", "8D88", "8DD6", "8E35" };
         public static readonly string[] OmenForceV0 = { "8607", "8746", "8747", "8748", "8749", "874A" };   // report v1 but want v0 bytes
         public static readonly string[] Victus = { "88F8", "8A25" };                                       // 0x00 default, 0x01 performance, 0x03 quiet
         public static readonly string[] VictusS = { "8A3D", "8B2F", "8BBE", "8BD4", "8BD5", "8C99", "8C9C" };   // 0x00 default, 0x01 performance
