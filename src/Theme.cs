@@ -44,9 +44,11 @@ namespace Ohman {
         /// <summary>The accent brush every accent-coloured thing shares; its colour follows the mode (see ColorSource).</summary>
         public static SolidColorBrush Accent = new SolidColorBrush(BalColor);
 
-        /// <summary>IBM Plex ships inside the exe; it is written beside the app once and loaded from there (WPF wants a directory URI).</summary>
+        /// <summary>IBM Plex ships inside the exe; it is written beside the app once and loaded from there (WPF wants a
+        /// directory URI). The OFL goes out with it: the licence requires every copy of the font software to carry the
+        /// copyright notice and the licence text, and these files are a copy wherever they land.</summary>
         public static void LoadFonts() {
-            string[] names = { "IBMPlexSans-Regular.ttf", "IBMPlexSans-Medium.ttf", "IBMPlexSans-SemiBold.ttf", "IBMPlexMono-Regular.ttf", "IBMPlexMono-Medium.ttf" };
+            string[] names = { "IBMPlexSans-Regular.ttf", "IBMPlexSans-Medium.ttf", "IBMPlexSans-SemiBold.ttf", "IBMPlexMono-Regular.ttf", "IBMPlexMono-Medium.ttf", "OFL.txt" };
             try {
                 string dir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "fonts");
                 bool all = System.IO.Directory.Exists(dir);

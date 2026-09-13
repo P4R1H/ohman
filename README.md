@@ -12,8 +12,6 @@ Don't you love paying $2,500 for a laptop and still having ads pushed down your 
 with no alternative? Ohman is the alternative. One executable, no services, no drivers, no account, no ads.
 Same firmware interface as OMEN Gaming Hub, same bytes, nothing else.
 
-Use at your own risk.
-
 ## Features
 
 | | |
@@ -129,12 +127,19 @@ Pushing a `v*` tag builds on a Windows runner and attaches the binaries to a rel
 
 ## Later
 
-- **Benchmarking tab**: run a short load and record clocks, watts, temperatures and throttling, so you can see
-  what +15 W actually did.
+- **Benchmarking tab**: run a short load and record clocks, watts, temperatures and throttling.
 - **Fan curve import/export** so a verified model's curve can be shared as a file.
 
 Ideas and issues are welcome.
 
+## Risk
+
+While this has been tested extensively, it is still sending commands to your laptop's firmware.
+Use at your own risk.
+
 ## Licence
 
-GPL-3.0-or-later. OMEN is a trademark of HP Inc. This project is not affiliated with HP.
+GPL-3.0-or-later, except the embedded IBM Plex typefaces, which are under the SIL Open Font License 1.1
+(Copyright (c) 2017 IBM Corp., Reserved Font Name "Plex"). See [fonts/OFL.txt](fonts/OFL.txt).
+
+OMEN is a trademark of HP Inc. This project is not affiliated with HP.

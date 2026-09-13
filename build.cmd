@@ -9,7 +9,7 @@ set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 set WPF=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\WPF
 set REFS=/r:System.Management.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Xaml.dll /r:"%WPF%\PresentationCore.dll" /r:"%WPF%\PresentationFramework.dll" /r:"%WPF%\WindowsBase.dll"
 set SRC=src\Platform.cs src\Hardware.cs src\Hid.cs src\Lighting.cs src\Keyboard.cs src\Display.cs src\Update.cs src\Theme.cs src\Controls.cs src\Curve.cs src\Sensors.cs src\Engine.cs src\Ui.cs src\Program.cs
-set RES=/resource:src\Ui.xaml,Ohman.Ui.xaml /resource:fonts\IBMPlexSans-Regular.ttf,Ohman.fonts.IBMPlexSans-Regular.ttf /resource:fonts\IBMPlexSans-Medium.ttf,Ohman.fonts.IBMPlexSans-Medium.ttf /resource:fonts\IBMPlexSans-SemiBold.ttf,Ohman.fonts.IBMPlexSans-SemiBold.ttf /resource:fonts\IBMPlexMono-Regular.ttf,Ohman.fonts.IBMPlexMono-Regular.ttf /resource:fonts\IBMPlexMono-Medium.ttf,Ohman.fonts.IBMPlexMono-Medium.ttf
+set RES=/resource:src\Ui.xaml,Ohman.Ui.xaml /resource:fonts\IBMPlexSans-Regular.ttf,Ohman.fonts.IBMPlexSans-Regular.ttf /resource:fonts\IBMPlexSans-Medium.ttf,Ohman.fonts.IBMPlexSans-Medium.ttf /resource:fonts\IBMPlexSans-SemiBold.ttf,Ohman.fonts.IBMPlexSans-SemiBold.ttf /resource:fonts\IBMPlexMono-Regular.ttf,Ohman.fonts.IBMPlexMono-Regular.ttf /resource:fonts\IBMPlexMono-Medium.ttf,Ohman.fonts.IBMPlexMono-Medium.ttf /resource:fonts\OFL.txt,Ohman.fonts.OFL.txt
 if not exist preview mkdir preview
 
 :: 1. preview build without an icon, used to generate app.ico

@@ -29,6 +29,10 @@ jobs:
           New-Item -ItemType Directory dist | Out-Null
           New-Item -ItemType Directory dist\Ohman-$tag | Out-Null
           Copy-Item Ohman.exe, README.md, LICENSE dist\Ohman-$tag\
+          # OFL 1.1 requires the notice and licence to accompany every copy of the font software,
+          # and the exe carries the fonts inside it.
+          New-Item -ItemType Directory dist\Ohman-$tag\fonts | Out-Null
+          Copy-Item fonts\OFL.txt dist\Ohman-$tag\fonts\
           Copy-Item preview dist\Ohman-$tag\preview -Recurse
           New-Item -ItemType Directory dist\Ohman-$tag\tools | Out-Null
           Copy-Item tools\*.cmd, tools\*.ps1, tools\omenprobe.exe dist\Ohman-$tag\tools\
