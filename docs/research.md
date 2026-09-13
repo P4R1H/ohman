@@ -207,6 +207,27 @@ own fan table when that is above 57. The fan floor, the keep-alive rule and the 
 - What launches the OGH main app on Fn+F12 when `OmenCommandCenterBackground` is not running (observed once;
   HP's `OMENKeyboardRemapper` and the `OmenOverlay` tasks are candidates).
 
+## 11. Battery charge limit: not reachable from here
+
+Recorded so nobody spends another evening on it. `MasonDye/OmenXHub` took this apart on an OMEN 16-am0xxx
+(BIOS F.12) in August 2026 and published the negative result, which matches what the mailbox looks like from
+our side:
+
+- Scanning `hpqBIntM` across commands `0x2000C`–`0x20020`, every cmdType, returns `rc = 0x3`, invalid command.
+  That BIOS implements only `0x20008` (system and design data) and `0x20009` (keyboard and lighting) — the two
+  Ohman already drives. **There is no charge-limit command in the mailbox to find.**
+- myHP does not use the mailbox for this. It goes through WinRT, `HP.AppFramework.PowerManagerClient`, whose
+  implementation is inside `HP.HPX.dll` — 198 MB of CoreRT AOT with ~340k functions, which ILSpy cannot
+  decompile. Activating `BatteryParticulars` from outside the package fails with `E_INVALIDARG`, because the
+  class is gated on UWP package identity.
+- Writing HP's own feature flags (`HKLM\SOFTWARE\HP\HP App\SysControl\BatteryExtenderMode\Enabled`, and the
+  scheduled-charge key) and restarting `HPAppHelperCap` succeeds and changes nothing.
+
+The only path left is writing EC registers directly, which needs a kernel driver to reach port I/O. That is
+exactly the thing Ohman does not have and does not want: one executable, no driver, no service. So this is not
+a gap in our coverage, it is out of scope by construction — and if a laptop's own vendor app does not offer
+the setting, its firmware very likely does not implement it either.
+
 ## Measured: what the app itself costs (2026-09-13)
 
 Two findings from profiling Ohman on the Transcend 14, both now handled in code.
