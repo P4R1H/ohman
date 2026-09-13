@@ -1,0 +1,184 @@
+/* The Ohman panel, rebuilt for the browser. Same palette, same metrics, same layout as src/Ui.xaml, so what
+   you click here is what you get when you run it. Sizes are the app's own logical pixels; the whole frame is
+   scaled down with a transform on narrow screens rather than reflowed, because the real window does not reflow. */
+
+.demo-stage{
+  --card:#161311; --sunken:#0F0D0B; --pill:#201C19; --line:#2C2825; --line2:#241F1C;
+  --well:#13100E; --edge:#332E2A;
+  --ink:#EDEAE8; --ink-hi:#F4F1EF; --seg:#A8A3A0; --hex:#A29D99; --sub:#96918D;
+  --desc:#908B87; --status:#8A8581; --foot:#7E7976; --section:#787370;
+  --acc:#3F8CFF; --acc-dim:rgba(63,140,255,.18);
+  --sans:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --code:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  display:flex; flex-direction:column; align-items:center; gap:14px;
+  margin:0 0 8px;
+}
+.demo-scaler{ transform-origin:top center; }
+
+.ohman{
+  position:relative; display:flex; overflow:hidden;
+  background:var(--card); color:var(--ink);
+  font-family:var(--sans); font-size:14px; line-height:normal;
+  border:1px solid var(--line); border-radius:14px;
+  box-shadow:0 24px 60px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.4);
+  transition:width 420ms cubic-bezier(.22,1,.28,1), height 420ms cubic-bezier(.22,1,.28,1);
+  user-select:none; -webkit-user-select:none;
+}
+.ohman *{box-sizing:border-box}
+
+/* ---------- rail ---------- */
+.oh-rail{
+  position:relative; width:62px; flex:none; background:var(--sunken);
+  border-right:1px solid var(--line);
+  display:flex; flex-direction:column; align-items:center;
+}
+.oh-mark{
+  width:13px; height:13px; border-radius:2px; margin:20px 0 16px;
+  transform:rotate(45deg);
+  background:linear-gradient(135deg, var(--mark-lo), var(--mark-hi));
+  transition:background 320ms ease;
+}
+.oh-nav{flex:1; display:flex; flex-direction:column; align-items:center; padding-top:4px}
+.oh-navbtn{
+  position:relative; width:42px; height:42px; margin:2px 0; border-radius:12px;
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+  color:var(--foot); transition:color 140ms ease;
+}
+.oh-navbtn:hover{color:var(--sub)}
+.oh-navbtn.on{color:var(--ink-hi)}
+.oh-navbtn svg{width:18px; height:18px; display:block}
+.oh-pill{
+  position:absolute; left:10px; width:42px; height:42px; border-radius:12px;
+  background:var(--pill); pointer-events:none;
+  transition:transform 380ms cubic-bezier(.22,1,.28,1), opacity 200ms ease;
+}
+.oh-bottom{padding-bottom:20px}
+
+/* ---------- pages ---------- */
+.oh-host{position:relative; flex:1; min-width:0; overflow:hidden}
+.oh-page{
+  position:absolute; inset:0; padding:24px 24px 20px;
+  display:flex; flex-direction:column;
+  opacity:0; pointer-events:none;
+  transition:opacity 170ms ease;
+}
+.oh-page.on{opacity:1; pointer-events:auto}
+
+.oh-head{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:18px}
+.oh-title{font-size:21px; font-weight:600; letter-spacing:-.01em; color:var(--ink-hi)}
+.oh-status{font-family:var(--code); font-size:11.5px; color:var(--status)}
+
+/* big readouts */
+.oh-bigrow{display:flex; gap:24px}
+.oh-big{flex:1}
+.oh-bignum{font-size:46px; font-weight:600; letter-spacing:-.03em; line-height:1}
+.oh-bigunit{font-size:17px; font-weight:500; margin-left:2px; color:var(--sub)}
+.oh-bigsub{font-size:12.5px; color:var(--sub); margin-top:7px}
+.oh-rule{height:1px; background:var(--line); margin:18px 0}
+
+/* segmented control */
+.oh-seg{display:flex; background:var(--sunken); border-radius:12px; padding:5px; position:relative}
+.oh-seg .oh-thumb{
+  position:absolute; top:5px; bottom:5px; border-radius:9px; background:var(--acc);
+  transition:transform 320ms cubic-bezier(.22,1,.28,1), width 320ms cubic-bezier(.22,1,.28,1), background 320ms ease;
+}
+.oh-seg button{
+  position:relative; flex:1; border:0; background:none; cursor:pointer;
+  font-family:inherit; font-size:14px; color:var(--seg);
+  padding:11px 0; border-radius:9px; transition:color 180ms ease;
+}
+.oh-seg.big button{font-size:15px; padding:13px 0}
+.oh-seg button.on{color:#fff; font-weight:600}
+.oh-seg button:disabled{color:#5A5552; cursor:default}
+.oh-seg.row{padding:3px; border-radius:9px}
+.oh-seg.row button{font-size:12.5px; padding:6px 12px; flex:none}
+.oh-seg.row .oh-thumb{top:3px; bottom:3px; border-radius:7px}
+
+/* links row */
+.oh-links{display:flex; gap:22px}
+.oh-links span{
+  position:relative; cursor:pointer; color:var(--desc); font-size:13.5px; padding-bottom:4px;
+  transition:color 140ms ease;
+}
+.oh-links span:hover{color:var(--ink)}
+.oh-links span.on{color:var(--ink-hi)}
+.oh-links span.off{color:#5A5552; cursor:default}
+.oh-links .oh-ul{
+  position:absolute; left:0; bottom:0; height:1px; background:var(--acc);
+  transition:transform 320ms cubic-bezier(.22,1,.28,1), width 320ms cubic-bezier(.22,1,.28,1);
+}
+
+/* generic rows */
+.oh-row{display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 0}
+.oh-row+.oh-row{border-top:1px solid var(--line2)}
+.oh-label{font-size:14px}
+.oh-sublabel{font-size:12px; color:var(--desc); margin-top:3px}
+.oh-val{font-family:var(--code); font-size:12px; color:var(--hex); min-width:44px; text-align:right}
+
+/* slider */
+.oh-slider{position:relative; flex:1; height:16px; cursor:pointer; display:flex; align-items:center}
+.oh-slider .oh-track{position:absolute; left:0; right:0; height:2px; background:#3A3532; border-radius:2px}
+.oh-slider .oh-fill{position:absolute; left:0; height:2px; background:var(--acc); border-radius:2px}
+.oh-slider .oh-knob{
+  position:absolute; width:13px; height:13px; border-radius:50%; background:var(--acc);
+  transform:translateX(-50%); transition:box-shadow 140ms ease;
+}
+.oh-slider:hover .oh-knob{box-shadow:0 0 0 4px var(--acc-dim)}
+
+/* switch */
+.oh-switch{width:38px; height:21px; border-radius:11px; background:#3A3532; position:relative; cursor:pointer; flex:none; transition:background 200ms ease}
+.oh-switch i{position:absolute; top:3px; left:3px; width:15px; height:15px; border-radius:50%; background:#8A8581; transition:transform 240ms cubic-bezier(.22,1,.28,1), background 200ms ease}
+.oh-switch.on{background:var(--acc)}
+.oh-switch.on i{transform:translateX(17px); background:#fff}
+.oh-switch.lg{width:40px; height:22px} .oh-switch.lg i{width:16px;height:16px} .oh-switch.lg.on i{transform:translateX(18px)}
+
+/* footer */
+.oh-foot{
+  margin-top:auto; padding-top:14px; border-top:1px solid var(--line);
+  display:flex; align-items:center; justify-content:space-between;
+  font-family:var(--code); font-size:11.5px; color:var(--foot);
+}
+.oh-dot{width:7px; height:7px; border-radius:50%; background:#4AC06C; display:inline-block; margin-right:9px; vertical-align:middle}
+
+/* curve graph */
+.oh-curve{position:relative; margin-top:4px}
+.oh-curve svg{display:block; overflow:visible; cursor:crosshair}
+.oh-axis{font-family:var(--code); font-size:10.5px; fill:var(--foot)}
+.oh-pointdot{cursor:grab}
+.oh-curve.ro .oh-pointdot{cursor:default}
+
+/* keyboard */
+.oh-kb{display:flex; flex-direction:column; gap:5px}
+.oh-kbrow{display:flex; gap:5px}
+.oh-key{
+  height:34px; border-radius:5px; display:flex; align-items:center; justify-content:center;
+  font-family:var(--code); font-size:10px; cursor:pointer;
+  transition:opacity 90ms ease, box-shadow 90ms ease;
+}
+.oh-kb.noclick .oh-key{cursor:default}
+
+/* colour editor */
+.oh-editor{margin-top:22px; padding-top:18px; border-top:1px solid var(--line)}
+.oh-cols{display:flex; gap:12px; align-items:center}
+.oh-leftcol{width:176px; flex:none}
+.oh-hexbar{display:flex; align-items:center; height:34px; background:var(--well); border:1px solid var(--edge); overflow:hidden}
+.oh-chip{width:40px; height:100%; flex:none}
+.oh-hexin{
+  flex:1; min-width:0; background:none; border:0; outline:0; padding:0 0 0 10px;
+  font-family:var(--code); font-size:13.5px; color:var(--ink);
+}
+.oh-icon{font-size:12px; color:var(--status); width:13px; flex:none; text-align:center}
+.oh-strips{flex:1; min-width:0; overflow:hidden; display:flex; flex-direction:column}
+.oh-strip{display:flex; height:33px; cursor:crosshair}
+.oh-strip i{flex:1; display:block}
+.oh-effrow{display:flex; gap:32px; margin-top:18px}
+.oh-effrow>div{flex:1; display:flex; align-items:center; gap:12px}
+
+/* settings scroller */
+.oh-scroll{flex:1; overflow-y:auto; overflow-x:hidden; padding-right:10px; margin-right:-10px}
+.oh-scroll::-webkit-scrollbar{width:6px}
+.oh-scroll::-webkit-scrollbar-thumb{background:#39332F; border-radius:3px}
+.oh-sec{font-family:var(--code); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--section); margin:22px 0 2px}
+.oh-sec:first-child{margin-top:0}
+
+.oh-link{color:var(--acc); cursor:pointer; font-size:12.5px}

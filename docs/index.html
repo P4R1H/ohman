@@ -6,11 +6,15 @@
 <meta name="color-scheme" content="dark">
 <title>Ohman</title>
 <meta name="description" content="Ohman replaces OMEN Gaming Hub on Windows: modes, fan curves, power gain, GPU power, graphics switching and keyboard lighting. One executable, no services, no drivers, no account, no ads.">
-<link rel="icon" href="logo.webp" type="image/webp">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237FB2FF'/%3E%3Cstop offset='1' stop-color='%232C62B3'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='7.4' y='7.4' width='13.2' height='13.2' rx='2.2' fill='url(%23g)' transform='rotate(45 14 14)'/%3E%3C/svg%3E">
 <meta property="og:title" content="Ohman">
 <meta property="og:description" content="OMEN Gaming Hub's controls, without OMEN Gaming Hub. One executable, no services, no ads.">
 <meta property="og:image" content="https://p4r1h.github.io/ohman/home.png">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="demo.css">
 <style>
 /* ---------- palette and tokens: dark only, one accent, warm neutrals to match the app ---------- */
 :root{
@@ -41,7 +45,7 @@ body{
   line-height:1.62;
   -webkit-font-smoothing:antialiased;
 }
-.wrap{max-width:750px;margin:0 auto;padding:0 24px}
+.wrap{max-width:980px;margin:0 auto;padding:0 28px}
 a{
   color:var(--accent);
   text-decoration:underline;
@@ -56,7 +60,12 @@ img{display:block}
 /* ---------- 1. header row ---------- */
 .bar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-top:24px}
 .brand{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:600;letter-spacing:-.01em}
-.brand img{width:28px;height:28px}
+/* the mark, and the joke the name is: hover it and it says what it is */
+.mark{position:relative;width:28px;height:28px;flex:none}
+.mark svg,.mark span{position:absolute;inset:0;transition:opacity 220ms ease,transform 320ms cubic-bezier(.22,1,.28,1)}
+.mark span{font-size:21px;line-height:28px;text-align:center;opacity:0;transform:scale(.6) rotate(-18deg)}
+.brand:hover .mark svg{opacity:0;transform:scale(.6) rotate(18deg)}
+.brand:hover .mark span{opacity:1;transform:none}
 .bar nav{display:flex;align-items:center;gap:6px}
 .bar .out{padding:6px 10px;color:var(--muted);font-size:14px;text-decoration:none;border-radius:8px}
 .bar .out:hover{color:var(--text);background:var(--surface)}
@@ -74,12 +83,12 @@ img{display:block}
 .hero{padding-top:72px}
 h1{
   margin:0 0 20px;
-  font-size:clamp(29px,7.4vw,42px);
+  font-size:clamp(29px,6vw,50px);
   font-weight:600;
   line-height:1.14;
   letter-spacing:-.028em;
 }
-.lede{margin:0;max-width:56ch;color:var(--muted);font-size:16px}
+.lede{margin:0;max-width:760px;color:var(--muted);font-size:16.5px}
 
 /* ---------- 3. buttons and meta ---------- */
 .cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}
@@ -99,24 +108,33 @@ h1{
 .count{color:var(--muted);font-weight:500;font-variant-numeric:tabular-nums}
 .meta{margin:16px 0 0;color:var(--muted);font-size:13px}
 
-/* ---------- 4. screenshots ---------- */
-.shot{
-  width:100%;max-width:460px;height:auto;
-  margin:60px auto 0;
+/* ---------- 4. the live panel, and the strip of screens ---------- */
+.demo{margin:56px 0 0}
+
+/* full-bleed: the only thing on the page that leaves the column */
+.strip{
+  margin:64px 0 0;width:100vw;position:relative;left:50%;transform:translateX(-50%);
+  overflow:hidden;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);
+          mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);
+}
+.strip-track{display:flex;width:max-content;animation:drift 64s linear infinite}
+.strip:hover .strip-track{animation-play-state:paused}
+/* the spacing is a margin, not a gap: a gap is not part of the track's width, so translating by exactly one
+   third of it would land 8px short every cycle and the loop would visibly jump */
+.strip img{
+  height:440px;width:auto;flex:none;margin-right:22px;
   border:1px solid var(--border);border-radius:14px;
   box-shadow:0 18px 44px rgba(0,0,0,.55);
 }
-.shot.wide{max-width:702px}
-.pair{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:34px;align-items:start}
-.pair .shot{margin:0;max-width:100%}
-figure{margin:0}
-figcaption{margin-top:10px;color:var(--muted);font-size:13px;text-align:center}
+@keyframes drift{from{transform:translateX(0)}to{transform:translateX(calc(-100% / 3))}}
+@media (prefers-reduced-motion:reduce){.strip-track{animation:none}.strip{overflow-x:auto}}
 
 /* ---------- sections ---------- */
 section{margin-top:68px}
 h2{margin:0 0 22px;font-size:19px;font-weight:600;letter-spacing:-.015em}
 h3{margin:34px 0 0;font-size:15px;font-weight:600}
-p{margin:0 0 14px}
+p{margin:0 0 14px;max-width:74ch}
 p:last-child{margin-bottom:0}
 
 /* ---------- 5. what it does: two columns ---------- */
@@ -200,7 +218,7 @@ footer p{margin:0 0 8px}
 
   <!-- 1. header -->
   <header class="bar">
-    <span class="brand"><img src="logo.webp" width="28" height="28" alt="">Ohman</span>
+    <span class="brand"><span class="mark" aria-hidden="true"><svg viewBox="0 0 28 28"><defs><linearGradient id="mk" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7FB2FF"/><stop offset="1" stop-color="#2C62B3"/></linearGradient></defs><rect x="7.4" y="7.4" width="13.2" height="13.2" rx="2.2" fill="url(#mk)" transform="rotate(45 14 14)"/></svg><span>😮</span></span>Ohman</span>
     <nav>
       <a class="out" href="#laptops">Laptops</a>
       <a class="out" href="https://github.com/P4R1H/Ohman">GitHub</a>
@@ -229,9 +247,8 @@ footer p{margin:0 0 8px}
       <p class="meta"><span id="ver">v2.0</span> &middot; <span id="size">400 KB</span> &middot; Windows 10/11</p>
     </div>
 
-    <!-- 4. the app -->
-    <img class="shot" src="home.png" width="920" height="1082"
-         alt="The Ohman panel: Eco, Balanced and Performance buttons, live CPU and GPU temperatures and fan speeds, and rows for fans, power gain and keyboard lighting.">
+    <!-- 4. the app, actually running -->
+    <div id="demo" class="demo"></div>
 
     <!-- 5. what it does -->
     <section aria-labelledby="what">
@@ -265,19 +282,25 @@ footer p{margin:0 0 8px}
         <dd>Starts with Windows without a UAC prompt, Eco on battery, Windows power mode sync, hotkeys, an on-screen flash when a key changes something, and an update check that never installs anything for you.</dd>
       </dl>
 
-      <div class="pair">
-        <figure>
-          <img class="shot" src="fans.png" width="920" height="1208" alt="The Fans page: Auto, Max, Curve and Manual, a draggable seven-point fan curve with the current temperature marked on it, a link switch, floor and ramp delay.">
-          <figcaption>Your own curve, remembered per mode</figcaption>
-        </figure>
-        <figure>
-          <img class="shot" src="settings.png" width="920" height="1280" alt="The Settings page: what the OMEN key opens, taking over the key, hotkeys, GPU power, Eco on battery, quieter Eco fan policy and more.">
-          <figcaption>Settings, in sections</figcaption>
-        </figure>
-      </div>
-
-      <img class="shot wide" src="keyboard.png" width="1400" height="1038" alt="The keyboard page: the keyboard drawn in its real zone colours, a Key / Row / Zone / All selector, a hex field, brightness, and hue and shade strips.">
     </section>
+
+    <!-- every screen, at one height so each keeps its own shape; three copies so the loop never shows a seam -->
+    <div class="strip" aria-label="The four pages of the Ohman window">
+      <div class="strip-track">
+        <img src="home.png" width="920" height="1082" alt="The Home page: modes, live temperatures and fan speeds, power gain and a lighting preview.">
+        <img src="fans.png" width="920" height="1208" alt="The Fans page: Auto, Max, Curve and Manual, with a draggable seven-point curve.">
+        <img src="keyboard.png" width="1400" height="1038" alt="The Keyboard page: the board in its real zone colours, with hue and shade strips.">
+        <img src="settings.png" width="920" height="1280" alt="The Settings page: the OMEN key, power, display and app sections.">
+        <img src="home.png" width="920" height="1082" alt="" aria-hidden="true">
+        <img src="fans.png" width="920" height="1208" alt="" aria-hidden="true">
+        <img src="keyboard.png" width="1400" height="1038" alt="" aria-hidden="true">
+        <img src="settings.png" width="920" height="1280" alt="" aria-hidden="true">
+        <img src="home.png" width="920" height="1082" alt="" aria-hidden="true">
+        <img src="fans.png" width="920" height="1208" alt="" aria-hidden="true">
+        <img src="keyboard.png" width="1400" height="1038" alt="" aria-hidden="true">
+        <img src="settings.png" width="920" height="1280" alt="" aria-hidden="true">
+      </div>
+    </div>
 
     <!-- 6. how it works -->
     <section aria-labelledby="how">
@@ -298,9 +321,9 @@ footer p{margin:0 0 8px}
     <!-- 7b. laptops -->
     <section aria-labelledby="laptops">
       <h2 id="laptops">Laptops</h2>
-      <p><b>Verified</b> means somebody ran the checklist on that exact board and every control did what it says.
-      <b>Supported</b> means Ohman drives it with the mode bytes documented for its firmware generation and enables power,
-      GPU and lighting only where the firmware answers &mdash; the normal case, and it works.</p>
+      <p><b>Verified</b> means somebody ran the checklist on that exact laptop and every control did what it says.
+      <b>Supported</b> means Ohman understands the board and how to drive it, but no owner has confirmed it yet &mdash;
+      <a href="#verify">this could be you</a>.</p>
 
       <div class="tablewrap">
       <table class="models">
@@ -325,7 +348,7 @@ footer p{margin:0 0 8px}
       </div>
       <p class="note">Your board id is in Ohman under Settings, or from <code>wmic baseboard get product</code>. A board that is not in this table still runs: Ohman asks the firmware what it is and uses what it answers.</p>
 
-      <h3>Verify yours</h3>
+      <h3 id="verify">Verify yours</h3>
       <p>Five minutes, and it is the most useful thing you can contribute. Check that each mode changes the fans, that the
       fan modes do what they say, and that nothing is stuck after you exit. Then run <code>tools\support-info.cmd</code> and open a
       <a href="https://github.com/P4R1H/Ohman/issues/new?template=verify-laptop.yml">Verify my laptop</a> issue with the file it writes.
@@ -382,5 +405,6 @@ footer p{margin:0 0 8px}
 })();
 </script>
 
+<script src="demo.js" defer></script>
 </body>
 </html>

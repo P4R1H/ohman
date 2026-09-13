@@ -28,7 +28,7 @@ Ohman interacts with the BIOS through the same commands OGH uses. Use at your ow
 | **Power gain** | OGH's "Smart Performance Gain": +0 to +15 W on the CPU+GPU budget NVIDIA Dynamic Boost draws from. |
 | **GPU power** | Base · Boost · Max, or follow the mode. |
 | **Graphics** | Hybrid, Discrete (the MUX) or iGPU only, whichever the firmware offers, with the restart it needs. |
-| **Lighting** | The keyboard drawn as it actually lights. Select a key, a row, a zone or the whole board, then pick a hue and a shade; or Breathe, Cycle, Wave, or hand it to Windows Dynamic Lighting. Four-zone boards go through the firmware; per-key boards go through the keyboard's own HID lighting interface, because HP's firmware interface answers for them and lights nothing. |
+| **Lighting** | The keyboard drawn as it actually lights. Select a key, a row, a zone or the whole board, then pick a hue and a shade; or Breathe, Cycle, Wave, or hand it to Windows Dynamic Lighting. Four zones or per key, whichever your keyboard has. |
 | **Display** | Refresh rate, and the lowest rate on battery if you want it. |
 | **Live** | CPU and GPU temperature, CPU package watts, fan speeds, load, clocks, chassis sensor, battery. CPU temperature on the tray icon. |
 | **Tray** | Every control above without opening the window: modes, fan mode, refresh rate, GPU power, graphics, lighting, brightness and all the switches. |
@@ -150,10 +150,6 @@ Pushing a `v*` tag builds on a Windows runner and attaches the binaries to a rel
 
 - **Benchmarking tab**: run a short load, record clocks, watts, temperatures and throttle events, and let you
   compare two settings honestly instead of guessing whether +15 W did anything.
-- **Per-key lighting** is written against the keyboard's own HID lighting interface, which is a published
-  standard and needs no per-model table — the keyboard reports how many lamps it has and which key each one
-  sits under. It is unverified: nobody working on Ohman owns a per-key OMEN. If you do, run
-  `Ohman.exe --lamps` (read-only, changes nothing) and open an issue with what it prints.
 - **Fan curve import/export** so a verified model's curve can be shared as a file.
 
 Ideas and issues are welcome.
