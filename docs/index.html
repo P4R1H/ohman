@@ -73,6 +73,22 @@ img{display:block}
   transition:background-color var(--t);
 }
 .bar .dl:hover{background:var(--accent-hi)}
+/* GitHub Primer dark: its own surface and border, so the button reads as GitHub's and not as ours */
+.gh{
+  --gh-bg:#21262D; --gh-bg-hi:#30363D; --gh-edge:rgba(240,246,252,.14); --gh-ink:#F0F6FC;
+  background:var(--gh-bg);border:1px solid var(--gh-edge);color:var(--gh-ink);
+}
+.gh:hover{background:var(--gh-bg-hi);border-color:rgba(240,246,252,.24);color:var(--gh-ink)}
+.gh .n{
+  margin-left:2px;padding-left:9px;border-left:1px solid var(--gh-edge);
+  font-variant-numeric:tabular-nums;color:var(--gh-ink);
+}
+.bar .gh{
+  display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px;
+  border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;
+  transition:background-color var(--t),border-color var(--t);
+}
+.bar .gh svg{width:14px;height:14px;flex:none}
 .bar .dl svg{width:13px;height:13px;flex:none}
 
 /* ---------- 2. hero ---------- */
@@ -101,6 +117,7 @@ h1{
 .btn-primary:hover{background:var(--accent-hi)}
 .btn-secondary{border-color:var(--border);color:var(--text)}
 .btn-secondary:hover{border-color:var(--border-hi);background:var(--surface)}
+.btn.gh .n{font-size:14px}
 .btn svg{width:14px;height:14px;flex:none}
 .count{color:var(--muted);font-weight:500;font-variant-numeric:tabular-nums}
 .meta{margin:16px 0 0;color:var(--muted);font-size:13px}
@@ -228,7 +245,10 @@ footer p{margin:0 0 8px}
     <span class="brand"><span class="mark" aria-hidden="true"><svg viewBox="0 0 28 28" width="38" height="38"><defs><linearGradient id="mk" gradientUnits="userSpaceOnUse" x1="4" y1="4" x2="24" y2="24"><stop offset="0" stop-color="#8FBCFF"/><stop offset="1" stop-color="#2454A6"/></linearGradient></defs><rect x="7.4" y="7.4" width="13.2" height="13.2" rx="2.2" fill="url(#mk)" transform="rotate(45 14 14)"/></svg><span>😮</span></span>Ohman</span>
     <nav>
       <a class="out" href="#laptops">Laptops</a>
-      <a class="out" href="https://github.com/P4R1H/Ohman">GitHub</a>
+      <a class="gh" href="https://github.com/P4R1H/Ohman" aria-label="Star Ohman on GitHub">
+        <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>
+        Star <span class="n" id="starsNav" hidden></span>
+      </a>
       <a class="dl" href="https://github.com/P4R1H/Ohman/releases/latest/download/Ohman.exe">
         <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 1v8.2M4.6 6.2L8 9.6l3.4-3.4" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 11.5v2A1.5 1.5 0 0 0 4 15h8a1.5 1.5 0 0 0 1.5-1.5v-2" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/></svg>
         Download
@@ -246,9 +266,9 @@ footer p{margin:0 0 8px}
       <!-- 3. actions -->
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/P4R1H/Ohman/releases/latest/download/Ohman.exe">Download for Windows</a>
-        <a class="btn btn-secondary" href="https://github.com/P4R1H/Ohman">
-          <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 .8l2.2 4.5 5 .7-3.6 3.5.9 5L8 12.2 3.5 14.5l.9-5L.8 6l5-.7z"/></svg>
-          Star on GitHub <span class="count" id="stars" hidden></span>
+        <a class="btn gh" href="https://github.com/P4R1H/Ohman">
+          <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>
+          Star on GitHub <span class="n" id="stars" hidden></span>
         </a>
       </div>
       <p class="meta"><span id="ver">v2.0</span> &middot; <span id="size">1.2 MB</span> &middot; Windows 10/11</p>
@@ -404,11 +424,14 @@ footer p{margin:0 0 8px}
   })['catch'](function () {});
   get(api).then(function (d) {
     var n = d.stargazers_count;
-    if (typeof n === 'number' && n > 0) {
-      var el = document.getElementById('stars');
-      el.textContent = n.toLocaleString('en-US');
-      el.hidden = false;
-    }
+    if (typeof n !== 'number') { return; }
+    var text = n.toLocaleString('en-US');
+    ['stars', 'starsNav'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) { return; }
+      el.textContent = text;
+      el.hidden = false;          // a repository with no stars yet shows the button without a count
+    });
   })['catch'](function () {});
 })();
 </script>
