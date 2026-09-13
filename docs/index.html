@@ -432,7 +432,11 @@ footer p{margin:0 0 8px}
     var tag = (d.tag_name || '').trim();
     if (tag) set('ver', tag.charAt(0) === 'v' ? tag : 'v' + tag);
     var exe = (d.assets || []).filter(function (a) { return /\.exe$/i.test(a.name || ''); })[0];
-    if (exe && exe.size) set('size', Math.round(exe.size / 1024) + ' KB');
+    // Over a megabyte, say megabytes: "1237 KB" is accurate and reads like a mistake.
+    if (exe && exe.size) {
+      var kb = exe.size / 1024;
+      set('size', kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : Math.round(kb) + ' KB');
+    }
   })['catch'](function () {});
   get(api).then(function (d) {
     var n = d.stargazers_count;
