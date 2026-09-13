@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/hero.png" alt="Ohman: fan curves, keyboard lighting and the OMEN key, without the vendor adware"></p>
+<p align="center"><img src="docs/hero.png" alt="The Ohman window: modes, live temperatures and fan speeds, a fan curve and the keyboard lighting editor"></p>
 
 <p align="center">
 <a href="https://github.com/P4R1H/Ohman/releases/latest/download/Ohman.exe"><img alt="Download Ohman.exe" src="https://img.shields.io/badge/Download%20Ohman.exe-3F8CFF?style=for-the-badge&logo=windows&logoColor=white"></a>
@@ -24,10 +24,10 @@ Ohman interacts with the BIOS through the same commands OGH uses. Use at your ow
 | **Power gain** | OGH's "Smart Performance Gain": +0 to +15 W on the CPU+GPU budget NVIDIA Dynamic Boost draws from. |
 | **GPU power** | Base · Boost · Max, or follow the mode. |
 | **Graphics** | Hybrid, Discrete (the MUX) or iGPU only, whichever the firmware offers, with the restart it needs. |
-| **Lighting** | The keyboard drawn as it actually lights. Select a key, a row, a zone or the whole board, then pick a hue and a shade; or Breathe, Cycle, Wave, or hand it to Windows Dynamic Lighting. Four zones or per key, whichever your keyboard has. |
+| **Lighting** | The keyboard drawn as it actually lights. Select a key, a row, a zone or the whole board, then pick a hue and a shade; or Breathe, Cycle, Wave, or hand it to Windows Dynamic Lighting. One zone, four zones or per key, whichever your keyboard has. |
 | **Display** | Refresh rate, and the lowest rate on battery if you want it. |
 | **Live** | CPU and GPU temperature, CPU package watts, fan speeds, load, clocks, chassis sensor, battery. CPU temperature on the tray icon. |
-| **Tray** | Every control above without opening the window: modes, fan mode, refresh rate, GPU power, graphics, lighting, brightness and all the switches. |
+| **Tray** | Every control above without opening the window: modes, fan mode, power gain, refresh rate, GPU power, graphics, lighting, brightness and all the switches. |
 | **OMEN key** | Opens the panel, cycles modes, toggles max fan, or runs a command of your choice. OGH's key handler is stopped, reversibly. Shift+F11 cycles modes; Ctrl+Alt+E/B/P/M/O for the rest. |
 | **Safety** | A thermal guard forces max fan on a hot CPU, a hot chassis or stalled fans. It can be switched off, with a warning. Fans are never set below 1800 rpm. |
 | **Extras** | Starts with Windows without a UAC prompt, Eco on battery, Windows power-mode sync, an on-screen flash when a key changes something, an update check that never installs anything for you. |
@@ -37,9 +37,10 @@ Uninstalling is deleting it.
 
 ## Install
 
-Download `Ohman.exe` from [Releases](../../releases/latest) and run it. It asks for administrator rights once,
-because the firmware interface needs them, and adds itself to your startup apps so it is there after a reboot
-(one switch in Settings turns that off).
+Download `Ohman.exe` from [Releases](../../releases/latest) and run it. It asks for administrator rights,
+because the firmware interface needs them, and it will ask again every time you start it by hand. On the first
+run it also registers a scheduled task so it starts with Windows without the prompt. One switch in Settings
+removes that task.
 
 Or build it with the compiler that already ships inside Windows. No SDK, no NuGet, no toolchain:
 
@@ -77,11 +78,9 @@ mode (`0x52`), keyboard lighting (`0x20009`), plus read-only queries. The OMEN k
 (`hpqBEvnt`). Every byte and every measured firmware behaviour is written down in
 [docs/research.md](docs/research.md), including the things that are *not* safe to do and why.
 
-Two of those are worth knowing about:
-
 - The firmware forgets a user-defined fan state after about 120 seconds, so Ohman re-asserts it. When it
   expires the firmware first re-applies the *last written level* before its own curve resumes, so handing the
-  fans back is not as simple as it sounds. Ohman never writes a level below 1800 rpm.
+  fans back takes care. Ohman never writes a level below 1800 rpm.
 - The thermal guard is independent of everything else: it reads the fans and the chassis sensor every ten
   seconds and forces maximum fan if the machine is running away, regardless of what mode you picked.
 
@@ -93,7 +92,7 @@ A verified laptop is one entry in [`src/Platform.cs`](src/Platform.cs):
 new PlatformProfile {
     Name = "HP OMEN 16 (2023, 16-wf0xxx)",
     Boards = new[] { "8BAA" },
-    Notes  = "Verified 2026-09-20 against OGH 1101.x logs."
+    Notes  = "Verified 2026-09-10 against OGH 1101.x logs."
 }
 ```
 

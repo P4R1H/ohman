@@ -598,7 +598,7 @@ namespace Ohman {
             if (mode == FanMode.Max && S.Fan != FanMode.Max) maxSince = DateTime.MinValue;   // asking for Max again starts a fresh session
             NoteFanMode(mode);
             S.Fan = mode; S.Fan1 = P.Curve.Clamp(f1); S.Fan2 = P.Curve.Clamp(f2); S.Save();
-            if (GuardActive && mode != FanMode.Max) { Say("Thermal guard is holding max fan; " + mode + " resumes when cool"); Changed(); return; }
+            if (GuardActive && mode != FanMode.Max) { Say("Thermal guard is holding max fan; " + Choice.Fan[Choice.Of(mode)] + " resumes when cool"); Changed(); return; }
             lock (applySync) { ApplyFanCore(); lastFanWrite = DateTime.Now; }
             if (announce) Say(mode == FanMode.Max ? "Max fan" : mode == FanMode.Manual ? "Fans " + Rpm(S.Fan1) + " / " + Rpm(S.Fan2) : mode == FanMode.Custom ? "Fans on your curve" : "Fans auto");
             Changed();
@@ -749,7 +749,7 @@ namespace Ohman {
             S.SuppressOgh = on; S.Save();
             if (Hw.IsDemo) { Say("Simulated hardware: OMEN Gaming Hub is left alone"); Changed(); return; }
             if (ReadOnly) { Say("Unsupported board: OMEN Gaming Hub keeps the key"); Changed(); return; }
-            if (on) { KillOgh(); SetOghTasks(true); Say("Fn+F12 now belongs to " + Program.DisplayName); }
+            if (on) { KillOgh(); SetOghTasks(true); Say("The OMEN key now belongs to " + Program.DisplayName); }
             else { SetOghTasks(false); Say("OMEN Gaming Hub's launcher restored at next logon"); }
         }
 

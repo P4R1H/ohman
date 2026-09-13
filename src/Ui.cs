@@ -343,7 +343,11 @@ namespace Ohman {
                 E.SetKey(a);
                 keyCmdRow.Visibility = a == KeyAction.Run ? Visibility.Visible : Visibility.Collapsed;
             };
-            gpuSeg = new Seg(new[] { "Base", "Boost", "Max", "Auto" }, new[] { "Base TGP", "PPAB", "Custom TGP + PPAB", "Follow the mode: Eco → Base, Balanced → Boost, Performance → Max" }, null, Seg.Kind.Row);
+            gpuSeg = new Seg(new[] { "Base", "Boost", "Max", "Auto" },
+                new[] { "The GPU's standard power limit",
+                        "Lets the GPU borrow power from the CPU when it needs it",
+                        "A raised power limit as well as the borrowing",
+                        "Base in Eco, Boost in Balanced, Max in Performance" }, null, Seg.Kind.Row);
             F<Border>("GpuSegHost").Child = gpuSeg;
             gpuSeg.Picked += delegate(int i) {
                 if (i == 3) Bg(delegate { E.SetGpu(E.S.Gpu, true, false); });
@@ -407,7 +411,7 @@ namespace Ohman {
             var g = E.P.Guard;
             txtGuardSub.Text = "Forces max fan above " + g.CpuHot + "° CPU or " + g.ChassisHot + "° chassis, and when the fans read stalled";
             txtMaxCoolSub.Text = "Below " + g.MaxFanCoolBelow + "° for " + (g.MaxFanCoolSeconds / 60) + " minutes";
-            txtGuardNote.Text = "For your safety, " + Program.DisplayName + " forces max fan above " + g.CpuHot + "°";
+            txtGuardNote.Text = Program.DisplayName + " forces max fan above " + g.CpuHot + "° CPU";
         }
         /// <summary>Switching the safety net off is the one thing in here that asks twice, wherever it is switched off from.</summary>
         bool ConfirmGuardOff() {
@@ -551,7 +555,7 @@ namespace Ohman {
             }
             if (trayHz.Count >= 2) gfxMenu.DropDownItems.Add(new WF.ToolStripSeparator());
             if (E.P.HasGpuPower) {
-                string[] gpuNames = { "Base power", "Extra power", "Extra power with boost", "Follow the mode" };
+                string[] gpuNames = { "Base", "Boost", "Max", "Follow the mode" };
                 for (int i = 0; i < 4; i++) {
                     int idx = i;
                     var it = Item(gpuNames[i], delegate {
@@ -601,7 +605,7 @@ namespace Ohman {
             AddSwitch(setMenu, "Take over the OMEN key", delegate(bool on) { Bg(delegate { E.SetOghSuppression(on); }); }, delegate { return E.S.SuppressOgh; });
             setMenu.DropDownItems.Add(new WF.ToolStripSeparator());
             AddSwitch(setMenu, "Eco on battery", delegate(bool on) { E.SetEcoOnBattery(on); }, delegate { return E.S.EcoOnBattery; });
-            AddSwitch(setMenu, "Quieter fan policy for Eco", delegate(bool on) { Bg(delegate { E.SetEcoCool(on); }); }, delegate { return E.S.EcoCool; });
+            AddSwitch(setMenu, "Cooler fans in Eco", delegate(bool on) { Bg(delegate { E.SetEcoCool(on); }); }, delegate { return E.S.EcoCool; });
             AddSwitch(setMenu, "Sync Windows power mode", delegate(bool on) { E.SetSyncWinPower(on); }, delegate { return E.S.SyncWinPower; });
             AddSwitch(setMenu, "Thermal guard", delegate(bool on) { if (on || ConfirmGuardOff()) Bg(delegate { E.SetGuard(on); }); }, delegate { return E.S.Guard; });
             if (trayHz.Count >= 2) AddSwitch(setMenu, "Lowest refresh rate on battery", delegate(bool on) { E.SetLowHzOnBattery(on); }, delegate { return E.S.LowHzOnBattery; });
@@ -996,7 +1000,7 @@ namespace Ohman {
             // Reaching here means both ways in failed: HP's firmware answers and lights nothing, and this keyboard
             // offers no HID lighting interface either. Say which, so it does not read as "per-key is unsupported".
             txtKbdInfo.Text = inert && m != 2
-                ? "This is a per-key keyboard and neither way in works on it. HP's firmware interface answers but lights nothing, and this keyboard does not offer the HID lighting interface Ohman drives per-key boards through. Windows Dynamic Lighting can still light it. Run Ohman.exe --lamps and open an issue with what it prints."
+                ? "Ohman cannot light this keyboard. HP's firmware interface answers for per-key boards but does nothing, and this keyboard offers no lighting interface of its own. Windows Dynamic Lighting can still light it. Run Ohman.exe --lamps and open an issue with what it prints."
                 : m == 0 ? "The backlight is off. Pick a mode to turn it back on, or press the keyboard backlight key."
                 : (WinLighting.Present || E.Hw.IsDemo ? "Windows Dynamic Lighting has the keyboard. Its colours and effects come from Windows settings."
                                                       : "No Dynamic Lighting device for this keyboard was found; Windows cannot drive it.");
@@ -1252,7 +1256,7 @@ namespace Ohman {
                 if (err) txtErr.Text = !E.BiosOk ? "BIOS interface unavailable: " + E.LastError
                     : "Unsupported laptop (board " + E.Board + "). Read-only: nothing is written to the firmware. Run tools\\support-info.cmd and open a GitHub issue to add it.";
                 infoBanner.Visibility = E.Generic && !E.Hw.IsDemo ? Visibility.Visible : Visibility.Collapsed;
-                if (E.Generic) txtInfo.Text = "Unverified model (board " + E.Board + "): using the generic OMEN commands for its firmware generation. If it behaves, say so in a GitHub issue so it can be marked verified.";
+                if (E.Generic) txtInfo.Text = "Board " + E.Board + " is supported but nobody has verified it yet. If everything works, say so in a GitHub issue and it will be marked verified.";
                 RefreshTray();
                 string tip = Program.DisplayName + " · " + E.ModeName + " · " + E.CurrentTdp + " W" + (S.Fan == FanMode.Max ? " · max fan" : "");
                 tray.Text = tip.Length > 63 ? tip.Substring(0, 63) : tip;

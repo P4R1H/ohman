@@ -8,7 +8,7 @@ the only model-specific thing in the app, and it lives in one table: [`src/Platf
 
 | | What it means |
 |---|---|
-| **Verified** | Somebody ran the checklist below on that exact board and every control did what it says. The profile is pinned, not guessed. |
+| **Verified** | Somebody ran the checklist below on that exact board and every control did what it says. The settings for it are fixed rather than worked out at run time. |
 | **Supported** | Ohman asks the firmware what generation it is and drives it with the mode bytes documented for that generation, with power, GPU and lighting controls enabled only where the firmware answers. This is the normal case and it works. |
 
 There is no "unsupported" list. A board nobody has ever seen still runs: the app reads the firmware's own
@@ -19,14 +19,14 @@ read-only and says so in the window rather than writing bytes it does not unders
 
 | Model | Board | Verified on | Notes |
 |---|---|---|---|
-| OMEN Transcend 14 (2024, 14-fb0xxx) | `8C58` | 2026-09-12 | Core Ultra 9 185H + RTX 4070. Modes, fans, power gain, GPU power, graphics switching and four-zone lighting all confirmed against OMEN Gaming Hub 1101.2608. |
+| OMEN Transcend 14 (2024, 14-fb0xxx) | `8C58` | 2026-09-12 | Core Ultra 9 185H + RTX 4070. Modes, fans, power gain, GPU power and four-zone lighting all confirmed against OMEN Gaming Hub 1101.2608. Graphics switching writes correctly but the restart it needs was never taken, so it is unconfirmed. |
 
-**Yours could be next.** See [Verifying your laptop](#verifying-your-laptop).
+See [Verifying your laptop](#verifying-your-laptop).
 
 ## Supported
 
 Board ids come from the Linux `hp-wmi` driver's tables plus HP's own service documentation. Grouping is by
-firmware generation, which is what actually decides the bytes; marketing names are approximate because HP
+firmware generation, which is what decides the bytes; marketing names are approximate because HP
 reuses a board across several SKUs.
 
 ### OMEN Transcend
@@ -52,7 +52,6 @@ reuses a board across several SKUs.
 | OMEN 17 (2019, 17-cb0) | `8603` |
 | OMEN 15 (2020) | `8A15` |
 | OMEN 15 / 17 (2021) | `8BAD` |
-| OMEN 17 (2025) | `8E10` |
 | OMEN 15 / 17, 2018–2021 generations | `84DA`, `84DB`, `84DC`, `8572`, `8573`, `8575`, `8601`, `8602`, `8604`, `8605`, `8606`, `8607`, `860A`, `8746`, `8747`, `8748`, `8749`, `874A`, `8786`, `8787`, `8788`, `878A`, `878B`, `878C`, `87B5`, `886B`, `886C`, `88C8`, `88CB`, `88D1`, `88D2`, `88F4`, `88F5`, `88F6`, `88F7`, `88FD`, `88FE`, `88FF`, `8900`, `8901`, `8902`, `8912`, `8917`, `8918`, `8949`, `894A`, `89EB` |
 
 ### Victus
@@ -63,8 +62,10 @@ reuses a board across several SKUs.
 | Victus 16 S / R (2023–2024) | `8A3D`, `8B2F`, `8BBE`, `8BD4`, `8BD5`, `8C99`, `8C9C` |
 | Victus 15 | `88D9`, `88DA`, `8A3E`, `8C2F`, `8C30`, `8C3F`, `8D07`, `8DCD`, `8E5E` |
 
-Victus firmware uses different mode bytes from OMEN (`0x00` default, `0x01` performance, `0x03` quiet on the
-2021–2023 boards; no quiet mode on the S/R boards). Ohman picks the right set from the board id.
+Victus firmware uses different mode bytes from OMEN: `0x00` default, `0x01` performance, `0x03` quiet on the
+2021–2023 boards, and no quiet mode on the S/R boards. Ohman uses those bytes for the boards named in the
+Linux `hp-wmi` driver's Victus tables. Any other board, Victus or not, is driven from the generation the
+firmware reports, which is the same path every unlisted OMEN takes.
 
 ## Finding your board id
 
@@ -76,7 +77,7 @@ wmic baseboard get product
 
 ## Verifying your laptop
 
-This takes about five minutes and it is the single most useful thing you can contribute.
+This takes about five minutes and it is the most useful thing you can contribute.
 
 1. **Modes.** Switch Eco → Balanced → Performance. The fans should audibly change within a few seconds, and
    the chassis reading on the Home page should drift. If nothing changes on any mode, say so.
@@ -114,8 +115,7 @@ Ohman.exe --lamps
 ```
 
 and open an issue with what it prints. It reports how many lamps your keyboard has, where each one is, and
-which key each one lights. That is everything needed to confirm the feature, and it is the exact data every
-other project working on this has asked for and never received.
+which key each one lights. That is everything needed to confirm the feature works.
 
 ## If a control is wrong on your model
 
@@ -138,7 +138,7 @@ A laptop is one entry in `Platforms.Known` in [`src/Platform.cs`](../src/Platfor
 new PlatformProfile {
     Name = "HP OMEN 16 (2023, 16-wf0xxx)",
     Boards = new[] { "8BAA" },
-    Notes  = "Verified 2026-09-20 against OGH 1101.x logs."
+    Notes  = "Verified 2026-09-10 against OGH 1101.x logs."
 }
 ```
 
