@@ -59,14 +59,14 @@ accordingly. Controls your firmware does not offer are hidden rather than broken
 OMEN 15, 16 and 17 &middot; OMEN MAX 16 &middot; OMEN Transcend 14 and 16 &middot; Victus 15 and 16, including
 the S and R.
 
-One of them is **verified**: the HP OMEN Transcend 14 (2024, board 8C58), where an owner ran the checklist and
-every control did what it says. Every model and its board ids are listed in **[docs/laptops.md](docs/laptops.md)**.
+Note: so far Ohman has been verified end to end on one machine, an HP OMEN Transcend 14 (2024, board 8C58).
+**[Help get your laptop verified](docs/laptops.md#verifying-your-laptop)**: it takes five minutes. Every model
+and its board ids are listed in [docs/laptops.md](docs/laptops.md).
 
 > ### Verify yours
-> If your machine is not marked verified, this is the most useful thing you can contribute, and it takes five
-> minutes. Run through [the checklist](docs/laptops.md#verifying-your-laptop), run `tools\support-info.cmd`, and
-> open a **Verify my laptop** issue with the file it writes. Your model moves to verified and everybody with that
-> board gets a profile that has been tested on a real machine.
+> Run through [the checklist](docs/laptops.md#verifying-your-laptop), run `tools\support-info.cmd`, and open a
+> **Verify my laptop** issue with the file it writes. Your model moves to verified and everybody with that board
+> gets a profile that has been tested on a real machine.
 
 If a control is wrong on your model, open a **New laptop support** issue with the same file and, if you can get
 it, OGH's own log from a session where you clicked every mode:
