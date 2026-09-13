@@ -27,6 +27,10 @@ namespace Ohman {
         readonly object sync = new object();
         SensorSnapshot last = new SensorSnapshot();
         Thread worker; volatile bool stop; volatile int intervalMs = 2000;
+        // Sleeping in 100 ms steps to stay responsive to Stop() costs ten timer interrupts a second for the life of
+        // the process, which is enough to keep the package out of its deeper idle states. One wait for the whole
+        // interval costs one, and the event still ends it immediately.
+        readonly ManualResetEvent wake = new ManualResetEvent(false);
         public event Action<SensorSnapshot> Updated;
 
         public Sensors() { }
@@ -56,7 +60,12 @@ namespace Ohman {
             if (nvsmi == null) Log.Write("nvidia-smi not found; GPU stats disabled");
         }
 
-        public void SetInterval(int ms) { intervalMs = Math.Max(500, ms); }
+        public void SetInterval(int ms) {
+            int now = Math.Max(500, ms);
+            if (now == intervalMs) return;
+            intervalMs = now;
+            if (now < 3000) wake.Set();        // going faster: take the next reading now rather than after the old wait
+        }
 
         public void Start() {
             if (worker != null) return;
@@ -66,13 +75,17 @@ namespace Ohman {
 
         void Loop() {
             InitCounters();
-            int tick = 0;
+            // The first read of a delta counter has no window to divide by, so it is thrown away and the panel shows
+            // "--" until the second one. Run the first few passes fast whatever rate is configured, so a window that
+            // opens straight into the tray-rate or battery-rate schedule still has real numbers in it.
+            int warm = 3;
             while (!stop) {
+                wake.Reset();
                 var s = new SensorSnapshot();
                 try { if (thermal != null) { double k = thermal.NextValue(); if (k > 200) s.CpuTemp = Math.Round(k - 273.15, 1); } } catch { }
                 try { if (cpuUtil != null) s.CpuLoad = Math.Min(100, cpuUtil.NextValue()); } catch { }
                 try { if (cpuFreq != null) s.CpuMhz = cpuFreq.NextValue(); } catch { }
-                try { if (cpuPower != null) { double mw = cpuPower.NextValue(); if (mw > 0 && mw < 400000) s.CpuWatts = mw / 1000.0; } } catch { }
+                try { if (cpuPower != null) s.CpuWatts = Watts(cpuPower.NextValue() / 1000.0); } catch { }
                 try {
                     var ps = System.Windows.Forms.SystemInformation.PowerStatus;
                     s.OnBattery = ps.PowerLineStatus == System.Windows.Forms.PowerLineStatus.Offline;
@@ -86,7 +99,8 @@ namespace Ohman {
                 if (s.GpuRead != DateTime.MinValue && (DateTime.Now - s.GpuRead).TotalMilliseconds > GpuStaleMs) { s.GpuTemp = double.NaN; s.GpuLoad = double.NaN; s.GpuWatts = double.NaN; s.GpuMhz = double.NaN; }
                 lock (sync) last = s;
                 var h = Updated; if (h != null) { try { h(s); } catch { } }
-                int waited = 0; while (!stop && waited < intervalMs) { Thread.Sleep(100); waited += 100; }
+                wake.WaitOne(warm > 0 ? Math.Min(1000, intervalMs) : intervalMs);
+                if (warm > 0) warm--;
             }
         }
 
@@ -100,6 +114,18 @@ namespace Ohman {
         void NoteGpuActivity(SensorSnapshot s) {
             bool busy = (!double.IsNaN(s.GpuLoad) && s.GpuLoad > 1) || (!double.IsNaN(s.GpuWatts) && s.GpuWatts >= 12);
             if (busy) gpuQuiet = 0; else if (gpuQuiet < 100) gpuQuiet++;
+        }
+        // The Energy Meter counter is an energy delta divided by the sampling window, so a short or missed window
+        // reports a number the package cannot physically draw. Drop those, then average a few readings: a watt figure
+        // that jumps 40 W between two glances reads as broken even when each sample is honest.
+        double wattsAvg = double.NaN;
+        static readonly double WattsCeiling = 200;
+        double Watts(double w) {
+            if (w <= 0 || w > WattsCeiling) return wattsAvg;                       // nothing believable this time; keep what we had
+            if (double.IsNaN(wattsAvg)) { wattsAvg = w; return w; }
+            if (w > wattsAvg * 2.5 && w > 60) return wattsAvg;                     // a single spike, not the CPU waking up
+            wattsAvg += (w - wattsAvg) * 0.45;
+            return wattsAvg;
         }
         void ReadNvidia(SensorSnapshot s) {
             try {
@@ -123,7 +149,7 @@ namespace Ohman {
         }
 
         public void Dispose() {
-            stop = true;
+            stop = true; wake.Set();
             try { if (thermal != null) thermal.Dispose(); if (cpuUtil != null) cpuUtil.Dispose(); if (cpuFreq != null) cpuFreq.Dispose(); if (cpuPower != null) cpuPower.Dispose(); } catch { }
         }
     }

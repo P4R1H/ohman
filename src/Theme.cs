@@ -33,6 +33,10 @@ namespace Ohman {
         public static readonly Color EcoColor = Col("#2FBF8F"), BalColor = Col("#3F8CFF"), PerfColor = Col("#E2572C");
         public static readonly Color Warn = Col("#F3821D"), Danger = Col("#FF5C5C"), Ok = Col("#4AC06C");
         public static Color ModeColor(int i) { return i == 0 ? EcoColor : i == 2 ? PerfColor : BalColor; }
+        /// <summary>c moved t of the way towards towards, in straight sRGB: enough for a short accent ramp.</summary>
+        public static Color Mix(Color c, Color towards, double t) {
+            return Color.FromRgb((byte)(c.R + (towards.R - c.R) * t), (byte)(c.G + (towards.G - c.G) * t), (byte)(c.B + (towards.B - c.B) * t));
+        }
         public static FontFamily UiFont = new FontFamily("Segoe UI"), MonoFont = new FontFamily("Consolas");
         public static readonly Brush Card = Brush("#161311"), Sunken = Brush("#0F0D0B"), Pill = Brush("#201C19"), Line = Brush("#2C2825"),
             TextB = Brush("#EDEAE8"), TextHi = Brush("#F4F1EF"), SegText = Brush("#A8A3A0"), Hex = Brush("#A29D99"),
@@ -154,13 +158,32 @@ namespace Ohman {
     /// <summary>An animatable colour. A brush bound to it cannot be frozen, so it survives being a resource (WPF freezes
     /// plain brushes in an owned dictionary and in Style setters) and every DynamicResource user follows it.</summary>
     public sealed class ColorSource : Animatable {
-        public static readonly DependencyProperty ColorProperty = DependencyProperty.Register("Color", typeof(Color), typeof(ColorSource), new PropertyMetadata(Colors.Transparent));
+        public static readonly DependencyProperty ColorProperty = DependencyProperty.Register("Color", typeof(Color), typeof(ColorSource), new PropertyMetadata(Colors.Transparent, OnColor));
+        public static readonly DependencyProperty LightProperty = DependencyProperty.Register("Light", typeof(Color), typeof(ColorSource), new PropertyMetadata(Colors.Transparent));
+        public static readonly DependencyProperty DarkProperty = DependencyProperty.Register("Dark", typeof(Color), typeof(ColorSource), new PropertyMetadata(Colors.Transparent));
         public Color Color { get { return (Color)GetValue(ColorProperty); } set { SetValue(ColorProperty, value); } }
         protected override Freezable CreateInstanceCore() { return new ColorSource(); }
+        static void OnColor(DependencyObject d, DependencyPropertyChangedEventArgs e) {
+            var s = (ColorSource)d; var c = (Color)e.NewValue;
+            s.SetValue(LightProperty, Ui.Mix(c, Colors.White, 0.26));
+            s.SetValue(DarkProperty, Ui.Mix(c, Colors.Black, 0.30));
+        }
         public SolidColorBrush MakeBrush() {
             var b = new SolidColorBrush();
-            System.Windows.Data.BindingOperations.SetBinding(b, SolidColorBrush.ColorProperty, new System.Windows.Data.Binding("Color") { Source = this });
+            Bind(b, SolidColorBrush.ColorProperty, "Color");
             return b;
+        }
+        /// <summary>The accent as a diagonal light-to-dark fill. The rail mark is drawn with this so it reads as a
+        /// solid object rather than a flat chip; everything else in the window uses the plain accent brush.</summary>
+        public LinearGradientBrush MakeGradient() {
+            var g = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1) };
+            var top = new GradientStop(Colors.Transparent, 0); var bottom = new GradientStop(Colors.Transparent, 1);
+            g.GradientStops.Add(top); g.GradientStops.Add(bottom);
+            Bind(top, GradientStop.ColorProperty, "Light"); Bind(bottom, GradientStop.ColorProperty, "Dark");
+            return g;
+        }
+        void Bind(DependencyObject o, DependencyProperty p, string path) {
+            System.Windows.Data.BindingOperations.SetBinding(o, p, new System.Windows.Data.Binding(path) { Source = this });
         }
     }
 

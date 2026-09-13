@@ -533,43 +533,46 @@
         <!-- the editor: colour for the per-zone modes, speed + brightness for the firmware effects -->
         <Border x:Name="EditorRow" Margin="0,22,0,0" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,18,0,0">
           <Grid>
-            <Grid x:Name="ColorEditor">
-              <Grid.ColumnDefinitions><ColumnDefinition Width="176"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-              <StackPanel>
-                <Grid Height="26">
-                  <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                  <TextBlock Text="&#xE790;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" Foreground="{StaticResource Status}" VerticalAlignment="Center" Margin="0,0,9,0" ToolTip="Colour"/>
-                  <Border Grid.Column="1" Height="26" Background="{StaticResource Well}" BorderBrush="{StaticResource Edge}" BorderThickness="1" CornerRadius="7" ClipToBounds="True">
-                    <Grid>
-                      <Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                      <Border x:Name="HexChip" Background="#3F8CFF"/>
-                      <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="9,0,0,0">
-                        <TextBlock Text="#" FontFamily="{DynamicResource MonoFont}" FontSize="13.5" Foreground="#7E7976" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                        <TextBox x:Name="TxtHex" Style="{StaticResource Bare}" MaxLength="6" Width="70" VerticalAlignment="Center"/>
-                      </StackPanel>
-                    </Grid>
-                  </Border>
-                </Grid>
-                <Grid Height="26" Margin="0,6,0,0">
-                  <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                  <TextBlock Text="&#xE706;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" Foreground="{StaticResource Status}" VerticalAlignment="Center" Margin="0,0,9,0" ToolTip="Brightness"/>
-                  <Slider x:Name="SlLevel" Grid.Column="1" Style="{StaticResource Sl}" Minimum="5" Maximum="100" IsSnapToTickEnabled="True" TickFrequency="5" VerticalAlignment="Center"/>
-                  <TextBlock x:Name="TxtLevel" Grid.Column="2" Style="{StaticResource Mono}" FontSize="11.5" Foreground="{StaticResource Hex}" Width="34" TextAlignment="Right"/>
-                </Grid>
-                <Grid x:Name="SpeedInline" Height="26" Margin="0,6,0,0" Visibility="Collapsed">
-                  <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                  <TextBlock Text="&#xE916;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" Foreground="{StaticResource Status}" VerticalAlignment="Center" Margin="0,0,9,0" ToolTip="Speed"/>
-                  <Slider x:Name="SlSpeed2" Grid.Column="1" Style="{StaticResource Sl}" Minimum="1" Maximum="5" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center"/>
-                  <TextBlock x:Name="TxtSpeed2" Grid.Column="2" Style="{StaticResource Mono}" FontSize="11.5" Foreground="{StaticResource Hex}" Width="34" TextAlignment="Right"/>
-                </Grid>
-              </StackPanel>
-              <Border Grid.Column="2" CornerRadius="7" ClipToBounds="True" VerticalAlignment="Top">
+            <StackPanel x:Name="ColorEditor">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="176"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                 <StackPanel>
-                  <Border x:Name="HueHost" Height="26"/>
-                  <Border x:Name="ShadeHost" Height="26"/>
+                  <Grid Height="34">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="&#xE790;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" Foreground="{StaticResource Status}" VerticalAlignment="Center" Margin="0,0,9,0" ToolTip="Colour"/>
+                    <Border Grid.Column="1" Height="34" Background="{StaticResource Well}" BorderBrush="{StaticResource Edge}" BorderThickness="1" ClipToBounds="True">
+                      <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <Border x:Name="HexChip" Background="#3F8CFF"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0">
+                          <TextBlock Text="#" FontFamily="{DynamicResource MonoFont}" FontSize="13.5" Foreground="#7E7976" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                          <TextBox x:Name="TxtHex" Style="{StaticResource Bare}" MaxLength="6" Width="70" VerticalAlignment="Center"/>
+                        </StackPanel>
+                      </Grid>
+                    </Border>
+                  </Grid>
+                  <Grid Height="26" Margin="0,6,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="&#xE706;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" Foreground="{StaticResource Status}" VerticalAlignment="Center" Margin="0,0,9,0" ToolTip="Brightness"/>
+                    <Slider x:Name="SlLevel" Grid.Column="1" Style="{StaticResource Sl}" Minimum="5" Maximum="100" IsSnapToTickEnabled="True" TickFrequency="5" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="TxtLevel" Grid.Column="2" Style="{StaticResource Mono}" FontSize="11.5" Foreground="{StaticResource Hex}" Width="34" TextAlignment="Right"/>
+                  </Grid>
                 </StackPanel>
-              </Border>
-            </Grid>
+                <Border Grid.Column="2" ClipToBounds="True" VerticalAlignment="Top">
+                  <StackPanel>
+                    <Border x:Name="HueHost" Height="33"/>
+                    <Border x:Name="ShadeHost" Height="33"/>
+                  </StackPanel>
+                </Border>
+              </Grid>
+              <!-- breathe is the one mode with both a colour and a speed; its speed is the same row cycle and wave use -->
+              <Grid x:Name="SpeedInline" Height="26" Margin="0,16,0,0" Visibility="Collapsed">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <TextBlock Text="Speed" Style="{StaticResource Row}" FontSize="13"/>
+                <Slider x:Name="SlSpeed2" Grid.Column="1" Style="{StaticResource Sl}" Minimum="1" Maximum="5" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center" Margin="12,0,12,0"/>
+                <TextBlock x:Name="TxtSpeed2" Grid.Column="2" Style="{StaticResource Mono}" FontSize="12.5" Foreground="{StaticResource Hex}" Width="32" TextAlignment="Right"/>
+              </Grid>
+            </StackPanel>
 
             <Grid x:Name="EffectEditor" Visibility="Collapsed">
               <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="32"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -670,16 +673,6 @@
               <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
-                  <TextBlock Text="Quieter fan policy for Eco" Style="{StaticResource Row}"/>
-                  <TextBlock Text="BIOS cool policy (0x50) instead of the vendor default" Style="{StaticResource RowSub}"/>
-                </StackPanel>
-                <ToggleButton x:Name="TgEcoCool" Grid.Column="1" Style="{StaticResource Switch}"/>
-              </Grid>
-            </Border>
-            <Border BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
-              <Grid>
-                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
                   <TextBlock Text="Sync Windows power mode" Style="{StaticResource Row}"/>
                   <TextBlock Text="Efficiency · Balanced · Best performance" Style="{StaticResource RowSub}"/>
                 </StackPanel>
@@ -752,22 +745,13 @@
             </Border>
             <Border BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
               <Grid>
-                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
-                  <TextBlock Text="Update check" Style="{StaticResource Row}"/>
+                  <TextBlock Text="Check for updates" Style="{StaticResource Row}"/>
                   <TextBlock x:Name="TxtUpdate" Style="{StaticResource RowSub}" FontFamily="{DynamicResource MonoFont}" FontSize="11"/>
                 </StackPanel>
-                <TextBlock x:Name="BtnUpdate" Grid.Column="1" Style="{StaticResource Link}" Text="Check now"/>
-              </Grid>
-            </Border>
-            <Border BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
-              <Grid>
-                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
-                  <TextBlock Text="Check on launch" Style="{StaticResource Row}"/>
-                  <TextBlock Text="Asks GitHub for the latest release once a day. Nothing is installed for you." Style="{StaticResource RowSub}"/>
-                </StackPanel>
-                <ToggleButton x:Name="TgUpdateAuto" Grid.Column="1" Style="{StaticResource Switch}"/>
+                <TextBlock x:Name="BtnUpdate" Grid.Column="1" Style="{StaticResource Link}" Text="Check now" Margin="0,0,18,0"/>
+                <ToggleButton x:Name="TgUpdateAuto" Grid.Column="2" Style="{StaticResource Switch}" ToolTip="Check once a day when Ohman starts"/>
               </Grid>
             </Border>
             <TextBlock x:Name="TxtDiag" Style="{StaticResource Mono}" FontSize="10.5" Margin="0,14,0,0" Visibility="Collapsed" TextWrapping="Wrap"/>

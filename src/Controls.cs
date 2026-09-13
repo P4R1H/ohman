@@ -131,7 +131,7 @@ namespace Ohman {
     /// <summary>A row of text links; the accent underline slides to the selected one.</summary>
     sealed class LinkSeg : Grid {
         readonly StackPanel sp = new StackPanel { Orientation = Orientation.Horizontal }; readonly Border line; readonly TranslateTransform lineT = new TranslateTransform();
-        readonly List<TextBlock> labels = new List<TextBlock>(); int sel = -1;
+        readonly List<TextBlock> labels = new List<TextBlock>(); readonly List<bool> off = new List<bool>(); int sel = -1;
         public event Action<int> Picked;
         public LinkSeg(string[] names, double gap, double size, double under, string[] tips) {
             line = new Border { Height = 1, Background = Ui.Accent, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom, Width = 20, Opacity = 0, RenderTransform = lineT };
@@ -141,15 +141,22 @@ namespace Ohman {
                 var tb = new TextBlock { Text = names[i], FontFamily = Ui.UiFont, FontSize = size, Foreground = Ui.Desc, Cursor = Cursors.Hand,
                     Padding = new Thickness(0, 0, 0, under), Margin = new Thickness(0, 0, i < names.Length - 1 ? gap : 0, 0), VerticalAlignment = VerticalAlignment.Center };
                 if (tips != null && i < tips.Length && tips[i] != null) tb.ToolTip = tips[i];
-                tb.MouseLeftButtonUp += delegate { Select(idx, true); var h = Picked; if (h != null) h(idx); };
-                tb.MouseEnter += delegate { if (idx != sel) tb.Foreground = Ui.TextB; };
+                tb.MouseLeftButtonUp += delegate { if (off[idx]) return; Select(idx, true); var h = Picked; if (h != null) h(idx); };
+                tb.MouseEnter += delegate { if (idx != sel && !off[idx]) tb.Foreground = Ui.TextB; };
                 tb.MouseLeave += delegate { if (idx != sel) tb.Foreground = Ui.Desc; };
                 tb.SizeChanged += delegate { Place(false); };
-                labels.Add(tb); sp.Children.Add(tb);
+                labels.Add(tb); off.Add(false); sp.Children.Add(tb);
             }
             SizeChanged += delegate { Place(false); };
         }
         public void SetText(int i, string t) { if (labels[i].Text != t) labels[i].Text = t; }
+        /// <summary>Grey out a choice this machine cannot do, with the reason on the tooltip.</summary>
+        public void SetEnabled(int i, bool on, string why) {
+            off[i] = !on;
+            labels[i].Opacity = on ? 1 : 0.35;
+            labels[i].Cursor = on ? Cursors.Hand : Cursors.Arrow;
+            labels[i].ToolTip = on ? null : why;
+        }
         public void Select(int i, bool animate) {
             sel = i;
             for (int j = 0; j < labels.Count; j++) labels[j].Foreground = j == i ? Ui.TextHi : (labels[j].IsMouseOver ? Ui.TextB : Ui.Desc);

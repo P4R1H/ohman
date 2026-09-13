@@ -161,19 +161,9 @@ ol li:last-child{margin-bottom:0}
 .models td{padding:10px 12px 10px 0;border-bottom:1px solid var(--border);vertical-align:top}
 .models td:last-child,.models th:last-child{padding-right:0;white-space:nowrap}
 .models td.ids{font-family:var(--mono);font-size:12px;color:var(--dim);line-height:1.5}
-.tier{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--border);color:var(--muted)}
-.tier::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
-.tier.verified{color:var(--ok);border-color:rgba(74,192,108,.4);background:rgba(74,192,108,.1)}
-.tier.supported{color:var(--accent);border-color:rgba(63,140,255,.4);background:rgba(63,140,255,.1)}
+.models td.st{white-space:nowrap;color:var(--muted)}
+.models td.st.v{color:var(--ok)}
 .note{margin-top:16px;color:var(--muted);font-size:13px}
-
-/* the verify callout */
-.callout{
-  margin-top:22px;padding:16px 18px;
-  background:var(--surface);border:1px solid var(--border);border-left:2px solid var(--accent);
-  border-radius:var(--r);color:var(--muted);font-size:14px;
-}
-.callout b{color:var(--text)}
 
 /* ---------- 8. footer ---------- */
 footer{
@@ -226,7 +216,7 @@ footer p{margin:0 0 8px}
     <!-- 2. hero -->
     <div class="hero">
       <h1>OMEN Gaming Hub's controls. Without OMEN Gaming Hub.</h1>
-      <p class="lede">Modes, fan curves, power, graphics switching and keyboard lighting in one 400 KB executable. No services, no drivers, no account, no ads. Same firmware interface as OMEN Gaming Hub, same bytes, nothing else.</p>
+      <p class="lede">Modes, fan curves, power, graphics switching and keyboard lighting in one 400&nbsp;KB executable. Same firmware interface as OMEN Gaming Hub, same bytes. No services, no drivers, no account, no ads.</p>
 
       <!-- 3. actions -->
       <div class="cta">
@@ -236,7 +226,7 @@ footer p{margin:0 0 8px}
           Star on GitHub <span class="count" id="stars" hidden></span>
         </a>
       </div>
-      <p class="meta"><span id="ver">v2.0</span> &middot; <span id="size">400 KB</span> &middot; Windows 10/11 &middot; nothing to install</p>
+      <p class="meta"><span id="ver">v2.0</span> &middot; <span id="size">400 KB</span> &middot; Windows 10/11</p>
     </div>
 
     <!-- 4. the app -->
@@ -302,44 +292,44 @@ footer p{margin:0 0 8px}
         <li><b>0x52</b> graphics mode</li>
         <li><b>0x20009</b> lighting</li>
       </ul>
-      <p class="note">Nothing is installed. One executable, a settings file and a log beside it. Uninstalling is deleting it.</p>
+      <p class="note">One executable, with a settings file and a log beside it. To remove it, delete it.</p>
     </section>
 
     <!-- 7b. laptops -->
     <section aria-labelledby="laptops">
       <h2 id="laptops">Laptops</h2>
-      <p>Two states. <b>Verified</b> means somebody ran the checklist on that exact machine and every control did what it says. <b>Supported</b> means Ohman drives it with the mode bytes documented for its firmware generation, and enables power, GPU and lighting controls only where the firmware answers. Supported is the normal case and it works; verified is supported plus a human who confirmed it.</p>
+      <p><b>Verified</b> means somebody ran the checklist on that exact board and every control did what it says.
+      <b>Supported</b> means Ohman drives it with the mode bytes documented for its firmware generation and enables power,
+      GPU and lighting only where the firmware answers &mdash; the normal case, and it works.</p>
 
       <div class="tablewrap">
       <table class="models">
         <thead><tr><th>Model</th><th>Board ids</th><th>Status</th></tr></thead>
         <tbody>
-        <tr><td>OMEN Transcend 14 (2024, 14-fb0xxx)</td><td class="ids">8C58</td><td><span class="tier verified">Verified</span></td></tr>
-        <tr><td>OMEN Transcend 14 (2024, other SKU)</td><td class="ids">8E41</td><td><span class="tier supported">Supported</span></td></tr>
-        <tr><td>OMEN 15 (2019, 15-dc / 15-dh)</td><td class="ids">8574, 8600</td><td><span class="tier supported">Supported</span></td></tr>
-        <tr><td>OMEN 17 (2019, 17-cb0)</td><td class="ids">8603</td><td><span class="tier supported">Supported</span></td></tr>
-        <tr><td>OMEN 15 (2020)</td><td class="ids">8A15</td><td><span class="tier supported">Supported</span></td></tr>
-        <tr><td>OMEN 15 / 17 (2021)</td><td class="ids">8BAD</td><td><span class="tier supported">Supported</span></td></tr>
-        <tr><td>OMEN 16 / 17 (2021&ndash;2022)</td><td class="ids">8A42, 8A43</td><td><span class="tier supported">Supported</span></td></tr>
-        <tr><td>Victus 16 (2021&ndash;2023)</td><td class="ids">88F8, 8A25</td><td><span class="tier supported">Supported</span></td></tr>
-        <tr><td>Victus 16 S / R (2023&ndash;2024)</td><td class="ids">8A3D, 8B2F, 8BBE, 8BD4, 8BD5, 8C99, 8C9C</td><td><span class="tier supported">Supported</span></td></tr>
-        <tr><td>OMEN 15 / 17, 2018&ndash;2021 generations</td><td class="ids">84DA&ndash;84DC, 8572&ndash;8575, 8601&ndash;860A, 8746&ndash;874A, 8786&ndash;878C, 87B5, 886B, 886C, 88C8&ndash;88D2, 88F4&ndash;88F7, 88FD&ndash;8902, 8912, 8917, 8918, 8949, 894A, 89EB</td><td><span class="tier supported">Supported</span></td></tr>
-        <tr><td>OMEN 16 (2023&ndash;2025)</td><td class="ids">8BAA, 8BAB, 8BCA, 8BCD, 8C76&ndash;8C78, 8D24, 8D26, 8D2F, 8E35</td><td><span class="tier supported">Supported</span></td></tr>
-        <tr><td>OMEN MAX 16 (2025)</td><td class="ids">8D41, 8D87</td><td><span class="tier supported">Supported</span></td></tr>
-        <tr><td>OMEN Transcend 16, OMEN 17 (2025)</td><td class="ids">8BB3, 8C3B, 8C4D, 8E10</td><td><span class="tier supported">Supported</span></td></tr>
-        <tr><td>Victus 15</td><td class="ids">88D9, 88DA, 8A3E, 8C2F, 8C30, 8C3F, 8D07, 8DCD, 8E5E</td><td><span class="tier supported">Supported</span></td></tr>
+        <tr><td>OMEN Transcend 14 (2024, 14-fb0xxx)</td><td class="ids">8C58</td><td class="st v">Verified</td></tr>
+        <tr><td>OMEN Transcend 14 (2024, other SKU)</td><td class="ids">8E41</td><td class="st">Supported</td></tr>
+        <tr><td>OMEN 15 (2019, 15-dc / 15-dh)</td><td class="ids">8574, 8600</td><td class="st">Supported</td></tr>
+        <tr><td>OMEN 17 (2019, 17-cb0)</td><td class="ids">8603</td><td class="st">Supported</td></tr>
+        <tr><td>OMEN 15 (2020)</td><td class="ids">8A15</td><td class="st">Supported</td></tr>
+        <tr><td>OMEN 15 / 17 (2021)</td><td class="ids">8BAD</td><td class="st">Supported</td></tr>
+        <tr><td>OMEN 16 / 17 (2021&ndash;2022)</td><td class="ids">8A42, 8A43</td><td class="st">Supported</td></tr>
+        <tr><td>Victus 16 (2021&ndash;2023)</td><td class="ids">88F8, 8A25</td><td class="st">Supported</td></tr>
+        <tr><td>Victus 16 S / R (2023&ndash;2024)</td><td class="ids">8A3D, 8B2F, 8BBE, 8BD4, 8BD5, 8C99, 8C9C</td><td class="st">Supported</td></tr>
+        <tr><td>OMEN 15 / 17, 2018&ndash;2021 generations</td><td class="ids">84DA&ndash;84DC, 8572&ndash;8575, 8601&ndash;860A, 8746&ndash;874A, 8786&ndash;878C, 87B5, 886B, 886C, 88C8&ndash;88D2, 88F4&ndash;88F7, 88FD&ndash;8902, 8912, 8917, 8918, 8949, 894A, 89EB</td><td class="st">Supported</td></tr>
+        <tr><td>OMEN 16 (2023&ndash;2025)</td><td class="ids">8BAA, 8BAB, 8BCA, 8BCD, 8C76&ndash;8C78, 8D24, 8D26, 8D2F, 8E35</td><td class="st">Supported</td></tr>
+        <tr><td>OMEN MAX 16 (2025)</td><td class="ids">8D41, 8D87</td><td class="st">Supported</td></tr>
+        <tr><td>OMEN Transcend 16, OMEN 17 (2025)</td><td class="ids">8BB3, 8C3B, 8C4D, 8E10</td><td class="st">Supported</td></tr>
+        <tr><td>Victus 15</td><td class="ids">88D9, 88DA, 8A3E, 8C2F, 8C30, 8C3F, 8D07, 8DCD, 8E5E</td><td class="st">Supported</td></tr>
         </tbody>
       </table>
       </div>
       <p class="note">Your board id is in Ohman under Settings, or from <code>wmic baseboard get product</code>. A board that is not in this table still runs: Ohman asks the firmware what it is and uses what it answers.</p>
 
-      <div class="callout">
-        <b>Verify your laptop.</b> If you are running Ohman on something that is not marked verified, this is the one thing worth doing.
-        Check that each mode changes the fans, that the fan modes do what they say, and that nothing is stuck when you exit.
-        Then run <code>tools\support-info.cmd</code> and open a
-        <a href="https://github.com/P4R1H/Ohman/issues/new?template=verify-laptop.yml">Verify my laptop</a> issue with the file it writes.
-        Your model moves to verified and everybody with that board gets the tested profile.
-      </div>
+      <h3>Verify yours</h3>
+      <p>Five minutes, and it is the most useful thing you can contribute. Check that each mode changes the fans, that the
+      fan modes do what they say, and that nothing is stuck after you exit. Then run <code>tools\support-info.cmd</code> and open a
+      <a href="https://github.com/P4R1H/Ohman/issues/new?template=verify-laptop.yml">Verify my laptop</a> issue with the file it writes.
+      Your model moves to verified and everyone with that board gets the tested profile.</p>
 
       <h3>If something is wrong on your model</h3>
       <ol>

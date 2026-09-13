@@ -104,6 +104,8 @@ namespace Ohman {
         static readonly string File_ = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Program.FileStem + ".state");
 
         public bool FirstRun;                       // no state file yet: first launch on this machine
+        public int Ver;                             // version of the file this was read from; 0 = written before versioning
+        public const int FileVer = 2;
         public static Settings Load() {
             var s = new Settings();
             try {
@@ -113,8 +115,18 @@ namespace Ohman {
                     if (line.Length == 0 || line[0] == '#' || eq < 1) continue;
                     s.Apply(line.Substring(0, eq).Trim(), line.Substring(eq + 1).Trim());
                 }
+                s.Migrate();
             } catch (Exception ex) { Log.Write("settings load: " + ex.Message); }
             return s;
+        }
+
+        /// <summary>Carry an older file forward. A default that changes is invisible to anyone who already has a file:
+        /// the old default is sitting in it as if they had chosen it. Each step here undoes exactly one such change.</summary>
+        void Migrate() {
+            // v1: the OMEN key defaulted to Cycle. It now opens the window (Shift+F11 cycles), so a file that never
+            // saw the new default and still says Cycle is the old default, not a choice.
+            if (Ver < 2 && Key == KeyAction.Cycle) { Key = KeyAction.Show; Log.Write("settings: OMEN key moved to the new default (open the window)"); }
+            if (Ver != FileVer) { Ver = FileVer; Save(); }
         }
 
         /// <summary>Apply one key=value pair (used by Load and by the --set command-line override).</summary>
@@ -128,6 +140,7 @@ namespace Ohman {
                 {
                     int n; bool b;
                     switch (k) {
+                        case "Ver": if (TryInt(v, out n)) s.Ver = n; break;
                         case "ModeIndex": if (TryInt(v, out n)) s.ModeIndex = Math.Max(0, Math.Min(2, n)); break;
                         case "EcoCool": if (bool.TryParse(v, out b)) s.EcoCool = b; break;
                         case "Key": if (TryInt(v, out n)) s.Key = (KeyAction)Math.Max(0, Math.Min(4, n)); break;
@@ -179,6 +192,7 @@ namespace Ohman {
             {
                 var sb = new StringBuilder();
                 sb.AppendLine("# " + Program.AppName + " settings (edited by the app; safe to hand-edit while it is closed)");
+                sb.AppendLine("Ver=" + FileVer);
                 sb.AppendLine("ModeIndex=" + (SavedModeOverride >= 0 ? SavedModeOverride : ModeIndex)); sb.AppendLine("EcoCool=" + EcoCool);
                 sb.AppendLine("# per-mode profiles: M0 = Eco, M1 = Balanced, M2 = Performance");
                 for (int i = 0; i < 3; i++) Modes[i].Write(sb, "M" + i + ".");
@@ -403,6 +417,9 @@ namespace Ohman {
         }
         void Fire(Action<string, bool> h, string m, bool err) { if (h != null) { try { h(m, err); } catch { } } }
         void Changed() { var h = StateChanged; if (h != null) { try { h(); } catch { } } }
+        /// <summary>A line for the user. Only for things they did not just ask for: the guard, a battery switch, an
+        /// update result. Echoing a change back at the person who made it is noise, so every "announce" from a
+        /// button, menu item or hotkey is false — the control they used already shows the new state.</summary>
         void Say(string m) { Log.Write(m); Fire(Toast, m, false); }
 
         public void ApplyAll(bool announce) {
@@ -528,7 +545,7 @@ namespace Ohman {
         /// <summary>Start a custom curve from this model's own points (the "Edit as curve" link on the Auto page).</summary>
         public void SeedCurveFromVendor() {
             S.Cur.CurveLevels = VendorCurveAt(false); S.Cur.GpuCurveLevels = VendorCurveAt(true); S.Save();
-            SetFan(FanMode.Custom, S.Fan1, S.Fan2, true);
+            SetFan(FanMode.Custom, S.Fan1, S.Fan2, false);
         }
         public void SetCurveLinked(bool linked) {
             if (S.Cur.CurveLinked == linked) return;
@@ -586,7 +603,7 @@ namespace Ohman {
             if (announce) Say(mode == FanMode.Max ? "Max fan" : mode == FanMode.Manual ? "Fans " + Rpm(S.Fan1) + " / " + Rpm(S.Fan2) : mode == FanMode.Custom ? "Fans on your curve" : "Fans auto");
             Changed();
         }
-        public void ToggleMaxFan() { SetFan(S.Fan == FanMode.Max ? FanMode.Auto : FanMode.Max, S.Fan1, S.Fan2, true); }
+        public void ToggleMaxFan() { SetFan(S.Fan == FanMode.Max ? FanMode.Auto : FanMode.Max, S.Fan1, S.Fan2, false); }
 
         public void SetTdpOffset(int off, bool announce) {
             S.TdpOffset = Math.Max(0, Math.Min(MaxOffset, off)); S.Save();

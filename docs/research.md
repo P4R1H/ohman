@@ -132,6 +132,54 @@ Same mailbox, second command id. Layout from OGH's own lighting module (`HP.Omen
   the app writes the firmware table directly. Brightness is applied by scaling the colours; effects are frames
   written every 120 ms (OGH animates the same way, on the CPU, at about 15 frames per second).
 
+### 7a. Per-key keyboards (type 3): the firmware interface is inert
+
+Keyboard type `3` reports "per-key RGB" and keeps answering `0x20009/0x02..0x05`, but **nothing it is told
+reaches the hardware**. Reported independently by owners of an OMEN 17-ck, board `88FE` and a Transcend 16,
+and stated by OmenMon's maintainer: the whole four-zone colour and backlight interface is there, and it does
+not control anything. It could not work anyway — 128 bytes cannot address 176 LEDs.
+
+Ohman therefore treats type 3 as `ILighting.Inert`: the keyboard is drawn, our own modes are greyed out, and
+Windows Dynamic Lighting (which talks to the keyboard directly) is offered instead.
+
+The real interface is the keyboard's own USB HID device. Two pieces of it are known:
+
+**2025 boards (OMEN MAX class) — documented, two independent implementations that agree byte for byte.**
+Device `VID_0D62 PID_54BF`, Darfon "HP Gaming Keyboard II"; the lighting lives on interface `MI_03`, which has
+a 65-byte output report. Report byte 0 is the report id and is stripped, so the 64 wire bytes are
+`[cmd][index][bLen lo][bLen hi][60-byte payload]` (the MCU ignores `bLen`). Commands: `0x09 {01}` select the
+static map, `0x05`/`0x06`/`0x07` write the R/G/B channels as three 60-byte pages each, `0x0A {AC 53}` commits
+to flash, `0x03` installs one of twelve device-side animations, `0x83` reads the effect record back. Every
+frame is acked `EC AC` (parsed) or `EC FA` (refused) — an ack does not mean anything lit. 180 slots, 176 real
+LEDs, 176–179 padding; index order is contiguous physical raster order with the numpad interleaved per row.
+`0x0A` is a real flash write and must never run per animation frame. Sources: `theantipopau/omencore`
+(`DojoKeyboardMcu.cs`, MIT, from a decompile of OGH's `McuSDK2.dll` plus a USB capture on board `8D87`) and
+`arfelious/omen-rgb-linux` (`driver.py` + `data/keys.json`, GPL-3.0 — readable as evidence, not copyable into
+this GPL-3.0 project). They cross-confirm the numbering: one predicts LEDs 137, 138 and 146 are the `.` key and
+the last cell of right shift; the other's independently-built map says exactly that.
+
+The same device also exposes `MI_04` as a **standard HID LampArray** (usage page `0x59`): 120 lamps, each
+carrying its key's HID usage, 33 ms minimum interval, no admin rights needed. No readback, no brightness, and
+a LampArray picture does not survive the Fn overlay, but it needs no reverse engineering. Windows Dynamic
+Lighting contends for the same device, which is the arbitration problem we already solve for four zones.
+
+**Every per-key OMEN before 2025 (17-ck, 16-b, Transcend 16, OMEN 16/17 2023–24): nobody has published a
+protocol.** The likely controller is Primax `0461:4E9B` "HP OMEN 16 KBM"; no capture of OMEN Light Studio
+driving it exists publicly. That capture is the blocker, and it is what the upstream projects have asked for
+and never received.
+
+**Do not write the `0x0F / 0x42 / 0x52 / 0x50` command set with `VID 0x03F0`** that circulates in a couple of
+projects citing "OpenRGB's HPOmenKeyboard controller". That controller does not exist: OpenRGB has no per-key
+HP keyboard driver at all, only a WMI four-zone one that explicitly refuses type 3. Mainline `hp-wmi.c` has no
+lighting code of any kind.
+
+**Caution on `0x20009/0x01`.** The row above reads bit 0 of the out128 as "lighting supported". On board
+`8D87` that byte was observed as a saturating accumulator (`0x0F, 0x1F, 0x3F, 0x7F, 0xFF`), so bit 0 can read
+true on a machine with no controllable lighting. Ohman only consults it for boards whose type byte is not
+1–5, and still disables lighting if the colour table then fails to read, but it is a weak signal and not
+something to build on. `0x20009/0x04` must be called with a 128-byte output buffer; a smaller one returns
+`rwReturnCode 5`.
+
 ## 8. Generic support for other boards
 
 A board without a verified profile gets one built at run time, the way the Linux driver decides: the thermal-policy

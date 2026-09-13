@@ -69,7 +69,7 @@ namespace Ohman {
         // settings
         Seg keySeg, gfxSeg, hzSeg, gpuSeg; TextBlock txtMachine, txtKeyInfo, txtGfxSub, txtGpuSub, txtDiag, txtUpdate, btnLearn, btnUpdate, btnDiag, btnLog, btnExit;
         FrameworkElement keyCmdRow, gfxRow, hzRow, lowHzRow, gpuRow; TextBox txtKeyCmd; Ellipse keyDot;
-        ToggleButton tgSuppress, tgHotkeys, tgAutostart, tgEcoBattery, tgSyncPower, tgEcoCool, tgLowHzBattery, tgTrayTemp, tgGuard, tgUpdateAuto;
+        ToggleButton tgSuppress, tgHotkeys, tgAutostart, tgEcoBattery, tgSyncPower, tgLowHzBattery, tgTrayTemp, tgGuard, tgUpdateAuto;
         TextBlock txtGuardSub, txtMaxCoolSub, txtKeyCmdHint;
         Button btnClose; Border toast; TextBlock txtToast;
         readonly List<WF.ToolStripMenuItem> trayHz = new List<WF.ToolStripMenuItem>();
@@ -79,6 +79,7 @@ namespace Ohman {
         readonly List<double> tempTrail = new List<double>();
         DispatcherTimer uiTimer, fanDebounce, powerDebounce, curveDebounce, learnTimer, toastTimer;
         HwndSource src; IntPtr hwnd; bool hotkeysRegistered;
+        bool onBattery;                                    // last known power source; PollRate uses it
 
         static readonly string[] ModeSubs = {
             "Windows efficiency mode · GPU base power",
@@ -111,6 +112,9 @@ namespace Ohman {
             Navigate(Page.Home, false);
             root.Measure(new Size(Width, double.PositiveInfinity));
             if (pageHost.DesiredSize.Height > 100) Height = Math.Ceiling(pageHost.DesiredSize.Height);    // first frame already at the right size
+            // This catches a page getting shorter. It cannot catch one getting taller: pageHost is aligned to the top
+            // inside a clipping grid, so its ActualHeight is min(what the page wants, what the window has) and a page
+            // that wants more than the window already is reports no change at all. Content that grows calls Remeasure.
             pageHost.SizeChanged += delegate { Morph(true); };
 
             E.StateChanged += delegate { Dispatcher.BeginInvoke((Action)Refresh); };
@@ -125,15 +129,16 @@ namespace Ohman {
             Closing += delegate(object o, System.ComponentModel.CancelEventArgs ce) { if (!exiting) { ce.Cancel = true; HideToTray(); } };
             Application.Current.SessionEnding += delegate { ExitApp(); };        // logoff/shutdown: leave cleanly instead of hiding
             StateChanged += delegate { if (WindowState == WindowState.Minimized) { WindowState = WindowState.Normal; HideToTray(); } };
-            IsVisibleChanged += delegate { sensors.SetInterval(IsVisible ? 2000 : (E.S.TrayTemp ? 5000 : 15000)); if (IsVisible) ReadHardwareAsync(); };
+            IsVisibleChanged += delegate { PollRate(); if (IsVisible) ReadHardwareAsync(); };
             LocationChanged += delegate { if (IsVisible && WindowState == WindowState.Normal && Left > -30000 && !morphing) { E.S.WinX = (int)Left; E.S.WinY = (int)Top; } };
             KeyDown += delegate(object o, KeyEventArgs ke) { if (ke.Key == Key.Escape && !(Keyboard.FocusedElement is TextBox)) HideToTray(); };
             MouseEnter += delegate { Ui.Fade(btnClose, 1, 140); };
             MouseLeave += delegate { Ui.Fade(btnClose, 0, 200); };
 
+            // Only drives things you can see, so it runs only while you can see them (PollRate starts and stops it).
             uiTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
-            uiTimer.Tick += delegate { if (IsVisible) ReadHardwareAsync(); UpdateFooter(); if (cur == Page.Fans && E.S.Fan == FanMode.Max) UpdateMaxBlock(); };
-            uiTimer.Start();
+            uiTimer.Tick += delegate { ReadHardwareAsync(); UpdateFooter(); if (cur == Page.Fans && E.S.Fan == FanMode.Max) UpdateMaxBlock(); };
+            PollRate();
             Refresh();
             if (!E.BiosOk && !E.Hw.IsDemo) ShowToast("BIOS interface unavailable: " + E.LastError, true);
             else if (E.LastError.Length > 0) ShowToast(E.LastError, true);      // a write already failed during Init, before this handler existed
@@ -156,7 +161,7 @@ namespace Ohman {
             return o;
         }
         void FindAll() {
-            rail = F<FrameworkElement>("Rail"); railCanvas = F<Canvas>("RailCanvas"); railPill = F<Border>("RailPill"); railPillT = (TranslateTransform)railPill.RenderTransform; logoHost = F<FrameworkElement>("LogoHost");
+            rail = F<FrameworkElement>("Rail"); railCanvas = F<Canvas>("RailCanvas"); railPill = F<Border>("RailPill"); railPillT = (TranslateTransform)railPill.RenderTransform; logoHost = F<FrameworkElement>("LogoHost"); F<Border>("Mark").Background = accentSrc.MakeGradient();
             scroll = F<ScrollViewer>("Scroll"); pageHost = F<Grid>("PageHost");
             pages[0] = F<FrameworkElement>("PageHome"); pages[1] = F<FrameworkElement>("PageFans"); pages[2] = F<FrameworkElement>("PageKbd"); pages[3] = F<FrameworkElement>("PageSettings");
             txtHomeTitle = F<TextBlock>("TxtHomeTitle"); txtHomeStatus = F<TextBlock>("TxtHomeStatus"); demoBadge = F<FrameworkElement>("DemoBadge");
@@ -185,7 +190,7 @@ namespace Ohman {
             gfxRow = F<FrameworkElement>("GfxRow"); txtGfxSub = F<TextBlock>("TxtGfxSub"); hzRow = F<FrameworkElement>("HzRow"); lowHzRow = F<FrameworkElement>("LowHzRow");
             gpuRow = F<FrameworkElement>("GpuRow"); txtGpuSub = F<TextBlock>("TxtGpuSub");
             tgSuppress = F<ToggleButton>("TgSuppress"); tgHotkeys = F<ToggleButton>("TgHotkeys"); tgEcoBattery = F<ToggleButton>("TgEcoBattery"); tgLowHzBattery = F<ToggleButton>("TgLowHzBattery");
-            tgEcoCool = F<ToggleButton>("TgEcoCool"); tgSyncPower = F<ToggleButton>("TgSyncPower"); tgTrayTemp = F<ToggleButton>("TgTrayTemp"); tgAutostart = F<ToggleButton>("TgAutostart");
+            tgSyncPower = F<ToggleButton>("TgSyncPower"); tgTrayTemp = F<ToggleButton>("TgTrayTemp"); tgAutostart = F<ToggleButton>("TgAutostart");
             tgGuard = F<ToggleButton>("TgGuard"); tgUpdateAuto = F<ToggleButton>("TgUpdateAuto");
             txtGuardSub = F<TextBlock>("TxtGuardSub"); txtMaxCoolSub = F<TextBlock>("TxtMaxCoolSub"); txtKeyCmdHint = F<TextBlock>("TxtKeyCmdHint");
             txtUpdate = F<TextBlock>("TxtUpdate"); btnUpdate = F<TextBlock>("BtnUpdate");
@@ -260,10 +265,10 @@ namespace Ohman {
             fanLinks = new LinkSeg(new[] { "Auto", "Max", "Manual" }, 18, 13, 3, new[] { "This model's own curve", "Both fans at full speed", "Your own levels or curve, on the Fans page" });
             F<Border>("FanLinksHost").Child = fanLinks;
             fanLinks.Picked += delegate(int i) {
-                if (i == 0) Bg(delegate { E.SetFan(FanMode.Auto, E.S.Fan1, E.S.Fan2, true); });
-                else if (i == 1) Bg(delegate { E.SetFan(FanMode.Max, E.S.Fan1, E.S.Fan2, true); });
+                if (i == 0) Bg(delegate { E.SetFan(FanMode.Auto, E.S.Fan1, E.S.Fan2, false); });
+                else if (i == 1) Bg(delegate { E.SetFan(FanMode.Max, E.S.Fan1, E.S.Fan2, false); });
                 else {
-                    if (E.S.Fan == FanMode.Auto || E.S.Fan == FanMode.Max) { int f1 = E.S.Fan1, f2 = E.S.Fan2; E.S.Fan = FanMode.Manual; Bg(delegate { E.SetFan(FanMode.Manual, f1, f2, true); }); }
+                    if (E.S.Fan == FanMode.Auto || E.S.Fan == FanMode.Max) { int f1 = E.S.Fan1, f2 = E.S.Fan2; E.S.Fan = FanMode.Manual; Bg(delegate { E.SetFan(FanMode.Manual, f1, f2, false); }); }
                     Navigate(Page.Fans, true);
                 }
             };
@@ -282,7 +287,7 @@ namespace Ohman {
             fanSeg.Picked += delegate(int i) {
                 FanMode m = Choice.FanModes[i];
                 int f1 = (int)slFan1.Value, f2 = (int)slFan2.Value;
-                Bg(delegate { E.SetFan(m, f1, f2, true); });
+                Bg(delegate { E.SetFan(m, f1, f2, false); });
                 E.S.Fan = m; RefreshFans(true);            // the page follows at once; the engine's own Changed arrives after the write
             };
             curveWhich = new LinkSeg(new[] { "CPU", "GPU" }, 12, 13, 3, null); curveWhichHost.Child = curveWhich;
@@ -341,8 +346,8 @@ namespace Ohman {
             gpuSeg = new Seg(new[] { "Base", "Boost", "Max", "Auto" }, new[] { "Base TGP", "PPAB", "Custom TGP + PPAB", "Follow the mode: Eco → Base, Balanced → Boost, Performance → Max" }, null, Seg.Kind.Row);
             F<Border>("GpuSegHost").Child = gpuSeg;
             gpuSeg.Picked += delegate(int i) {
-                if (i == 3) Bg(delegate { E.SetGpu(E.S.Gpu, true, true); });
-                else { GpuLevel g = (GpuLevel)i; Bg(delegate { E.SetGpu(g, false, true); }); }
+                if (i == 3) Bg(delegate { E.SetGpu(E.S.Gpu, true, false); });
+                else { GpuLevel g = (GpuLevel)i; Bg(delegate { E.SetGpu(g, false, false); }); }
             };
             if (!E.P.HasGpuPower) gpuRow.Visibility = Visibility.Collapsed;
             txtKeyCmd.LostFocus += delegate { E.SetKeyCommand(txtKeyCmd.Text); };
@@ -360,10 +365,9 @@ namespace Ohman {
             OnSwitch(tgTrayTemp, delegate(bool on) {
                 Bg(delegate { E.SetTrayTemp(on); });
                 if (!on) { try { tray.Icon = icons[E.ModeIndex]; } catch { } }
-                sensors.SetInterval(IsVisible ? 2000 : (on ? 5000 : 15000));
+                PollRate();
             });
             OnSwitch(tgSuppress, delegate(bool on) { Bg(delegate { E.SetOghSuppression(on); }); });
-            OnSwitch(tgEcoCool, delegate(bool on) { Bg(delegate { E.SetEcoCool(on); }); });
             OnSwitch(tgAutostart, delegate(bool on) { Slow(delegate { SetAutostart(on); }); });
             OnSwitch(tgGuard, delegate(bool on) {
                 if (!on && !ConfirmGuardOff()) { Synced(delegate { tgGuard.IsChecked = true; }); return; }
@@ -441,7 +445,7 @@ namespace Ohman {
                 using (var path = RoundSquare(mid, side, radius, mid)) using (var b = new SD.SolidBrush(c)) g.FillPath(b, path);
                 if (label == null) return bmp;
                 g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
-                float em = size * (label.Length >= 3 ? 0.54f : 0.80f);
+                float em = size * (label.Length >= 3 ? 0.46f : 0.68f);
                 using (var path = new System.Drawing.Drawing2D.GraphicsPath())
                 using (var family = new SD.FontFamily("Segoe UI")) {
                     path.AddString(label, family, (int)SD.FontStyle.Bold, em, new SD.PointF(0, 0), SD.StringFormat.GenericTypographic);
@@ -500,7 +504,8 @@ namespace Ohman {
 
         // ---------- the tray menu: everything the panel can do, without opening it ----------
         readonly List<WF.ToolStripMenuItem> trayFan = new List<WF.ToolStripMenuItem>(), trayGpu = new List<WF.ToolStripMenuItem>(),
-            trayGfx = new List<WF.ToolStripMenuItem>(), trayLight = new List<WF.ToolStripMenuItem>(), trayBright = new List<WF.ToolStripMenuItem>(), traySw = new List<WF.ToolStripMenuItem>();
+            trayGfx = new List<WF.ToolStripMenuItem>(), trayLight = new List<WF.ToolStripMenuItem>(), trayBright = new List<WF.ToolStripMenuItem>(),
+            trayPower = new List<WF.ToolStripMenuItem>(), traySw = new List<WF.ToolStripMenuItem>();
         WF.ToolStripMenuItem Item(string text, Action click) {
             var it = new WF.ToolStripMenuItem(text);
             if (click != null) it.Click += delegate { click(); };
@@ -522,10 +527,21 @@ namespace Ohman {
             var fanMenu = new WF.ToolStripMenuItem("Fan");
             for (int i = 0; i < Choice.Fan.Length; i++) {
                 FanMode m = Choice.FanModes[i];
-                var it = Item(Choice.Fan[i], delegate { Bg(delegate { E.SetFan(m, E.S.Fan1, E.S.Fan2, true); }); });
+                var it = Item(Choice.Fan[i], delegate { Bg(delegate { E.SetFan(m, E.S.Fan1, E.S.Fan2, false); }); });
                 trayFan.Add(it); fanMenu.DropDownItems.Add(it);
             }
             menu.Items.Add(fanMenu);
+
+            // Power gain: the same 0..max the slider offers, in the steps worth picking from a menu
+            if (E.P.HasPowerGain && E.MaxOffset > 0) {
+                var powerMenu = new WF.ToolStripMenuItem("Power gain");
+                foreach (int w in PowerSteps(E.MaxOffset)) {
+                    int watts = w;
+                    var it = Item(w == 0 ? "Off" : "+" + w + " W", delegate { Bg(delegate { E.SetTdpOffset(watts, false); }); }); it.Tag = w;
+                    trayPower.Add(it); powerMenu.DropDownItems.Add(it);
+                }
+                menu.Items.Add(powerMenu);
+            }
 
             // Graphics: refresh rate, GPU power, and the BIOS graphics mode
             var gfxMenu = new WF.ToolStripMenuItem("Graphics");
@@ -539,8 +555,8 @@ namespace Ohman {
                 for (int i = 0; i < 4; i++) {
                     int idx = i;
                     var it = Item(gpuNames[i], delegate {
-                        if (idx == 3) Bg(delegate { E.SetGpu(E.S.Gpu, true, true); });
-                        else { GpuLevel gl = (GpuLevel)idx; Bg(delegate { E.SetGpu(gl, false, true); }); }
+                        if (idx == 3) Bg(delegate { E.SetGpu(E.S.Gpu, true, false); });
+                        else { GpuLevel gl = (GpuLevel)idx; Bg(delegate { E.SetGpu(gl, false, false); }); }
                     });
                     trayGpu.Add(it); gfxMenu.DropDownItems.Add(it);
                 }
@@ -564,7 +580,7 @@ namespace Ohman {
                     int idx = i;
                     var it = Item(Choice.Light[i] + (i == 5 ? " lighting" : ""), delegate {
                         int m = Choice.LightMode(idx), fx = Choice.LightEffect(idx);
-                        Bg(delegate { E.SetLight(m, fx, true); });
+                        Bg(delegate { E.SetLight(m, fx, false); });
                     });
                     trayLight.Add(it); kbMenu.DropDownItems.Add(it);
                 }
@@ -580,7 +596,7 @@ namespace Ohman {
             // Settings: the switches, so none of this needs the window open
             var setMenu = new WF.ToolStripMenuItem("Settings");
             AddSwitch(setMenu, "Start with Windows", delegate(bool on) { Slow(delegate { SetAutostart(on); }); }, delegate { return autostart; });
-            AddSwitch(setMenu, "Temperature in the tray", delegate(bool on) { E.SetTrayTemp(on); if (!on) { try { tray.Icon = icons[E.ModeIndex]; } catch { } } sensors.SetInterval(IsVisible ? 2000 : (on ? 5000 : 15000)); }, delegate { return E.S.TrayTemp; });
+            AddSwitch(setMenu, "Temperature in the tray", delegate(bool on) { E.SetTrayTemp(on); if (!on) { try { tray.Icon = icons[E.ModeIndex]; } catch { } } PollRate(); }, delegate { return E.S.TrayTemp; });
             AddSwitch(setMenu, "Hotkeys", delegate(bool on) { E.SetHotkeys(on); if (on) RegisterHotkeys(); else UnregisterHotkeys(); }, delegate { return E.S.Hotkeys; });
             AddSwitch(setMenu, "Take over the OMEN key", delegate(bool on) { Bg(delegate { E.SetOghSuppression(on); }); }, delegate { return E.S.SuppressOgh; });
             setMenu.DropDownItems.Add(new WF.ToolStripSeparator());
@@ -598,6 +614,13 @@ namespace Ohman {
             tray = new WF.NotifyIcon { Icon = icons[1], Text = Program.DisplayName, Visible = true, ContextMenuStrip = menu };
             tray.MouseClick += delegate(object o, WF.MouseEventArgs me) { if (me.Button == WF.MouseButtons.Left) TogglePanel(); };
         }
+        /// <summary>0, then 5 W steps up to the profile's ceiling, with the ceiling itself always last.</summary>
+        static int[] PowerSteps(int max) {
+            var steps = new List<int>();
+            for (int w = 0; w < max; w += 5) steps.Add(w);
+            steps.Add(max);
+            return steps.ToArray();
+        }
         readonly List<Func<bool>> swState = new List<Func<bool>>();
         void AddSwitch(WF.ToolStripMenuItem parent, string text, Action<bool> set, Func<bool> get) {
             var it = new WF.ToolStripMenuItem(text);
@@ -610,6 +633,7 @@ namespace Ohman {
             var S = E.S;
             for (int i = 0; i < 3; i++) trayModes[i].Checked = i == E.ModeIndex;
             for (int i = 0; i < trayFan.Count; i++) trayFan[i].Checked = S.Fan == Choice.FanModes[i];
+            foreach (var it in trayPower) it.Checked = (int)it.Tag == S.TdpOffset;
             int hzNow = Display.CurrentHz();
             foreach (var it in trayHz) it.Checked = (int)it.Tag == hzNow;
             if (trayGpu.Count == 4) { GpuLevel g = E.EffectiveGpu; for (int i = 0; i < 3; i++) trayGpu[i].Checked = !S.GpuAuto && (int)g == i; trayGpu[3].Checked = S.GpuAuto; }
@@ -638,7 +662,7 @@ namespace Ohman {
                 F<FrameworkElement>(n).MouseLeftButtonDown += delegate(object o, MouseButtonEventArgs me) { if (me.LeftButton == MouseButtonState.Pressed) Drag(); };
             btnClose.Click += delegate { HideToTray(); };
             powerDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
-            powerDebounce.Tick += delegate { powerDebounce.Stop(); int off = (int)slPower.Value; Bg(delegate { E.SetTdpOffset(off, true); }); };
+            powerDebounce.Tick += delegate { powerDebounce.Stop(); int off = (int)slPower.Value; Bg(delegate { E.SetTdpOffset(off, false); }); };
             slPower.ValueChanged += delegate {
                 txtPower.Text = "+" + (int)slPower.Value + " W";
                 if (!syncing) { powerDebounce.Stop(); powerDebounce.Start(); }
@@ -670,6 +694,13 @@ namespace Ohman {
             if (live) CrossFade(old, page, (RailW + pageHost.Width) * Math.Ceiling(NaturalHeight()) > was);
             Dispatcher.BeginInvoke(DispatcherPriority.Loaded, (Action)delegate { PlaceRailPill(animate); });
             Log.Write("page " + p);
+        }
+
+        /// <summary>Something changed how tall page p wants to be. Re-aim the window once layout has caught up; see the
+        /// note on pageHost.SizeChanged for why the layout pass cannot be relied on to do this by itself.</summary>
+        void Remeasure(Page p) {
+            if (cur != p || !IsVisible || screenshotPath != null) return;
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, (Action)delegate { if (cur == p) Morph(true); });
         }
 
         /// <summary>Park a page in a known state, visible and opaque or collapsed; any running fade is dropped.</summary>
@@ -815,10 +846,12 @@ namespace Ohman {
             };
             kbdModes = new LinkSeg(Choice.Light, 22, 13.5, 4, new[] { null, null, "The zone colours pulse", "Every zone through the spectrum together", "The spectrum travels across the zones", "Hand the keyboard to Windows Dynamic Lighting" });
             F<Border>("KbdModeHost").Child = kbdModes;
+            if (E.Light.Inert)
+                for (int i = 1; i <= 4; i++) kbdModes.SetEnabled(i, false, "HP's firmware lighting interface does not drive per-key keyboards");
             kbdModes.Picked += delegate(int i) {
                 int m = Choice.LightMode(i), fx = Choice.LightEffect(i);
                 E.S.Light = m; E.S.LightEffect = fx; ApplyEditorState();
-                Bg(delegate { E.SetLight(m, fx, true); });
+                Bg(delegate { E.SetLight(m, fx, false); });
             };
             // what one click takes. Key and Row need per-key hardware; the firmware's zone table cannot address one key.
             granSeg = new Seg(new[] { "Key", "Row", "Zone", "All" }, null, null, Seg.Kind.Row);
@@ -938,6 +971,11 @@ namespace Ohman {
         void ApplyEditorState() {
             if (kbdBig == null) return;
             var S = E.S; int m = S.Light, fx = S.LightEffect;
+            // A per-key board answers every firmware lighting call and lights nothing by them, so none of our own
+            // modes can be offered: Windows Dynamic Lighting talks to the keyboard directly and is the only one
+            // that works there. Keeping the editor on screen would just discard everything the user picked.
+            bool inert = E.Light.Inert;
+            if (inert) m = S.Light == 2 ? 2 : 0;
             bool lit = m == 1, pick = lit && (fx == 0 || fx == 1), effect = lit && fx != 0;
             kbdModes.Select(Choice.OfLight(m, fx), IsVisible && cur == Page.Keyboard);
             selectRow.Visibility = pick ? Visibility.Visible : Visibility.Collapsed;
@@ -946,7 +984,9 @@ namespace Ohman {
             speedInline.Visibility = fx == 1 && lit ? Visibility.Visible : Visibility.Collapsed;      // breathe: colours and a speed
             kbdInfo.Visibility = lit ? Visibility.Collapsed : Visibility.Visible;
             btnWinLighting.Visibility = m == 2 ? Visibility.Visible : Visibility.Collapsed;
-            txtKbdInfo.Text = m == 0 ? "The backlight is off. Pick a mode to turn it back on, or press the keyboard backlight key."
+            txtKbdInfo.Text = inert && m != 2
+                ? "This is a per-key keyboard. HP's firmware interface answers for it but does not light it, so Ohman cannot set its colours yet \u2014 they go over the keyboard's own USB interface, which is only documented for the 2025 boards. Windows Dynamic Lighting drives it today."
+                : m == 0 ? "The backlight is off. Pick a mode to turn it back on, or press the keyboard backlight key."
                 : (WinLighting.Present || E.Hw.IsDemo ? "Windows Dynamic Lighting has the keyboard. Its colours and effects come from Windows settings."
                                                       : "No Dynamic Lighting device for this keyboard was found; Windows cannot drive it.");
             kbdBig.Selectable = pick; kbdBig.Off = m == 0; kbdBig.WindowsOwned = m == 2; kbdBig.Smooth = effect;
@@ -954,9 +994,11 @@ namespace Ohman {
             kbdBig.Level = kbdMini.Level = S.LightLevel / 100.0;
             if (!pick) { kbdBig.Selected.Clear(); kbdBig.Hover.Clear(); }
             string fxName = new[] { "static", "breathe", "cycle", "wave" }[Math.Max(0, Math.Min(3, fx))];
-            txtKbdStatus.Text = m == 2 ? "windows lighting" : m == 0 ? "backlight off" : effect ? "firmware effect · colour fixed" : E.Light.Describe + " · " + fxName;
+            // breathe runs in the firmware too, but it breathes the colours you picked, so it is not "colour fixed"
+            txtKbdStatus.Text = inert && m != 2 ? "per-key · not driveable yet" : m == 2 ? "windows lighting" : m == 0 ? "backlight off" : fx >= 2 ? "firmware effect · colour fixed" : E.Light.Describe + " · " + fxName;
             UpdateSelectionText();
             miniNeedsFrame = true; kbdBig.Repaint(); kbdMini.Repaint();
+            Remeasure(Page.Keyboard);        // the colour editor and the effect editor are different heights
         }
         void RefreshLighting() {
             if (E.Light == null || kbdMini == null) return;
@@ -1009,6 +1051,7 @@ namespace Ohman {
                 manSub1.Text = E.Rpm(S.Fan1) + " · CPU fan"; manSub2.Text = E.Rpm(S.Fan2) + " · GPU fan";
                 UpdateCurveLive(); UpdateMaxBlock(); UpdateFanStatus(); UpdateFanFooter();
             } finally { syncing = was; }
+            Remeasure(Page.Fans);            // the curve, max and manual blocks are different heights
         }
         void UpdateMaxBlock() {
             if (E.S.Fan != FanMode.Max) return;
@@ -1158,7 +1201,7 @@ namespace Ohman {
 
         void ApplyModeAsync(int idx) {
             SelectMode(idx, true);
-            Bg(delegate { E.SetMode(idx, true); });
+            Bg(delegate { E.SetMode(idx, false); });
         }
         void SelectMode(int idx, bool animate) {
             modeSeg.Select(idx, animate && IsVisible);
@@ -1190,7 +1233,7 @@ namespace Ohman {
                 if (gfxSeg != null) for (int i = 0; i < gfxSeg.Count; i++) if ((int)gfxSeg.Tags[i] == gfx) gfxSeg.Select(i, IsVisible && cur == Page.Settings);
                 txtGfxSub.Text = E.GpuModePending >= 0 && E.GpuModePending != E.GpuMode ? Engine.GpuModeNames[E.GpuModePending] + " after the next restart" : "Takes effect after a restart";
                 UpdateKeyStatus(); UpdateUpdateRow();
-                tgSuppress.IsChecked = S.SuppressOgh; tgHotkeys.IsChecked = S.Hotkeys; tgEcoBattery.IsChecked = S.EcoOnBattery; tgSyncPower.IsChecked = S.SyncWinPower; tgAutostart.IsChecked = autostart; tgEcoCool.IsChecked = S.EcoCool;
+                tgSuppress.IsChecked = S.SuppressOgh; tgHotkeys.IsChecked = S.Hotkeys; tgEcoBattery.IsChecked = S.EcoOnBattery; tgSyncPower.IsChecked = S.SyncWinPower; tgAutostart.IsChecked = autostart;
                 demoBadge.Visibility = E.Hw.IsDemo && screenshotPath == null ? Visibility.Visible : Visibility.Collapsed;
                 bool err = (!E.BiosOk || E.ReadOnly) && !E.Hw.IsDemo;
                 errBanner.Visibility = err ? Visibility.Visible : Visibility.Collapsed;
@@ -1220,8 +1263,10 @@ namespace Ohman {
         bool sensorsSeen;
         void OnSensors(SensorSnapshot s) {
             E.CpuTemp = s.CpuTemp; E.GpuTemp = s.GpuTemp;
+            onBattery = s.OnBattery;
             UpdateTrayTemp(s.CpuTemp);
             if (!double.IsNaN(s.CpuTemp)) { tempTrail.Add(s.CpuTemp); if (tempTrail.Count > 8) tempTrail.RemoveAt(0); sensorsSeen = true; }
+            if (!IsVisible) return;          // the rest of this writes text nobody is looking at
             if (cur == Page.Fans) { UpdateCurveLive(); UpdateMaxBlock(); UpdateFanFooter(); }
             bigCpu.Text = double.IsNaN(s.CpuTemp) ? "--" : s.CpuTemp.ToString("0", CultureInfo.InvariantCulture);
             bigGpu.Text = double.IsNaN(s.GpuTemp) ? "--" : s.GpuTemp.ToString("0", CultureInfo.InvariantCulture);
@@ -1276,10 +1321,23 @@ namespace Ohman {
         void OnPowerMode(object o, Microsoft.Win32.PowerModeChangedEventArgs e) {
             if (e.Mode == Microsoft.Win32.PowerModes.Resume) E.OnResume();
             else if (e.Mode == Microsoft.Win32.PowerModes.StatusChange) {
-                bool onBattery = false;
-                try { onBattery = WF.SystemInformation.PowerStatus.PowerLineStatus == WF.PowerLineStatus.Offline; } catch { }
-                Bg(delegate { E.OnPowerSource(onBattery); });
+                bool bat = false;
+                try { bat = WF.SystemInformation.PowerStatus.PowerLineStatus == WF.PowerLineStatus.Offline; } catch { }
+                onBattery = bat; PollRate();
+                Bg(delegate { E.OnPowerSource(bat); });
             }
+        }
+
+        /// <summary>How hard the app works right now. Reading sensors wakes performance counters and, on a hybrid
+        /// laptop, sometimes the discrete GPU, so this is the app's largest recurring power cost and it is worth
+        /// scaling. In front of you it has to keep up with the eye; behind you it only feeds the tray number and the
+        /// fan curve, and on battery even that can wait longer. The per-frame work (the footer, the fan readouts)
+        /// has no reader at all when the window is hidden, so its timer stops outright.</summary>
+        void PollRate() {
+            int ms = IsVisible ? 2000 : E.S.TrayTemp ? (onBattery ? 10000 : 5000) : (onBattery ? 30000 : 15000);
+            sensors.SetInterval(ms);
+            if (uiTimer == null) return;
+            if (IsVisible) { if (!uiTimer.IsEnabled) uiTimer.Start(); } else uiTimer.Stop();
         }
 
         // ---------- window plumbing ----------

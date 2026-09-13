@@ -54,6 +54,10 @@ namespace Ohman {
     public interface ILighting {
         LightKind Kind { get; }
         int Zones { get; }                 // addressable colour groups (1 or 4 on HP firmware)
+        /// <summary>The firmware answers every lighting call but does not drive this keyboard. True on the per-key
+        /// boards: they keep the four-zone colour table and the backlight byte, both of which change nothing on the
+        /// hardware. Colours there need the keyboard's own USB HID interface, which Ohman does not speak yet.</summary>
+        bool Inert { get; }
         bool Numpad { get; }               // layout hint for the drawing
         string Describe { get; }           // "4 zones", "1 zone", "per-key"
         Rgb[] GetColors();
@@ -78,6 +82,7 @@ namespace Ohman {
         public int Zones { get { return zones; } }
         public string Describe { get { return kind == LightKind.PerKey ? "per-key" : zones == 1 ? "1 zone" : zones + " zones"; } }
         public bool Numpad { get { return KbdType == 1 || KbdType == 4; } }
+        public bool Inert { get { return kind == LightKind.PerKey; } }
 
         BiosLighting(int kbdType, LightKind k, int z) { KbdType = kbdType; kind = k; zones = z; }
 
@@ -89,13 +94,17 @@ namespace Ohman {
             LightKind k = LightKind.None; int z = 0;
             if (type == 1 || type == 2) { k = LightKind.Zones; z = 4; }
             else if (type == 4 || type == 5) { k = LightKind.Zones; z = 1; }
-            else if (type == 3) { k = LightKind.PerKey; z = 4; }          // per-key boards still answer the zone table; per-key editing needs the HID path (later)
+            // Type 3 keeps the four-zone table and the backlight byte, and neither does anything: reported by three
+            // separate owners (OMEN 17-ck, board 88FE, Transcend 16) and confirmed by OmenMon's maintainer. The real
+            // interface is the keyboard's own USB HID device. See docs/research.md, "Per-key keyboards".
+            else if (type == 3) { k = LightKind.PerKey; z = 4; }
             else {
                 // older models (OGH: Pirates/Marlins/Gamora/Milos/Santorini) answer a platform-info query instead
                 try { var d = Bios.Call(CMD, OP_PLATFORM_INFO, new byte[0], 128); if (d.Length > 0 && (d[0] & 1) != 0) { k = LightKind.Zones; z = 4; } }
                 catch (Exception ex) { Log.Write("lighting platform info: " + ex.Message); }
             }
             if (k == LightKind.None) { Log.Write("keyboard lighting: none (type " + type + ")"); return null; }
+            if (k == LightKind.PerKey) Log.Write("keyboard lighting: type 3 (per-key). The firmware interface answers but drives nothing on these boards; colours are left to Windows Dynamic Lighting.");
             var l = new BiosLighting(type, k, z);
             try { var c = l.GetColors(); int b = l.GetBacklight(); Log.Write("keyboard lighting: type " + type + " -> " + l.Describe + ", colours " + Join(c) + ", backlight 0x" + b.ToString("X2")); }
             catch (Exception ex) { Log.Write("keyboard lighting: type " + type + " but the colour table failed (" + ex.Message + "); disabled"); return null; }
@@ -132,6 +141,7 @@ namespace Ohman {
         Rgb[] colors = { new Rgb(0x0F, 0x84, 0xFA), new Rgb(0x71, 0x0F, 0xFA), new Rgb(0xF9, 0x35, 0x0F), new Rgb(0xFA, 0xAC, 0x0F) };   // OGH's factory default
         int light = 0xE4;
         public LightKind Kind { get { return LightKind.Zones; } }
+        public bool Inert { get { return false; } }
         public int Zones { get { return 4; } }
         public string Describe { get { return "4 zones"; } }
         public bool Numpad { get { return false; } }
