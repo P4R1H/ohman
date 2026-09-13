@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/hero.png" alt="Ohman — fan curves, keyboard lighting and the OMEN key, without the vendor adware"></p>
+<p align="center"><img src="docs/hero.png" alt="Ohman: fan curves, keyboard lighting and the OMEN key, without the vendor adware"></p>
 
 <p align="center">
 <a href="https://github.com/P4R1H/Ohman/releases/latest/download/Ohman.exe"><img src="https://img.shields.io/badge/Download-Ohman.exe-3F8CFF?style=for-the-badge" alt="Download Ohman.exe"></a>
@@ -55,7 +55,7 @@ Download `Ohman.exe` from [Releases](../../releases/latest) and run it. It asks 
 because the firmware interface needs them, and adds itself to your startup apps so it is there after a reboot
 (one switch in Settings turns that off).
 
-Or build it with the compiler that already ships inside Windows — no SDK, no NuGet, no toolchain:
+Or build it with the compiler that already ships inside Windows. No SDK, no NuGet, no toolchain:
 
 ```
 build.cmd

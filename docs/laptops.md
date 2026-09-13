@@ -106,7 +106,7 @@ serial numbers.
 
 HP's firmware lighting interface answers on these boards and drives nothing at all, so Ohman uses the
 keyboard's own HID lighting interface instead. That part is written against a published standard but is
-**unverified** — nobody working on Ohman has a per-key machine. Run this, which writes nothing and changes
+**unverified**: nobody working on Ohman has a per-key machine. Run this, which writes nothing and changes
 nothing:
 
 ```
@@ -142,6 +142,6 @@ new PlatformProfile {
 }
 ```
 
-Everything else — fan ranges, mode bytes, which features exist — either has a sane default on
+Everything else (fan ranges, mode bytes, which features exist) either has a sane default on
 `PlatformProfile` or is read from the firmware at run time. Override only what the evidence says is
 different, and put the evidence in `Notes`.
