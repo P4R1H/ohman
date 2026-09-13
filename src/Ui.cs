@@ -526,9 +526,8 @@ namespace Ohman {
         }
 
         // ---------- the tray menu: everything the panel can do, without opening it ----------
-        readonly List<WF.ToolStripMenuItem> trayFan = new List<WF.ToolStripMenuItem>(), trayGpu = new List<WF.ToolStripMenuItem>(),
-            trayGfx = new List<WF.ToolStripMenuItem>(), trayLight = new List<WF.ToolStripMenuItem>(), trayBright = new List<WF.ToolStripMenuItem>(),
-            trayPower = new List<WF.ToolStripMenuItem>(), traySw = new List<WF.ToolStripMenuItem>();
+        readonly List<WF.ToolStripMenuItem> trayFan = new List<WF.ToolStripMenuItem>(), trayGfx = new List<WF.ToolStripMenuItem>();
+        WF.ToolStripMenuItem trayLight;
         WF.ToolStripMenuItem Item(string text, Action click) {
             var it = new WF.ToolStripMenuItem(text);
             if (click != null) it.Click += delegate { click(); };
@@ -555,34 +554,11 @@ namespace Ohman {
             }
             menu.Items.Add(fanMenu);
 
-            // Power gain: the same 0..max the slider offers, in the steps worth picking from a menu
-            if (E.P.HasPowerGain && E.MaxOffset > 0) {
-                var powerMenu = new WF.ToolStripMenuItem("Power gain");
-                foreach (int w in PowerSteps(E.MaxOffset)) {
-                    int watts = w;
-                    var it = Item(w == 0 ? "Off" : "+" + w + " W", delegate { Bg(delegate { E.SetTdpOffset(watts, false); }); }); it.Tag = w;
-                    trayPower.Add(it); powerMenu.DropDownItems.Add(it);
-                }
-                menu.Items.Add(powerMenu);
-            }
-
-            // Graphics: refresh rate, GPU power, and the BIOS graphics mode
-            var gfxMenu = new WF.ToolStripMenuItem("Graphics");
+            // Screen: the refresh rate, and the graphics mode for anyone who switches between hybrid and the MUX
+            var gfxMenu = new WF.ToolStripMenuItem("Screen");
             foreach (int hz in Display.Choices()) {
                 int h = hz; var it = Item(hz + " Hz refresh rate", delegate { Bg(delegate { E.SetRefreshRate(h); }); }); it.Tag = hz;
                 trayHz.Add(it); gfxMenu.DropDownItems.Add(it);
-            }
-            if (trayHz.Count >= 2) gfxMenu.DropDownItems.Add(new WF.ToolStripSeparator());
-            if (E.P.HasGpuPower) {
-                string[] gpuNames = { "Base", "Boost", "Max", "Follow the mode" };
-                for (int i = 0; i < 4; i++) {
-                    int idx = i;
-                    var it = Item(gpuNames[i], delegate {
-                        if (idx == 3) Bg(delegate { E.SetGpu(E.S.Gpu, true, false); });
-                        else { GpuLevel gl = (GpuLevel)idx; Bg(delegate { E.SetGpu(gl, false, false); }); }
-                    });
-                    trayGpu.Add(it); gfxMenu.DropDownItems.Add(it);
-                }
             }
             var gfxModes = new List<int>();
             foreach (int mode in new[] { 0, 1, 3 }) if (E.GpuModeOffered(mode)) gfxModes.Add(mode);
@@ -596,39 +572,15 @@ namespace Ohman {
             }
             if (gfxMenu.DropDownItems.Count > 0) menu.Items.Add(gfxMenu);
 
-            // Keyboard
+            // Keyboard: on or off. Which effect and what colour is a decision you make once, looking at it.
             if (E.Light != null) {
-                var kbMenu = new WF.ToolStripMenuItem("Keyboard");
-                for (int i = 0; i < Choice.Light.Length; i++) {
-                    int idx = i;
-                    var it = Item(Choice.Light[i] + (i == 5 ? " lighting" : ""), delegate {
-                        int m = Choice.LightMode(idx), fx = Choice.LightEffect(idx);
-                        Bg(delegate { E.SetLight(m, fx, false); });
-                    });
-                    trayLight.Add(it); kbMenu.DropDownItems.Add(it);
-                }
-                kbMenu.DropDownItems.Add(new WF.ToolStripSeparator());
-                foreach (int pct in new[] { 25, 50, 75, 100 }) {
-                    int p = pct;
-                    var it = Item("Brightness " + pct + " %", delegate { Bg(delegate { E.SetLightLevel(p); }); }); it.Tag = pct;
-                    trayBright.Add(it); kbMenu.DropDownItems.Add(it);
-                }
-                menu.Items.Add(kbMenu);
+                trayLight = Item("Keyboard lighting", delegate {
+                    int fx = E.S.LightEffect;
+                    int m = E.S.Light == 0 ? 1 : 0;          // back on in whatever mode it was last in
+                    Bg(delegate { E.SetLight(m, fx, false); });
+                });
+                menu.Items.Add(trayLight);
             }
-
-            // Settings: the switches, so none of this needs the window open
-            var setMenu = new WF.ToolStripMenuItem("Settings");
-            AddSwitch(setMenu, "Start with Windows", delegate(bool on) { Slow(delegate { SetAutostart(on); }); }, delegate { return autostart; });
-            AddSwitch(setMenu, "Temperature in the tray", delegate(bool on) { E.SetTrayTemp(on); if (!on) { try { tray.Icon = icons[E.ModeIndex]; } catch { } } PollRate(); }, delegate { return E.S.TrayTemp; });
-            AddSwitch(setMenu, "Hotkeys", delegate(bool on) { E.SetHotkeys(on); if (on) RegisterHotkeys(); else UnregisterHotkeys(); }, delegate { return E.S.Hotkeys; });
-            AddSwitch(setMenu, "Take over the OMEN key", delegate(bool on) { Bg(delegate { E.SetOghSuppression(on); }); }, delegate { return E.S.SuppressOgh; });
-            setMenu.DropDownItems.Add(new WF.ToolStripSeparator());
-            AddSwitch(setMenu, "Eco on battery", delegate(bool on) { E.SetEcoOnBattery(on); }, delegate { return E.S.EcoOnBattery; });
-            AddSwitch(setMenu, "Cooler fans in Eco", delegate(bool on) { Bg(delegate { E.SetEcoCool(on); }); }, delegate { return E.S.EcoCool; });
-            AddSwitch(setMenu, "Sync Windows power mode", delegate(bool on) { E.SetSyncWinPower(on); }, delegate { return E.S.SyncWinPower; });
-            AddSwitch(setMenu, "Thermal guard", delegate(bool on) { if (on || ConfirmGuardOff()) Bg(delegate { E.SetGuard(on); }); }, delegate { return E.S.Guard; });
-            if (trayHz.Count >= 2) AddSwitch(setMenu, "Lowest refresh rate on battery", delegate(bool on) { E.SetLowHzOnBattery(on); }, delegate { return E.S.LowHzOnBattery; });
-            menu.Items.Add(setMenu);
 
             menu.Items.Add(new WF.ToolStripSeparator());
             menu.Items.Add(Item("Show " + Program.DisplayName, delegate { ShowPanel(); }));
@@ -637,35 +589,17 @@ namespace Ohman {
             tray = new WF.NotifyIcon { Icon = icons[1], Text = Program.DisplayName, Visible = true, ContextMenuStrip = menu };
             tray.MouseClick += delegate(object o, WF.MouseEventArgs me) { if (me.Button == WF.MouseButtons.Left) TogglePanel(); };
         }
-        /// <summary>0, then 5 W steps up to the profile's ceiling, with the ceiling itself always last.</summary>
-        static int[] PowerSteps(int max) {
-            var steps = new List<int>();
-            for (int w = 0; w < max; w += 5) steps.Add(w);
-            steps.Add(max);
-            return steps.ToArray();
-        }
-        readonly List<Func<bool>> swState = new List<Func<bool>>();
-        void AddSwitch(WF.ToolStripMenuItem parent, string text, Action<bool> set, Func<bool> get) {
-            var it = new WF.ToolStripMenuItem(text);
-            it.Click += delegate { set(!get()); RefreshTray(); };
-            traySw.Add(it); swState.Add(get); parent.DropDownItems.Add(it);
-        }
         /// <summary>Tick what is currently true. Called when the menu opens and after every state change.</summary>
         void RefreshTray() {
             if (tray == null) return;
             var S = E.S;
             for (int i = 0; i < 3; i++) trayModes[i].Checked = i == E.ModeIndex;
             for (int i = 0; i < trayFan.Count; i++) trayFan[i].Checked = S.Fan == Choice.FanModes[i];
-            foreach (var it in trayPower) it.Checked = (int)it.Tag == S.TdpOffset;
             int hzNow = Display.CurrentHz();
             foreach (var it in trayHz) it.Checked = (int)it.Tag == hzNow;
-            if (trayGpu.Count == 4) { GpuLevel g = E.EffectiveGpu; for (int i = 0; i < 3; i++) trayGpu[i].Checked = !S.GpuAuto && (int)g == i; trayGpu[3].Checked = S.GpuAuto; }
             int gfx = E.GpuModePending >= 0 ? E.GpuModePending : E.GpuMode;
             foreach (var it in trayGfx) it.Checked = (int)it.Tag == gfx;
-            int litNow = Choice.OfLight(S.Light, S.LightEffect);
-            for (int i = 0; i < trayLight.Count; i++) trayLight[i].Checked = i == litNow;
-            foreach (var it in trayBright) it.Checked = (int)it.Tag == S.LightLevel;
-            for (int i = 0; i < traySw.Count; i++) traySw[i].Checked = swState[i]();
+            if (trayLight != null) trayLight.Checked = S.Light != 0;
         }
         /// <summary>Write a graphics mode and offer the restart it needs; shared by the Settings page and the tray.</summary>
         void SwitchGraphics(int m) {
