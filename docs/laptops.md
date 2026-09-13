@@ -6,14 +6,13 @@ the only model-specific thing in the app, and it lives in one table: [`src/Platf
 
 ## The two states
 
-| | What it means |
-|---|---|
-| **Verified** | Somebody ran the checklist below on that exact board and every control did what it says. The settings for it are fixed rather than worked out at run time. |
-| **Supported** | Ohman asks the firmware what generation it is and drives it with the mode bytes documented for that generation, with power, GPU and lighting controls enabled only where the firmware answers. This is the normal case and it works. |
+Every OMEN and Victus laptop is **supported**, and there is no "unsupported" list. A board nobody has ever seen
+still runs: Ohman reads the firmware's own system-design data, works out which generation it is, and drives it
+with the mode bytes documented for that generation. Power, GPU and lighting appear only where the firmware
+answers for them. If it answers with nothing usable, Ohman stays read-only and says so in the window.
 
-There is no "unsupported" list. A board nobody has ever seen still runs: the app reads the firmware's own
-system-design data and builds a profile from it. If the firmware answers with nothing usable, Ohman stays
-read-only and says so in the window rather than writing bytes it does not understand.
+A model becomes **verified** once somebody has run the checklist below on that exact board and every control
+did what it says. Its settings are then fixed rather than worked out at run time.
 
 ## Verified
 

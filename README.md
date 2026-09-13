@@ -53,17 +53,17 @@ screenshots above are.
 
 ## Your laptop
 
-**Verified on the HP OMEN Transcend 14 (2024, board 8C58).** Every other OMEN and Victus laptop is *supported*:
-Ohman asks the firmware what generation it is, drives it with the mode bytes documented for that generation,
-and enables power, GPU and lighting controls only where the firmware answers.
+**Every OMEN and Victus laptop is supported.** Ohman asks the firmware what generation it is and drives it
+accordingly. Controls your firmware does not offer are hidden rather than broken.
 
-The full table is in **[docs/laptops.md](docs/laptops.md)**.
+One of them is **verified**: the HP OMEN Transcend 14 (2024, board 8C58), where an owner ran the checklist and
+every control did what it says. The full table is in **[docs/laptops.md](docs/laptops.md)**.
 
-> ### Verify your laptop
+> ### Verify yours
 > If your machine is not marked verified, this is the most useful thing you can contribute, and it takes five
 > minutes. Run through [the checklist](docs/laptops.md#verifying-your-laptop), run `tools\support-info.cmd`, and
 > open a **Verify my laptop** issue with the file it writes. Your model moves to verified and everybody with that
-> board gets a tested profile instead of a deduced one.
+> board gets a profile that has been tested on a real machine.
 
 If a control is wrong on your model, open a **New laptop support** issue with the same file and, if you can get
 it, OGH's own log from a session where you clicked every mode:
