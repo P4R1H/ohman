@@ -56,8 +56,11 @@ screenshots above are.
 **Every OMEN and Victus laptop is supported.** Ohman asks the firmware what generation it is and drives it
 accordingly. Controls your firmware does not offer are hidden rather than broken.
 
+OMEN 15, 16 and 17 &middot; OMEN MAX 16 &middot; OMEN Transcend 14 and 16 &middot; Victus 15 and 16, including
+the S and R.
+
 One of them is **verified**: the HP OMEN Transcend 14 (2024, board 8C58), where an owner ran the checklist and
-every control did what it says. The full table is in **[docs/laptops.md](docs/laptops.md)**.
+every control did what it says. Every model and its board ids are listed in **[docs/laptops.md](docs/laptops.md)**.
 
 > ### Verify yours
 > If your machine is not marked verified, this is the most useful thing you can contribute, and it takes five
