@@ -254,9 +254,23 @@ namespace Ohman {
             }
         }
 
+        const double Snap = 11;        // a little over the gap between keys, and between rows
+
+        /// <summary>The key under the pointer, or the nearest one within Snap. The gaps are five pixels wide, and
+        /// treating them as empty meant dragging across the board dropped the hover between every pair of keys, so
+        /// the whole group flicked off and on again. A point in a gap belongs to whoever is closest. It also means
+        /// there are no dead clicks: clicking a gap selects the key you were obviously aiming at.</summary>
         KeyDef Hit(Point p) {
-            foreach (var k in Keys) if (KeyRect(k).Contains(p)) return k;
-            return null;
+            KeyDef best = null; double bestD = double.MaxValue;
+            foreach (var k in Keys) {
+                Rect r = KeyRect(k);
+                if (r.Contains(p)) return k;
+                double dx = p.X < r.Left ? r.Left - p.X : p.X > r.Right ? p.X - r.Right : 0;
+                double dy = p.Y < r.Top ? r.Top - p.Y : p.Y > r.Bottom ? p.Y - r.Bottom : 0;
+                double d = dx * dx + dy * dy;
+                if (d < bestD) { bestD = d; best = k; }
+            }
+            return bestD <= Snap * Snap ? best : null;   // past the edge of the board, nothing is hovered
         }
         KeyDef hovered;
         protected override void OnMouseMove(MouseEventArgs e) {
