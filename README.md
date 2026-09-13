@@ -1,12 +1,11 @@
 <p align="center"><img src="docs/hero.png" alt="Ohman: fan curves, keyboard lighting and the OMEN key, without the vendor adware"></p>
 
 <p align="center">
-<a href="https://github.com/P4R1H/Ohman/releases/latest/download/Ohman.exe"><img src="https://img.shields.io/badge/Download-Ohman.exe-3F8CFF?style=for-the-badge" alt="Download Ohman.exe"></a>
-</p>
-<p align="center">
-<a href="https://p4r1h.github.io/ohman/">p4r1h.github.io/ohman</a> &middot;
-<a href="docs/laptops.md">Supported laptops</a> &middot;
-<a href="docs/research.md">How the firmware works</a>
+<a href="https://github.com/P4R1H/Ohman/releases/latest/download/Ohman.exe"><img alt="Download Ohman.exe" src="https://img.shields.io/badge/Download%20Ohman.exe-3F8CFF?style=for-the-badge&logo=windows&logoColor=white"></a>
+&nbsp;
+<a href="https://p4r1h.github.io/ohman/"><img alt="Website" src="https://img.shields.io/badge/Website-21262D?style=for-the-badge"></a>
+<a href="docs/laptops.md"><img alt="Supported laptops" src="https://img.shields.io/badge/Supported%20laptops-21262D?style=for-the-badge"></a>
+<a href="docs/research.md"><img alt="How the firmware works" src="https://img.shields.io/badge/How%20it%20works-21262D?style=for-the-badge"></a>
 </p>
 
 Don't you love paying $2,500 for a laptop and still having ads pushed down your throat by mandatory software
@@ -35,19 +34,6 @@ Ohman interacts with the BIOS through the same commands OGH uses. Use at your ow
 
 Settings live in `ohman.state`, everything the app does goes to `ohman.log`. Both sit beside the executable.
 Uninstalling is deleting it.
-
-<table>
-<tr>
-<td width="50%"><img src="docs/fans.png" alt="The Fans page with a draggable seven-point curve, the current temperature marked on it, and floor and ramp controls."></td>
-<td width="50%"><img src="docs/settings.png" alt="The Settings page in sections: OMEN key, power, display, app."></td>
-</tr>
-<tr>
-<td align="center"><em>Your own curve, remembered per mode</em></td>
-<td align="center"><em>Settings, in sections</em></td>
-</tr>
-</table>
-
-<p align="center"><img src="docs/keyboard.png" width="700" alt="The keyboard page: the board drawn in its real zone colours, a Key / Row / Zone / All selector, a hex field, brightness, and hue and shade strips."></p>
 
 ## Install
 
