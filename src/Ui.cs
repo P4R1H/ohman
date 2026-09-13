@@ -455,7 +455,10 @@ namespace Ohman {
                     path.AddString(label, family, (int)SD.FontStyle.Bold, em, new SD.PointF(0, 0), SD.StringFormat.GenericTypographic);
                     var bounds = path.GetBounds();
                     using (var m = new System.Drawing.Drawing2D.Matrix()) { m.Translate(mid - bounds.X - bounds.Width / 2, mid - bounds.Y - bounds.Height / 2); path.Transform(m); }
-                    using (var fill = new SD.SolidBrush(SD.Color.FromArgb(0x16, 0x13, 0x11))) g.FillPath(fill, path);
+                    // White, not the card colour. On paper a dark glyph has the better contrast ratio against all
+                    // three mode colours, but the tray is sixteen pixels on a dark taskbar: the diamond reads as a
+                    // dark object and a dark number inside it disappears. White is what is actually legible there.
+                    using (var fill = new SD.SolidBrush(SD.Color.White)) g.FillPath(fill, path);
                 }
             }
             return bmp;
