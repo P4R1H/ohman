@@ -21,7 +21,7 @@ namespace Ohman {
         // (window title, tray, scheduled task, single-instance names, log/state file names).
         public const string AppName = "Ohman";                 // internal id: file names, mutex, scheduled task
         public static string DisplayName = AppName;           // what the UI shows; override with Name=... in ohman.state
-        public const string Version = "2.0";
+        public const string Version = "1.0";
         public static string FileStem { get { return AppName.ToLowerInvariant(); } }
         public static EventWaitHandle ShowEvent, ExitEvent;   // named events: another instance can ask us to show or exit
         public static bool FlashTest;                         // --flash: show the key OSD at start (preview/screenshot aid)
