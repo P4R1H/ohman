@@ -33,7 +33,11 @@ Ohman interacts with the BIOS through the same commands OGH uses. Use at your ow
 | **Extras** | Starts with Windows without a UAC prompt, Eco on battery, Windows power-mode sync, an on-screen flash when a key changes something, an update check that never installs anything for you. |
 
 Settings live in `ohman.state`, everything the app does goes to `ohman.log`. Both sit beside the executable.
-Uninstalling is deleting it.
+
+To remove it: turn off **Start with Windows** and **Take over the OMEN key** in Settings first, then delete the
+folder. Those two write outside it, to a scheduled task and to HP's own logon tasks, and deleting the exe on
+its own leaves both behind. If you changed the refresh rate or the graphics mode, those live in Windows and in
+the BIOS respectively and stay as you left them.
 
 ## Install
 
