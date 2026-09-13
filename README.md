@@ -1,6 +1,5 @@
-<p align="center"><img src="docs/logo.webp" width="120" alt=""></p>
-<h1 align="center">Ohman</h1>
-<p align="center">OMEN Gaming Hub's controls, without OMEN Gaming Hub.</p>
+<p align="center"><img src="docs/hero.png" alt="Ohman — fan curves, keyboard lighting and the OMEN key, without the vendor adware"></p>
+
 <p align="center">
 <a href="https://github.com/P4R1H/Ohman/releases/latest/download/Ohman.exe"><img src="https://img.shields.io/badge/Download-Ohman.exe-3F8CFF?style=for-the-badge" alt="Download Ohman.exe"></a>
 </p>
@@ -15,8 +14,6 @@ with no alternative? Ohman is the alternative. One executable, no services, no d
 Same firmware interface as OMEN Gaming Hub, same bytes, nothing else.
 
 Ohman interacts with the BIOS through the same commands OGH uses. Use at your own risk.
-
-<p align="center"><img src="docs/home.png" width="460" alt="The Ohman panel: Balanced selected, live CPU and GPU temperatures and fan speeds, rows for fans, power gain and keyboard lighting."></p>
 
 ## Features
 

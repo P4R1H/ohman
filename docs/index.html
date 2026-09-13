@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="dark">
 <title>Ohman</title>
 <meta name="description" content="Ohman replaces OMEN Gaming Hub on Windows: modes, fan curves, power gain, GPU power, graphics switching and keyboard lighting. One executable, no services, no drivers, no account, no ads.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237FB2FF'/%3E%3Cstop offset='1' stop-color='%232C62B3'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='7.4' y='7.4' width='13.2' height='13.2' rx='2.2' fill='url(%23g)' transform='rotate(45 14 14)'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Cdefs%3E%3ClinearGradient id='g' gradientUnits='userSpaceOnUse' x1='4' y1='4' x2='24' y2='24'%3E%3Cstop offset='0' stop-color='%238FBCFF'/%3E%3Cstop offset='1' stop-color='%232454A6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='7.4' y='7.4' width='13.2' height='13.2' rx='2.2' fill='url(%23g)' transform='rotate(45 14 14)'/%3E%3C/svg%3E">
 <meta property="og:title" content="Ohman">
 <meta property="og:description" content="OMEN Gaming Hub's controls, without OMEN Gaming Hub. One executable, no services, no ads.">
 <meta property="og:image" content="https://p4r1h.github.io/ohman/home.png">
@@ -119,7 +119,7 @@ h1{
   -webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);
           mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);
 }
-.strip-track{display:flex;align-items:flex-end;width:max-content;animation:drift 64s linear infinite}
+.strip-track{display:flex;align-items:center;width:max-content;animation:drift 64s linear infinite}
 .strip:hover .strip-track{animation-play-state:paused}
 /* One scale for all four, never one height: the window is a different size on every page and that is the point.
    Keyboard is the wide one and Settings the tall one, exactly as they are on screen. Widths are the window's own
@@ -224,7 +224,7 @@ footer p{margin:0 0 8px}
 
   <!-- 1. header -->
   <header class="bar">
-    <span class="brand"><span class="mark" aria-hidden="true"><svg viewBox="0 0 28 28" width="38" height="38"><defs><linearGradient id="mk" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7FB2FF"/><stop offset="1" stop-color="#2C62B3"/></linearGradient></defs><rect x="7.4" y="7.4" width="13.2" height="13.2" rx="2.2" fill="url(#mk)" transform="rotate(45 14 14)"/></svg><span>😮</span></span>Ohman</span>
+    <span class="brand"><span class="mark" aria-hidden="true"><svg viewBox="0 0 28 28" width="38" height="38"><defs><linearGradient id="mk" gradientUnits="userSpaceOnUse" x1="4" y1="4" x2="24" y2="24"><stop offset="0" stop-color="#8FBCFF"/><stop offset="1" stop-color="#2454A6"/></linearGradient></defs><rect x="7.4" y="7.4" width="13.2" height="13.2" rx="2.2" fill="url(#mk)" transform="rotate(45 14 14)"/></svg><span>😮</span></span>Ohman</span>
     <nav>
       <a class="out" href="#laptops">Laptops</a>
       <a class="out" href="https://github.com/P4R1H/Ohman">GitHub</a>
@@ -240,7 +240,7 @@ footer p{margin:0 0 8px}
     <!-- 2. hero -->
     <div class="hero">
       <h1>OMEN Gaming Hub's controls. Without OMEN Gaming Hub.</h1>
-      <p class="lede">Modes, fan curves, power, graphics switching and keyboard lighting in one 400&nbsp;KB executable. Same firmware interface as OMEN Gaming Hub, same bytes. No services, no drivers, no account, no ads.</p>
+      <p class="lede">Modes, fan curves, power, graphics switching and keyboard lighting in one executable. Same firmware interface as OMEN Gaming Hub, same bytes. No services, no drivers, no account, no ads.</p>
 
       <!-- 3. actions -->
       <div class="cta">
@@ -250,7 +250,7 @@ footer p{margin:0 0 8px}
           Star on GitHub <span class="count" id="stars" hidden></span>
         </a>
       </div>
-      <p class="meta"><span id="ver">v2.0</span> &middot; <span id="size">400 KB</span> &middot; Windows 10/11</p>
+      <p class="meta"><span id="ver">v2.0</span> &middot; <span id="size">1.2 MB</span> &middot; Windows 10/11</p>
     </div>
 
     <!-- 4. the app -->
