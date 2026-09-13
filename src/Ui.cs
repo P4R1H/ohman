@@ -847,7 +847,7 @@ namespace Ohman {
             kbdModes = new LinkSeg(Choice.Light, 22, 13.5, 4, new[] { null, null, "The zone colours pulse", "Every zone through the spectrum together", "The spectrum travels across the zones", "Hand the keyboard to Windows Dynamic Lighting" });
             F<Border>("KbdModeHost").Child = kbdModes;
             if (E.Light.Inert)
-                for (int i = 1; i <= 4; i++) kbdModes.SetEnabled(i, false, "HP's firmware lighting interface does not drive per-key keyboards");
+                for (int i = 1; i <= 4; i++) kbdModes.SetEnabled(i, false, "This keyboard offers no lighting interface Ohman can drive; see the note below");
             kbdModes.Picked += delegate(int i) {
                 int m = Choice.LightMode(i), fx = Choice.LightEffect(i);
                 E.S.Light = m; E.S.LightEffect = fx; ApplyEditorState();
@@ -993,8 +993,10 @@ namespace Ohman {
             speedInline.Visibility = fx == 1 && lit ? Visibility.Visible : Visibility.Collapsed;      // breathe: colours and a speed
             kbdInfo.Visibility = lit ? Visibility.Collapsed : Visibility.Visible;
             btnWinLighting.Visibility = m == 2 ? Visibility.Visible : Visibility.Collapsed;
+            // Reaching here means both ways in failed: HP's firmware answers and lights nothing, and this keyboard
+            // offers no HID lighting interface either. Say which, so it does not read as "per-key is unsupported".
             txtKbdInfo.Text = inert && m != 2
-                ? "This is a per-key keyboard. HP's firmware interface answers for it but does not light it, so Ohman cannot set its colours yet \u2014 they go over the keyboard's own USB interface, which is only documented for the 2025 boards. Windows Dynamic Lighting drives it today."
+                ? "This is a per-key keyboard and neither way in works on it. HP's firmware interface answers but lights nothing, and this keyboard does not offer the HID lighting interface Ohman drives per-key boards through. Windows Dynamic Lighting can still light it. Run Ohman.exe --lamps and open an issue with what it prints."
                 : m == 0 ? "The backlight is off. Pick a mode to turn it back on, or press the keyboard backlight key."
                 : (WinLighting.Present || E.Hw.IsDemo ? "Windows Dynamic Lighting has the keyboard. Its colours and effects come from Windows settings."
                                                       : "No Dynamic Lighting device for this keyboard was found; Windows cannot drive it.");
@@ -1004,7 +1006,7 @@ namespace Ohman {
             if (!pick) { kbdBig.Selected.Clear(); kbdBig.Hover.Clear(); }
             string fxName = new[] { "static", "breathe", "cycle", "wave" }[Math.Max(0, Math.Min(3, fx))];
             // breathe runs in the firmware too, but it breathes the colours you picked, so it is not "colour fixed"
-            txtKbdStatus.Text = inert && m != 2 ? "per-key · not driveable yet" : m == 2 ? "windows lighting" : m == 0 ? "backlight off" : fx >= 2 ? "firmware effect · colour fixed" : E.Light.Describe + " · " + fxName;
+            txtKbdStatus.Text = inert && m != 2 ? "per-key · no interface we can drive" : m == 2 ? "windows lighting" : m == 0 ? "backlight off" : fx >= 2 ? "firmware effect · colour fixed" : E.Light.Describe + " · " + fxName;
             UpdateSelectionText();
             miniNeedsFrame = true; kbdBig.Repaint(); kbdMini.Repaint();
             Remeasure(Page.Keyboard);        // the colour editor and the effect editor are different heights
