@@ -139,7 +139,6 @@ Use at your own risk.
 
 ## Licence
 
-GPL-3.0-or-later, except the embedded IBM Plex typefaces, which are under the SIL Open Font License 1.1
-(Copyright (c) 2017 IBM Corp., Reserved Font Name "Plex"). See [fonts/OFL.txt](fonts/OFL.txt).
+GPL-3.0. IBM Plex is bundled under the OFL, see [fonts/OFL.txt](fonts/OFL.txt).
 
 OMEN is a trademark of HP Inc. This project is not affiliated with HP.
