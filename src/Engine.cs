@@ -201,6 +201,7 @@ namespace Ohman {
                         case "DriverInstalledByOhman": if (bool.TryParse(v, out b)) s.DriverInstalledByOhman = b; break;
                         case "DriverRestartPending": if (bool.TryParse(v, out b)) s.DriverRestartPending = b; break;
                         case "DriverNudgeDismissed": s.DriverNudgeDismissed = v.Length > 24 ? v.Substring(0, 24) : v; break;
+                        case "FanCeilingSeen": if (TryInt(v, out n)) s.FanCeilingSeen = Math.Max(0, Math.Min(255, n)); break;
                     }
                 }
             } catch (Exception ex) { Log.Write("settings apply " + k + ": " + ex.Message); }
@@ -257,6 +258,7 @@ namespace Ohman {
                 sb.AppendLine("DriverInstalledByOhman=" + DriverInstalledByOhman);
                 sb.AppendLine("DriverRestartPending=" + DriverRestartPending);
                 sb.AppendLine("DriverNudgeDismissed=" + DriverNudgeDismissed);
+                sb.AppendLine("FanCeilingSeen=" + FanCeilingSeen);
                 sb.AppendLine("MaxBackWhenCool=" + MaxBackWhenCool);
                 sb.AppendLine("MaxStopAfterMin=" + MaxStopAfterMin);
                 sb.AppendLine("ManualLinked=" + ManualLinked);
