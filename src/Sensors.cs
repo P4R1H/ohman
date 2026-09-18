@@ -248,8 +248,13 @@ namespace Ohman {
                     CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true
                 };
                 using (var p = Process.Start(psi)) {
-                    string line = p.StandardOutput.ReadLine();
-                    if (!p.WaitForExit(2500)) { try { p.Kill(); } catch { } nvFail++; return; }
+                    string line = null;
+                    p.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e) { if (line == null && e.Data != null) line = e.Data; };
+                    p.ErrorDataReceived += delegate { };
+                    p.BeginOutputReadLine();
+                    p.BeginErrorReadLine();
+                    if (!p.WaitForExit(2500)) { try { p.Kill(); } catch { } p.WaitForExit(2000); Log.Write("nvidia-smi query timed out"); nvFail++; return; }
+                    p.WaitForExit();
                     if (string.IsNullOrEmpty(line)) { nvFail++; return; }
                     string[] parts = line.Split(',');
                     if (parts.Length != 4) { nvFail++; return; }             // a dropped field would shift the columns
