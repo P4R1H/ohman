@@ -253,7 +253,13 @@ namespace Ohman {
                     p.ErrorDataReceived += delegate { };
                     p.BeginOutputReadLine();
                     p.BeginErrorReadLine();
-                    if (!p.WaitForExit(2500)) { try { p.Kill(); } catch { } p.WaitForExit(2000); Log.Write("nvidia-smi query timed out"); nvFail++; return; }
+                    if (!p.WaitForExit(2500)) {
+                        try { p.Kill(); } catch { }
+                        p.WaitForExit(2000);
+                        if (nvFail == 0) Log.Write("nvidia-smi query timed out");
+                        nvFail++;
+                        return;
+                    }
                     p.WaitForExit();
                     if (string.IsNullOrEmpty(line)) { nvFail++; return; }
                     string[] parts = line.Split(',');
