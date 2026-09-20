@@ -1343,13 +1343,13 @@ namespace Ohman {
         public void SetGuard(bool on) {
             S.Guard = on;
             S.Save();
-            if (!on && GuardActive) { GuardActive = false; guardSafeSince = DateTime.MinValue; curLevel1 = curLevel2 = -1; lock (applySync) { ApplyFanCore(); lastFanWrite = DateTime.Now; } Log.Write("thermal guard switched off while engaged; fans back to " + S.Fan); }
+            if (!on && GuardActive) { GuardActive = false; guardSafeSince = DateTime.MinValue; guardStalled = false; guardIgnoredTicks = guardHotTicks = guardWarmTicks = 0; curLevel1 = curLevel2 = -1; lock (applySync) { ApplyFanCore(); lastFanWrite = DateTime.Now; } Log.Write("thermal guard switched off while engaged; fans back to " + S.Fan); }
             Changed();
         }
         void GuardTick() {
             if (!BiosOk || Hw.IsDemo || ReadOnly) return;      // read-only boards: nothing to force, the firmware's own limits apply
             if (!S.Guard) {
-                if (GuardActive) { GuardActive = false; guardSafeSince = DateTime.MinValue; curLevel1 = curLevel2 = -1; lock (applySync) { ApplyFanCore(); lastFanWrite = DateTime.Now; } Changed(); }
+                if (GuardActive) { GuardActive = false; guardSafeSince = DateTime.MinValue; guardStalled = false; guardIgnoredTicks = guardHotTicks = guardWarmTicks = 0; curLevel1 = curLevel2 = -1; lock (applySync) { ApplyFanCore(); lastFanWrite = DateTime.Now; } Changed(); }
                 // Still read the fans. This is the only tick that runs with the window closed, and somebody
                 // running Ohman in the tray with the guard switched off has to be able to learn a ceiling too.
                 try { int[] idle; lock (applySync) idle = Hw.GetFanLevels(); NoteFanLevels(idle); } catch { }
