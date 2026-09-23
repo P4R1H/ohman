@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman: the embedded controller, through the driver.
 //
 // The EC is the chip that actually runs the fans; the WMI mailbox is the firmware relaying requests to it. On
@@ -367,10 +367,13 @@ namespace Ohman {
         /// agree with the CPU's own sensor when the driver can supply one. The tachometers have to read like fan
         /// speeds, and have to agree with the firmware's own answer when it will give one.</summary>
         public bool Verify(int[] mailboxRpm, double dieTemp, out string why) {
-            EcReading r = Read();
-            if (!r.Any) { why = LastError.Length > 0 ? LastError : "the EC did not answer"; return false; }
-            if (r.Manual != Map.ManualOff && r.Manual != Map.ManualOn) {
-                why = "0x" + Map.Manual.ToString("X2") + " reads 0x" + (r.Manual < 0 ? "??" : r.Manual.ToString("X2")) + ", which is not a fan-control state";
+            return VerifyReading(Read(), Map, mailboxRpm, dieTemp, LastError, out why);
+        }
+
+        public static bool VerifyReading(EcReading r, EcMap map, int[] mailboxRpm, double dieTemp, string lastError, out string why) {
+            if (r == null || !r.Any) { why = !string.IsNullOrEmpty(lastError) ? lastError : "the EC did not answer"; return false; }
+            if (map != null && r.Manual != map.ManualOff && r.Manual != map.ManualOn) {
+                why = "0x" + map.Manual.ToString("X2") + " reads 0x" + (r.Manual < 0 ? "??" : r.Manual.ToString("X2")) + ", which is not a fan-control state";
                 return false;
             }
             // A temperature register that reads exactly zero is one this board does not populate, not one that
@@ -378,23 +381,44 @@ namespace Ohman {
             // 0x57. Rejecting the map over it left both 878A owners with no fan control. An absent temperature
             // takes nothing away from the fan registers; it only means the tachometers have to carry the proof
             // on their own, so that check stops being optional below.
+            byte cpuReg = map != null ? map.CpuTemp : (byte)0x57;
             bool tempAbsent = r.Cpu == 0;
             if (!tempAbsent) {
-                if (r.Cpu < 20 || r.Cpu > 110) { why = "0x" + Map.CpuTemp.ToString("X2") + " reads " + r.Cpu + ", which is not a temperature"; return false; }
+                if (r.Cpu < 20 || r.Cpu > 110) { why = "0x" + cpuReg.ToString("X2") + " reads " + r.Cpu + ", which is not a temperature"; return false; }
                 if (!double.IsNaN(dieTemp) && Math.Abs(r.Cpu - dieTemp) > 25) {
                     why = "it reads " + r.Cpu + " where the CPU itself reads " + dieTemp.ToString("0");
                     return false;
                 }
             }
             if (r.Rpm1 < 0 || r.Rpm1 > 9000 || r.Rpm2 < 0 || r.Rpm2 > 9000) { why = "fan speeds of " + r.Rpm1 + " and " + r.Rpm2 + " are not rpm"; return false; }
-            // A firmware reading of zero is a reading when the temperature register is absent and the tachometers
-            // are the only proof left: fans that are off agree at zero, and a board started cold would otherwise
-            // never verify, since this runs once at open.
-            bool mailboxKnown = mailboxRpm != null && mailboxRpm.Length > 1 && (mailboxRpm[0] > 0 || (tempAbsent && mailboxRpm[0] == 0));
-            if (mailboxKnown) {
-                int want = mailboxRpm[0] * 100, slack = Math.Max(500, want / 4);
-                if (Math.Abs(r.Rpm1 - want) > slack) { why = "it reads " + r.Rpm1 + " rpm where the firmware reads " + want; return false; }
-            } else if (tempAbsent) { why = "no temperature at 0x" + Map.CpuTemp.ToString("X2") + " and no firmware fan speed to check the tachometers against"; return false; }
+
+            bool hasF1 = mailboxRpm != null && mailboxRpm.Length > 0 && mailboxRpm[0] >= 0;
+            bool hasF2 = mailboxRpm != null && mailboxRpm.Length > 1 && mailboxRpm[1] >= 0;
+
+            if (tempAbsent) {
+                if (!hasF1 && !hasF2) {
+                    why = "no temperature at 0x" + cpuReg.ToString("X2") + " and no firmware fan speed to check the tachometers against";
+                    return false;
+                }
+                // Stopped fans agree at zero, but zero bytes exist across arbitrary unmapped EC memory. An absent
+                // temperature sensor cannot accept stopped fans as proof of the map; at least one spinning fan is
+                // required so the tachometer registers are verified against active physical motion.
+                bool anySpinning = (hasF1 && mailboxRpm[0] > 0) || (hasF2 && mailboxRpm[1] > 0);
+                if (!anySpinning) {
+                    why = "no temperature at 0x" + cpuReg.ToString("X2") + " and stopped fans cannot prove tachometer registers";
+                    return false;
+                }
+            }
+
+            if (hasF1) {
+                int want1 = mailboxRpm[0] * 100, slack1 = Math.Max(500, want1 / 4);
+                if (Math.Abs(r.Rpm1 - want1) > slack1) { why = "fan 1 reads " + r.Rpm1 + " rpm where the firmware reads " + want1; return false; }
+            }
+            if (hasF2) {
+                int want2 = mailboxRpm[1] * 100, slack2 = Math.Max(500, want2 / 4);
+                if (Math.Abs(r.Rpm2 - want2) > slack2) { why = "fan 2 reads " + r.Rpm2 + " rpm where the firmware reads " + want2; return false; }
+            }
+
             why = (tempAbsent ? "no temperature register" : "CPU " + r.Cpu + " C") + ", fans " + r.Rpm1 + "/" + r.Rpm2 + " rpm, control 0x" + r.Manual.ToString("X2");
             return true;
         }

@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman: control engine: settings, apply logic, keep-alive heartbeat, OMEN key watcher, OGH suppression.
 using System;
 using System.Collections.Generic;
@@ -441,12 +441,19 @@ namespace Ohman {
                 // fewer opcodes threw before BiosOk was ever set and the whole app went read-only, including the
                 // mode switching that board can do perfectly well. Nothing here is allowed to decide that any more:
                 // the mailbox works if 0x28 answers, and every other capability is probed on its own below.
+                Exception exFan = null;
                 try { FanCount = Hw.GetFanCountPassive(); }   // never the 0x10 query here: it is the keep-alive trigger
-                catch (Exception ex) { FanCount = -1; Log.Write("no fan table (" + ex.Message + "): fan readout unavailable"); }
+                catch (Exception ex) { exFan = ex; FanCount = -1; Log.Write("no fan table (" + ex.Message + "): fan readout unavailable"); }
                 // Some firmware refuses 0x28 outright (rc 3). That is an answer, not a dead mailbox, so it must not
                 // abort the rest of the check: a board can still have its mode bytes from a contributed readback.
+                Exception exInfo = null;
                 try { Info = Hw.GetSystemInfo(); }
-                catch (Exception ex) { Info = new SystemInfo(); Log.Write("system data (0x28) unavailable: " + ex.Message); }
+                catch (Exception ex) { exInfo = ex; Info = new SystemInfo(); Log.Write("system data (0x28) unavailable: " + ex.Message); }
+
+                string probeFailure;
+                if (!FirmwareVerificationLogic.EvaluateBiosProbes(exFan, exInfo, out probeFailure))
+                    throw new InvalidOperationException(probeFailure);
+
                 BiosOk = true;                                 // the mailbox answers; what it will answer is decided below
                 if (!Info.Valid) Log.Write("no system data: power gain and graphics cannot be offered on this board");
                 if (Supported && !Hw.IsDemo && Info.Valid && Info.ThermalPolicy != P.ThermalPolicy) {
@@ -1772,6 +1779,22 @@ namespace Ohman {
                 + " · ec " + (Ec == null ? "none" : (ecVerified ? Ec.Map.Name : "map rejected") + (Ec.Resting ? " (resting)" : "") + " · " + EcProof) : "none (" + DriverWhy + ")"));
             sb.AppendLine("last heartbeat: " + (LastHeartbeat == DateTime.MinValue ? "never" : LastHeartbeat.ToString("HH:mm:ss")) + "   last key event: " + (LastEventTime == DateTime.MinValue ? "none" : LastEventId + "/" + LastEventData + " at " + LastEventTime.ToString("HH:mm:ss")));
             return sb.ToString();
+        }
+    }
+
+    public static class FirmwareVerificationLogic {
+        /// <summary>Decide whether mailbox communication is healthy based on the two passive probes.
+        /// Preserves the distinction between firmware command refusal (BiosException) and mailbox failure.</summary>
+        public static bool EvaluateBiosProbes(Exception exFan, Exception exInfo, out string failureReason) {
+            failureReason = null;
+            if (exFan != null && exInfo != null) {
+                bool unsupported = (exFan is BiosException) || (exInfo is BiosException);
+                failureReason = unsupported
+                    ? "firmware responded with unsupported command (" + (exInfo is BiosException ? exInfo.Message : exFan.Message) + ")"
+                    : "mailbox communication failed (" + exInfo.Message + ")";
+                return false;
+            }
+            return true;
         }
     }
 }
