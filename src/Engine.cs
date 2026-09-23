@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman: control engine: settings, apply logic, keep-alive heartbeat, OMEN key watcher, OGH suppression.
 using System;
 using System.Collections.Generic;
@@ -476,7 +476,7 @@ namespace Ohman {
             InitDriver();           // reads only; the fan route it may pick is not written until ApplyAll below
             // Everything above only looked. Everything below changes the machine, and the support report wants the
             // first half without the second: it must describe this laptop, not reconfigure it.
-            if (!apply) { InitLight(); Log.Write("probe only: nothing was applied"); return; }
+            if (!apply) { InitLight(false); Log.Write("probe only: nothing was applied"); return; }
             // take the key over only where we can also take over the fans; on an unknown board OGH stays in charge
             if (S.SuppressOgh && !Hw.IsDemo && Supported) { KillOgh(); new Thread(delegate() { SetOghTasks(true); }) { IsBackground = true }.Start(); }
             if (S.EcoOnBattery && OnBattery && ModeIndex != 0) { ecoForcedByBattery = true; modeBeforeBattery = ModeIndex; S.SavedModeOverride = modeBeforeBattery; S.ModeIndex = 0; Log.Write("on battery at start: Eco (user mode " + ModeNames[modeBeforeBattery] + " kept)"); }
@@ -485,7 +485,7 @@ namespace Ohman {
                 if (m.CurveLevels == null) m.CurveLevels = VendorCurveAt(false);
                 if (m.GpuCurveLevels == null) m.GpuCurveLevels = VendorCurveAt(true);
             }
-            InitLight();
+            InitLight(true);
             ApplyRefreshRate(OnBattery);
             NoteFanMode(S.Fan);
             ApplyAll(false);
@@ -693,6 +693,12 @@ namespace Ohman {
             try { if (heartbeat != null) heartbeat.Dispose(); } catch { }
             try { if (guard != null) guard.Dispose(); } catch { }
             try { if (watcher != null) { watcher.Stop(); watcher.Dispose(); } } catch { }
+            ReleasePerKey();
+            try {
+                var disp = Light as IDisposable;
+                if (disp != null) disp.Dispose();
+            } catch (Exception ex) { Log.Write("dispose light: " + ex.Message); }
+            Light = null;
         }
 
         // ---------- apply ----------
@@ -702,7 +708,12 @@ namespace Ohman {
         /// keyboard that works. Nothing here writes a performance byte, so ReadOnly has no say over it.</summary>
         bool TryLight(Action a, string what) {
             try { a(); return true; }
-            catch (Exception ex) { Log.Write("FAIL " + what + ": " + ex.Message); Fire(Toast, what + " failed: " + ex.Message, true); return false; }
+            catch (Exception ex) {
+                ReleasePerKey();
+                Log.Write("FAIL " + what + ": " + ex.Message);
+                Fire(Toast, what + " failed: " + ex.Message, true);
+                return false;
+            }
         }
 
         bool Try(Action a, string what) {
@@ -1624,7 +1635,7 @@ namespace Ohman {
         }
 
         // ---------- keyboard lighting ----------
-        void InitLight() {
+        void InitLight(bool apply = true) {
             try {
                 Light = Hw.IsDemo ? (ILighting)new DemoLighting() : (BiosOk ? BiosLighting.Detect() : null);   // not !ReadOnly: see TryLight
                 // A per-key board answers the firmware calls and lights nothing by them. Its colours live on the
@@ -1633,13 +1644,13 @@ namespace Ohman {
                     var la = LampArray.FindKeyboard();
                     if (la != null) Light = new PerKeyLighting(la);
                     else Log.Write("per-key board with no HID lighting interface we can drive; colours left to Windows");
-                    WinLighting.Warm();
+                    if (apply) WinLighting.Warm();
                 }
                 if (Light == null) return;
                 // One-time repair. Before this build a per-key keyboard was initialised to white for every lamp,
                 // and InitLight then saved that array as the owner's own colours. It is the right length, so it
                 // parses cleanly and would be painted straight back. Drop it once and let the new default stand.
-                if (Light.Kind == LightKind.PerKey && !S.PerKeyReset) {
+                if (apply && Light.Kind == LightKind.PerKey && !S.PerKeyReset) {
                     S.LightColors = "";
                     S.PerKeyReset = true;
                     S.Save();
@@ -1647,9 +1658,16 @@ namespace Ohman {
                 }
                 var fw = Light.GetColors();
                 LightColors = ParseColors(S.LightColors, Light.Zones);
-                if (LightColors == null) { LightColors = fw; S.LightColors = JoinColors(fw); }    // first run: keep what the keyboard shows now
-                if (S.Light < 0) S.Light = WinLighting.HasControl ? 2 : ((Light.GetBacklight() & BiosLighting.ON_FLAG) != 0 ? 1 : 0);
-                Log.Write("lighting: " + Light.Describe + ", mode " + S.Light + ", effect " + S.LightEffect + ", level " + S.LightLevel + (WinLighting.Present ? ", Windows Dynamic Lighting present" + (WinLighting.HasControl ? " (in control)" : "") : ""));
+                if (LightColors == null) {
+                    LightColors = fw;
+                    if (apply) S.LightColors = JoinColors(fw);    // first run: keep what the keyboard shows now
+                }
+                int lightMode = S.Light;
+                if (lightMode < 0) {
+                    lightMode = WinLighting.HasControl ? 2 : ((Light.GetBacklight() & BiosLighting.ON_FLAG) != 0 ? 1 : 0);
+                    if (apply) S.Light = lightMode;
+                }
+                Log.Write("lighting: " + Light.Describe + ", mode " + (apply ? S.Light : lightMode) + ", effect " + S.LightEffect + ", level " + S.LightLevel + (WinLighting.Present ? ", Windows Dynamic Lighting present" + (WinLighting.HasControl ? " (in control)" : "") : ""));
             } catch (Exception ex) { Log.Write("lighting init: " + ex.Message); Light = null; }
         }
         static Rgb[] ParseColors(string s, int n) {

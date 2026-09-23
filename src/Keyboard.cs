@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman: keyboard drawing. One control renders both the small glyph on the Home page and the Keyboard page's map:
 // flat coloured keys, nothing more. The layout is a list of keys in key units; zones follow HP's four-zone firmware
 // order (0 right, 1 middle, 2 left, 3 WASD), which is also the order of the colour table.
@@ -88,8 +88,8 @@ namespace Ohman {
         /// under, so the match is the hardware's own; any key the device did not name falls back to the nearest lamp by
         /// position, which is what the bounding box is for. Afterwards a key's Zone is its lamp id and the rest of the
         /// app (selection, painting, effect frames, drawing) carries on in zone indices exactly as it does with four.</summary>
-        public static void BindLamps(List<KeyDef> keys, LampArray la) { BindLamps(keys, la, true); }
-        static void BindLamps(List<KeyDef> keys, LampArray la, bool log) {
+        public static void BindLamps(List<KeyDef> keys, ILampArray la) { BindLamps(keys, la, true); }
+        static void BindLamps(List<KeyDef> keys, ILampArray la, bool log) {
             double maxX = 0, maxY = 0;
             foreach (var k in keys) { maxX = Math.Max(maxX, k.X + k.W); maxY = Math.Max(maxY, k.Y + k.H); }
             if (maxX <= 0 || maxY <= 0 || la.LampCount <= 0) return;
@@ -117,7 +117,7 @@ namespace Ohman {
         /// <summary>The lamp closest to a point given as a fraction of the board, in the device's own bounding box.
         /// An unclaimed lamp wins only when it is within a key's width of the nearest one: a key whose own lamp is
         /// taken shares it rather than reaching across the board for a free one.</summary>
-        static int Nearest(LampArray la, double fx, double fy, bool[] claimed) {
+        static int Nearest(ILampArray la, double fx, double fy, bool[] claimed) {
             double want = fx * la.WidthMicrometres, wantY = fy * la.HeightMicrometres;
             int best = -1, any = 0;
             double bestD = double.MaxValue, anyD = double.MaxValue;
@@ -134,7 +134,7 @@ namespace Ohman {
         /// (a MAX 16 lights its spacebar with five lamps and the drawing has one key there), else the nearest owned
         /// lamp on the same row, to its left first. -1 for owned lamps. The drawing is built here from the same data
         /// the keyboard page uses, so the engine gets the same answer with no window open.</summary>
-        public static int[] Followers(LampArray la) {
+        public static int[] Followers(ILampArray la) {
             var lead = new int[la.LampCount];
             for (int i = 0; i < lead.Length; i++) lead[i] = -1;
             try {

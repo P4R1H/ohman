@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman: entry point.
 //   Ohman.exe                 normal start (elevated build asks for UAC once)
 //   Ohman.exe --hidden        start minimised to the tray (used by the autostart task)
@@ -57,6 +57,7 @@ namespace Ohman {
                 else if (a == "--page" && i + 1 < args.Length) StartPage = args[++i].ToLowerInvariant();
                 else if (a == "--board" && i + 1 < args.Length) Platforms.BoardOverride = args[++i];   // pretend to be another board (with --demo: see what generic mode would build)
             }
+            foreach (string a0 in args) if (a0.ToLowerInvariant() == "--test") return RunTests();
             foreach (string a0 in args) if (a0.ToLowerInvariant() == "--lamps") return ListLamps();
             // Before the single-instance guard, like --lamps: with Ohman already running, anything after it
             // just signals the live window and exits, which made this silently do nothing.
@@ -151,6 +152,7 @@ namespace Ohman {
                 IntPtr h = GetStdHandle(-11);                                  // STD_OUTPUT_HANDLE
                 bool nobodyListening = h == IntPtr.Zero || h == new IntPtr(-1);
                 if (nobodyListening && AllocConsole()) { PointStdOutAtConsole(); return true; }
+                PointStdOutAtConsole();
             } catch { }
             return false;
         }
@@ -246,6 +248,227 @@ namespace Ohman {
             }
             return 0;
         }
+
+        static void Assert(bool cond, string msg) {
+            if (!cond) throw new InvalidOperationException("ASSERT FAILED: " + msg);
+        }
+
+        static int RunTests() {
+            bool ownConsole = OpenConsole();
+            try {
+                Console.WriteLine("Running probe-only and keyboard ownership tests...");
+
+                // 1. IsDeviceInternal location evidence
+                Console.Write("  IsDeviceInternal rules... ");
+                Assert(LampArray.IsDeviceInternal(@"\\?\hid#hid_device_system_vhf#1", 0x1234, null, null), "VHF path must be internal");
+                Assert(LampArray.IsDeviceInternal(@"\\?\ACPI#HPQ6001#1", 0x1234, null, null), "ACPI path must be internal");
+                Assert(!LampArray.IsDeviceInternal(@"\\?\hid#vid_046d&pid_c332", 0x046D, true, false), "Unknown vendor (Logitech) must not be internal");
+                // Darfon (0x0D62)
+                Assert(LampArray.IsDeviceInternal(@"\\?\hid#vid_0d62&pid_1234", 0x0D62, true, false), "Darfon with inLocalContainer=true must be internal");
+                Assert(!LampArray.IsDeviceInternal(@"\\?\hid#vid_0d62&pid_1234", 0x0D62, false, false), "Darfon with inLocalContainer=false must be rejected as external");
+                Assert(!LampArray.IsDeviceInternal(@"\\?\hid#vid_0d62&pid_1234", 0x0D62, true, true), "Darfon with removable=true must be rejected as external");
+                Assert(!LampArray.IsDeviceInternal(@"\\?\hid#vid_0d62&pid_1234", 0x0D62, false, true), "Darfon with removable=true must be rejected as external");
+                // Primax (0x0461)
+                Assert(LampArray.IsDeviceInternal(@"\\?\hid#vid_0461&pid_0010", 0x0461, true, false), "Primax with inLocalContainer=true must be internal");
+                Assert(!LampArray.IsDeviceInternal(@"\\?\hid#vid_0461&pid_0010", 0x0461, false, false), "Primax with inLocalContainer=false must be rejected as external");
+                // Chicony (0x04F2)
+                Assert(LampArray.IsDeviceInternal(@"\\?\hid#vid_04f2&pid_0020", 0x04F2, true, false), "Chicony with inLocalContainer=true must be internal");
+                Assert(!LampArray.IsDeviceInternal(@"\\?\hid#vid_04f2&pid_0020", 0x04F2, false, false), "Chicony with inLocalContainer=false must be rejected as external");
+                // ITE (0x048D)
+                Assert(LampArray.IsDeviceInternal(@"\\?\hid#vid_048d&pid_0030", 0x048D, true, false), "ITE with inLocalContainer=true must be internal");
+                Assert(!LampArray.IsDeviceInternal(@"\\?\hid#vid_048d&pid_0030", 0x048D, false, false), "ITE with inLocalContainer=false must be rejected as external");
+                Console.WriteLine("PASS");
+
+                // 2. Init(false) probe-only never acquires or paints
+                Console.Write("  Init(false) probe-only isolation... ");
+                var fake = new FakeLampArray(100);
+                LampArray.KeyboardFinder = delegate { return fake; };
+                BiosLighting.Detector = delegate { return new BiosLighting(3, LightKind.PerKey, 4); };
+                try {
+                    var s = Settings.Load();
+                    s.NoPersist = true;
+                    s.SuppressOgh = false;
+                    s.RefreshHz = 0;
+                    s.DriverUse = false;
+                    var eng = new Engine(new TestHardware(), s);
+                    eng.Init(false);
+                    Assert(fake.TakeOverCount == 0, "Init(false) must NEVER call TakeOver");
+                    Assert(fake.SetAllCount == 0, "Init(false) must NEVER call SetAll");
+                    Assert(fake.SetLampsCount == 0, "Init(false) must NEVER call SetLamps");
+                    Assert(!s.TookWinLighting, "Init(false) must not take Windows Dynamic Lighting");
+                    Assert(eng.Light != null, "Init(false) should identify lighting device");
+                    Assert(eng.Light.Kind == LightKind.PerKey, "Device should be per-key");
+                    eng.Dispose();
+                    Assert(fake.DisposeCount >= 1, "Engine.Dispose must dispose device");
+                    Assert(fake.TakeOverFalseCount == 0, "Unacquired device should not call TakeOver(false)");
+                } finally {
+                    LampArray.KeyboardFinder = null;
+                    BiosLighting.Detector = null;
+                }
+                Console.WriteLine("PASS");
+
+                // 3. Normal application mode deferred ownership
+                Console.Write("  Deferred ownership acquisition... ");
+                var fake2 = new FakeLampArray(100);
+                var pk = new PerKeyLighting(fake2);
+                Assert(fake2.TakeOverCount == 0, "Constructing PerKeyLighting must NOT call TakeOver");
+                Assert(!pk.Held, "Device must not be held initially");
+                // First write acquires immediately before write
+                pk.SetColors(new Rgb[] { new Rgb(255, 0, 0) });
+                Assert(fake2.TakeOverCount == 1, "SetColors must acquire device");
+                Assert(fake2.TakeOverTrueCount == 1, "SetColors must call TakeOver(true)");
+                Assert(fake2.LastTakeOverValue == true, "Last takeover must be true");
+                Assert(fake2.SetLampsCount == 1, "SetColors must paint lamps");
+                Assert(pk.Held, "Device must be held after write");
+                Console.WriteLine("PASS");
+
+                // 4. Disposal releases acquired device
+                Console.Write("  Disposal releases acquired device... ");
+                pk.Dispose();
+                Assert(fake2.TakeOverFalseCount == 1, "Dispose must release device (TakeOver(false))");
+                Assert(!pk.Held, "Device must not be held after dispose");
+                Assert(fake2.DisposeCount == 1, "Underlying LampArray must be disposed");
+                Console.WriteLine("PASS");
+
+                // 5. Write failure releases device
+                Console.Write("  Write failure releases device... ");
+                var fake3 = new FakeLampArray(100);
+                var pk3 = new PerKeyLighting(fake3);
+                pk3.SetColors(new Rgb[] { new Rgb(0, 255, 0) });
+                Assert(pk3.Held, "Device should be held after successful write");
+                fake3.ThrowOnWrite = true;
+                bool threw = false;
+                try { pk3.SetColors(new Rgb[] { new Rgb(0, 0, 255) }); }
+                catch (System.IO.IOException) { threw = true; }
+                Assert(threw, "Write failure must bubble exception");
+                Assert(fake3.TakeOverFalseCount == 1, "Failure path must release device immediately");
+                Assert(!pk3.Held, "Device must not be held after write failure");
+                pk3.Dispose();
+                Console.WriteLine("PASS");
+
+                // 6. Engine disposal and TryLight failure release
+                Console.Write("  Engine disposal and TryLight failure release... ");
+                var fake4 = new FakeLampArray(100);
+                LampArray.KeyboardFinder = delegate { return fake4; };
+                BiosLighting.Detector = delegate { return new BiosLighting(3, LightKind.PerKey, 4); };
+                try {
+                    var s = Settings.Load();
+                    s.NoPersist = true;
+                    s.SuppressOgh = false;
+                    s.RefreshHz = 0;
+                    s.DriverUse = false;
+                    s.Light = 1;
+                    var eng = new Engine(new TestHardware(), s);
+                    eng.Init(true);
+                    var pkEngine = eng.Light as PerKeyLighting;
+                    Assert(pkEngine != null, "Engine.Light must be PerKeyLighting");
+                    Assert(fake4.TakeOverTrueCount >= 1, "Normal mode should acquire on write");
+                    eng.Dispose();
+                    Assert(fake4.TakeOverFalseCount >= 1, "Engine.Dispose must release per-key device");
+                    Assert(fake4.DisposeCount >= 1, "Engine.Dispose must dispose device");
+                } finally {
+                    LampArray.KeyboardFinder = null;
+                    BiosLighting.Detector = null;
+                }
+                Console.WriteLine("PASS");
+
+                Console.WriteLine("\nAll tests passed successfully!");
+                return 0;
+            } catch (Exception ex) {
+                Console.WriteLine("\nFAIL: " + ex.Message);
+                return 1;
+            }
+        }
+    }
+
+    internal sealed class FakeLampArray : ILampArray {
+        public int LampCount { get; set; }
+        public ushort VendorId { get; set; }
+        public ushort ProductId { get; set; }
+        public uint Kind { get; set; }
+        public int WidthMicrometres { get; set; }
+        public int HeightMicrometres { get; set; }
+        public uint MinUpdateMicroseconds { get; set; }
+        public string Path { get; set; }
+        public string Product { get; set; }
+        public ushort[] KeyUsage { get; set; }
+        public int[] X { get; set; }
+        public int[] Y { get; set; }
+        public bool UsableAsPerKey { get; set; }
+        public bool Internal { get; set; }
+        public bool AnyProgrammable { get; set; }
+
+        public int TakeOverCount;
+        public int TakeOverTrueCount;
+        public int TakeOverFalseCount;
+        public bool? LastTakeOverValue;
+        public int SetAllCount;
+        public int SetLampsCount;
+        public int DisposeCount;
+        public bool ThrowOnWrite;
+
+        public FakeLampArray(int lamps) {
+            LampCount = lamps;
+            VendorId = 0x0D62;
+            ProductId = 0x1234;
+            Kind = LampArray.KindKeyboard;
+            WidthMicrometres = 300000;
+            HeightMicrometres = 120000;
+            MinUpdateMicroseconds = 16000;
+            Path = @"\\?\hid#vid_0d62&pid_1234#1";
+            Product = "Fake Internal Keyboard";
+            KeyUsage = new ushort[lamps];
+            X = new int[lamps];
+            Y = new int[lamps];
+            UsableAsPerKey = true;
+            Internal = true;
+            AnyProgrammable = true;
+        }
+
+        public string Describe { get { return LampCount + " lamps, fake"; } }
+        public bool Programmable(int lamp) { return true; }
+
+        public void TakeOver(bool ours) {
+            TakeOverCount++;
+            if (ours) TakeOverTrueCount++; else TakeOverFalseCount++;
+            LastTakeOverValue = ours;
+        }
+
+        public void SetAll(Rgb c, int intensity) {
+            if (ThrowOnWrite) throw new System.IO.IOException("Simulated SetAll failure");
+            SetAllCount++;
+        }
+
+        public void SetLamps(int[] ids, Rgb[] colors, int intensity) {
+            if (ThrowOnWrite) throw new System.IO.IOException("Simulated SetLamps failure");
+            SetLampsCount++;
+        }
+
+        public void Dispose() {
+            DisposeCount++;
+        }
+    }
+
+    internal sealed class TestHardware : IHardware {
+        public bool IsDemo { get { return false; } }
+        public int GetFanCount() { return 2; }
+        public int GetFanCountPassive() { return 2; }
+        public int GetFanTableMax() { return 46; }
+        public int[] GetFanLevels() { return new int[] { 25, 25 }; }
+        public int GetTemperature() { return 45; }
+        public bool GetMaxFan() { return false; }
+        public GpuPowerState GetGpuPower() { return new GpuPowerState { CustomTgp = true, Ppab = false, DState = 1, PeakTemp = 70 }; }
+        public SystemInfo GetSystemInfo() {
+            return new SystemInfo { Valid = true, ThermalPolicy = 1, SwFanControl = true, DefaultPl4 = 159, DefaultConcurrentTdp = 30, GpuModes = 3,
+                Raw = new byte[] { 0x8C, 0, 0x35, 1, 1, 0x9F, 0, 3, 0x1E } };
+        }
+        public void SetMode(byte m, bool byBios) { }
+        public void SetMaxFan(bool on) { }
+        public void SetFanLevels(int a, int b) { }
+        public void SetConcurrentTdp(int w) { }
+        public void SetGpuPower(bool c, bool p, int t) { }
+        public int GetGpuMode() { return 0; }
+        public void SetGpuMode(int m) { }
     }
 }
 
