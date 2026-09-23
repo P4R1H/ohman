@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman: entry point.
 //   Ohman.exe                 normal start (elevated build asks for UAC once)
 //   Ohman.exe --hidden        start minimised to the tray (used by the autostart task)
@@ -57,6 +57,7 @@ namespace Ohman {
                 else if (a == "--page" && i + 1 < args.Length) StartPage = args[++i].ToLowerInvariant();
                 else if (a == "--board" && i + 1 < args.Length) Platforms.BoardOverride = args[++i];   // pretend to be another board (with --demo: see what generic mode would build)
             }
+            foreach (string a0 in args) if (a0.ToLowerInvariant() == "--test") return RunTests();
             foreach (string a0 in args) if (a0.ToLowerInvariant() == "--lamps") return ListLamps();
             // Before the single-instance guard, like --lamps: with Ohman already running, anything after it
             // just signals the live window and exits, which made this silently do nothing.
@@ -147,7 +148,8 @@ namespace Ohman {
         /// is a real destination, support-info.cmd's file included, and must be left alone.</summary>
         static bool OpenConsole() {
             try {
-                if (AttachConsole(-1)) { PointStdOutAtConsole(); return false; }
+                PointStdOutAtConsole();
+                if (AttachConsole(-1)) return false;
                 IntPtr h = GetStdHandle(-11);                                  // STD_OUTPUT_HANDLE
                 bool nobodyListening = h == IntPtr.Zero || h == new IntPtr(-1);
                 if (nobodyListening && AllocConsole()) { PointStdOutAtConsole(); return true; }
@@ -245,6 +247,88 @@ namespace Ohman {
                 la.Dispose();
             }
             return 0;
+        }
+
+        static int RunTests() {
+            OpenConsole();
+            Console.WriteLine("Running Ohman deterministic tests...");
+            int passed = 0, failed = 0;
+
+            Action<string, bool> check = delegate(string name, bool ok) {
+                if (ok) {
+                    passed++;
+                    Console.WriteLine("  PASS: " + name);
+                } else {
+                    failed++;
+                    Console.WriteLine("  FAIL: " + name);
+                }
+            };
+
+            // 1. Missing sensors: fail-safe release
+            check("Sensor: missing CPU + unusable chassis is NOT safe",
+                !ThermalGuardLogic.IsGuardSafe(false, double.NaN, 85, false, -1, 54));
+            check("Sensor: NaN CPU + unusable chassis is NOT safe",
+                !ThermalGuardLogic.IsGuardSafe(true, double.NaN, 85, false, 45, 54));
+            check("Sensor: missing CPU + usable cool chassis is NOT safe",
+                !ThermalGuardLogic.IsGuardSafe(false, double.NaN, 85, true, 45, 54));
+            check("Sensor: cool CPU + unusable chassis is SAFE",
+                ThermalGuardLogic.IsGuardSafe(true, 70, 85, false, -1, 54));
+            check("Sensor: cool CPU + usable cool chassis is SAFE",
+                ThermalGuardLogic.IsGuardSafe(true, 70, 85, true, 45, 54));
+            check("Sensor: cool CPU + usable hot chassis is NOT safe",
+                !ThermalGuardLogic.IsGuardSafe(true, 70, 85, true, 60, 54));
+            check("Sensor: cool CPU + usable failed chassis read (-1) is NOT safe",
+                !ThermalGuardLogic.IsGuardSafe(true, 70, 85, true, -1, 54));
+            check("Sensor: hot CPU is NOT safe",
+                !ThermalGuardLogic.IsGuardSafe(true, 90, 85, true, 45, 54));
+
+            // 2. One stalled fan
+            check("Stall: fan1=0, fan2=25 at 80C is stalled",
+                ThermalGuardLogic.IsStalled(true, 80, 75, 0, 25, 5, 10));
+            check("Stall: fan1=25, fan2=0 at 80C is stalled",
+                ThermalGuardLogic.IsStalled(true, 80, 75, 25, 0, 5, 10));
+            check("Stall: fan1=4, fan2=25 at 80C is stalled",
+                ThermalGuardLogic.IsStalled(true, 80, 75, 4, 25, 5, 10));
+
+            // 3. Both stalled fans
+            check("Stall: fan1=0, fan2=0 at 80C is stalled",
+                ThermalGuardLogic.IsStalled(true, 80, 75, 0, 0, 5, 10));
+            check("Stall: fan1=4, fan2=4 at 80C is stalled (sum 8 < 10)",
+                ThermalGuardLogic.IsStalled(true, 80, 75, 4, 4, 5, 10));
+
+            // 4. Normal cooling
+            check("Cooling: fan1=25, fan2=25 at 80C is NOT stalled",
+                !ThermalGuardLogic.IsStalled(true, 80, 75, 25, 25, 5, 10));
+            check("Cooling: fan1=50, fan2=50 at 80C is NOT stalled",
+                !ThermalGuardLogic.IsStalled(true, 80, 75, 50, 50, 5, 10));
+            check("Cooling: fan1=0, fan2=0 at 50C (idle) is NOT stalled",
+                !ThermalGuardLogic.IsStalled(true, 50, 75, 0, 0, 5, 10));
+
+            // 5. Custom guard levels
+            var demoHw = new DemoHardware();
+            var sCustom = new Settings { NoPersist = true, GuardLevel = 45 };
+            var engCustom = new Engine(demoHw, sCustom);
+            check("GuardLevel: custom level 45 formats to 4500 rpm",
+                engCustom.GuardFanAction.IndexOf("4500 rpm", StringComparison.Ordinal) >= 0);
+            var sZero = new Settings { NoPersist = true, GuardLevel = 0 };
+            var engZero = new Engine(demoHw, sZero);
+            check("GuardLevel: level 0 formats to max fan",
+                engZero.GuardFanAction == "max fan");
+
+            // 6. Max ignored and capability detection
+            check("Max: +3 natural increase (20->23, ceil 57) does NOT prove Max",
+                ThermalGuardLogic.EvaluateMaxFan(20, 23, 57, 10, true, 0) == MaxVerdict.None);
+            check("Max: second unreached ask condemns Max as Ignored",
+                ThermalGuardLogic.EvaluateMaxFan(23, 24, 57, 10, true, 1) == MaxVerdict.Ignored);
+            check("Max: stall (asked from 0, seen 0) condemns Max as Ignored after 2 asks",
+                ThermalGuardLogic.EvaluateMaxFan(0, 0, 57, 10, true, 1) == MaxVerdict.Ignored);
+            check("Max: reaching ceiling (20->50, ceil 57) proves Max",
+                ThermalGuardLogic.EvaluateMaxFan(20, 50, 57, 10, true, 0) == MaxVerdict.Proven);
+            check("Max: ask before reading (-1->50, ceil 57) proves Max",
+                ThermalGuardLogic.EvaluateMaxFan(-1, 50, 57, 10, true, 0) == MaxVerdict.Proven);
+
+            Console.WriteLine("Tests completed: " + passed + " passed, " + failed + " failed.");
+            return failed == 0 ? 0 : 1;
         }
     }
 }

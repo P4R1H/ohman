@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman: control engine: settings, apply logic, keep-alive heartbeat, OMEN key watcher, OGH suppression.
 using System;
 using System.Collections.Generic;
@@ -15,6 +15,40 @@ namespace Ohman {
     public enum FanMode { Auto = 0, Max = 1, Manual = 2, Custom = 3 }   // Custom = the user's own curve, per mode
     public enum KeyAction { Cycle = 0, Show = 1, MaxFan = 2, Off = 3, Run = 4 }
     public enum GpuLevel { Base = 0, Boost = 1, Max = 2 }   // {cTGP,PPAB} = {0,0} / {0,1} / {1,1}, the three payloads OGH sends
+    public enum MaxVerdict { None = 0, Proven = 1, Ignored = 2 }
+
+    public static class ThermalGuardLogic {
+        /// <summary>Pure helper: decides whether active thermal guard can safely release.
+        /// Failsafe: requires CPU reading to be known and cool. If chassis is usable, it must be
+        /// valid (>= 0) and cool. Missing or failed sensors can never be interpreted as safe.</summary>
+        public static bool IsGuardSafe(bool cpuKnown, double cpuTemp, int guardCpuSafe, bool chassisUsable, int chassisTemp, int guardChassisSafe) {
+            if (!cpuKnown || double.IsNaN(cpuTemp) || cpuTemp >= guardCpuSafe) return false;
+            if (chassisUsable && (chassisTemp < 0 || chassisTemp >= guardChassisSafe)) return false;
+            return true;
+        }
+
+        /// <summary>Pure helper: decides whether fans are stalled while the machine is warm.
+        /// Triggers if either fan is stalled, or both fans together are under the combined threshold.</summary>
+        public static bool IsStalled(bool cpuKnown, double cpuTemp, int stallCpu, int f1, int f2, int stallSingle, int stallSum) {
+            if (!cpuKnown || double.IsNaN(cpuTemp) || cpuTemp < stallCpu) return false;
+            if (f1 < 0 || f2 < 0) return false;
+            return f1 < stallSingle || f2 < stallSingle || (f1 + f2) < stallSum;
+        }
+
+        /// <summary>Pure helper: evaluates fan speed response after Max command was sent.
+        /// Max is only proven when fans reach near ceiling from below ceiling. A natural 3-level increase
+        /// does not prove Max. Two unreached asks count as Max ignored.</summary>
+        public static MaxVerdict EvaluateMaxFan(int maxAskedFrom, int seen, int ceiling, int ceilingShort, bool canSetFanLevels, int priorIgnoredVerdicts) {
+            int target = ceiling - ceilingShort;
+            if (seen >= target && (maxAskedFrom < target || maxAskedFrom < 0)) {
+                return MaxVerdict.Proven;
+            }
+            if (maxAskedFrom >= 0 && canSetFanLevels && (priorIgnoredVerdicts + 1) >= 2) {
+                return MaxVerdict.Ignored;
+            }
+            return MaxVerdict.None;
+        }
+    }
 
     /// <summary>Fan, power-gain and GPU choices are remembered per performance mode (like tabs): switching to a mode applies its own set.</summary>
     public sealed class ModeProfile {
@@ -799,16 +833,17 @@ namespace Ohman {
             lastFanSeen = seen;
             if (maxAskedAt != DateTime.MinValue && (DateTime.Now - maxAskedAt).TotalSeconds >= 15) {
                 maxAskedAt = DateTime.MinValue;
-                // Near the top counts as working too: that is where max puts the fans, and it is the only verdict
-                // available when the ask came before any reading.
-                if ((maxAskedFrom >= 0 && seen >= maxAskedFrom + 3) || seen >= P.Curve.Ceiling - CeilingShort) { maxProven = true; maxIgnoredVerdicts = 0; }
-                else if (maxAskedFrom > 0 && CanSetFanLevels && ++maxIgnoredVerdicts >= 2) {
-                    // Slow and unmoved 15 s after two separate asks.
+                MaxVerdict v = ThermalGuardLogic.EvaluateMaxFan(maxAskedFrom, seen, P.Curve.Ceiling, CeilingShort, CanSetFanLevels, maxIgnoredVerdicts);
+                if (v == MaxVerdict.Proven) { maxProven = true; maxIgnoredVerdicts = 0; }
+                else if (v == MaxVerdict.Ignored) {
+                    maxIgnoredVerdicts++;
                     S.MaxIgnored = true;
                     S.Save();
                     Log.Write("max fan: the firmware took the command twice and the fans stayed at " + seen + " (from " + maxAskedFrom
                         + "); Max and the thermal guard write the ceiling as a level from now on");
                     lastFanWrite = DateTime.MinValue;   // the Max keep-alive re-sends on its next tick; the guard re-sends every tick
+                } else if (maxAskedFrom >= 0 && CanSetFanLevels) {
+                    maxIgnoredVerdicts++;
                 }
             }
             if (seen == 0) return;
@@ -1110,10 +1145,9 @@ namespace Ohman {
             if (!on) { maxAskedAt = DateTime.MinValue; return; }
             if (Route == FanRoute.Ec) WriteLevelsEc(P.Curve.Ceiling, P.Curve.Ceiling, what + " via EC");
             else if (S.MaxIgnored) WriteLevels(P.Curve.Ceiling, P.Curve.Ceiling, what + " as a level");
-            // Not from a stall: stopped fans that take a while to answer max are the firmware recovering, not ignoring
-            // the flag. lastFanSeen -1 (asked before the first reading, e.g. Max restored at start) watches too, but
+            // lastFanSeen -1 (asked before the first reading, e.g. Max restored at start) watches too, but
             // can only prove the flag, never condemn it.
-            else if (!maxProven && maxAskedAt == DateTime.MinValue && !guardStalled && lastFanSeen != 0) { maxAskedAt = DateTime.Now; maxAskedFrom = lastFanSeen; }
+            else if (!maxProven && maxAskedAt == DateTime.MinValue) { maxAskedAt = DateTime.Now; maxAskedFrom = lastFanSeen; }
         }
         DateTime maxAskedAt = DateTime.MinValue;   // when an unproven max flag was sent and is being watched
         int maxAskedFrom, lastFanSeen = -1;        // the fan reading before it, and the latest reading (-1 none yet)
@@ -1275,7 +1309,7 @@ namespace Ohman {
             S.Fan1 = P.Curve.ClampOrOff(f1);
             S.Fan2 = P.Curve.ClampOrOff(f2);
             S.Save();
-            if (GuardActive && mode != FanMode.Max) { Say("Thermal guard is holding max fan; " + Choice.Fan[Choice.Of(mode)] + " resumes when cool"); Changed(); return; }
+            if (GuardActive && mode != FanMode.Max) { Say("Thermal guard is holding " + GuardFanAction + "; " + Choice.Fan[Choice.Of(mode)] + " resumes when cool"); Changed(); return; }
             // On battery the mode command carries who drives the fans (FansByBios), and that follows the fan
             // mode: leaving Auto has to take control back before the first level is written.
             if (OnBattery) lock (applySync) Try(delegate { Hw.SetMode(ModeByte, FansByBios); }, "Set mode");
@@ -1382,6 +1416,13 @@ namespace Ohman {
             if (GuardActive) lock (applySync) GuardFans();
             Changed();
         }
+        public string GuardFanAction {
+            get {
+                return (GuardLevel > 0 && !guardStalled && CanSetFanLevels && !FansByBios && S.Fan != FanMode.Max)
+                    ? Rpm(GuardLevel)
+                    : "max fan";
+            }
+        }
         bool guardStalled;
         /// <summary>What the guard holds the fans at. A stalled fan gets max whatever the setting says: a level
         /// the fan is not taking is not a level, and max is the one command with its own path.</summary>
@@ -1424,7 +1465,8 @@ namespace Ohman {
                 if (c >= 0 && c < GuardChassisSafe) chassisScaleKnown = true;
                 bool chassisUsable = P.Verified || chassisScaleKnown;
                 bool hot = (cpuKnown && t >= GuardCpuHot) || (chassisUsable && c >= GuardChassisHot);
-                bool stalled = cpuKnown && t >= P.Guard.StallCpu && f[0] >= 0 && f[1] >= 0 && (f[0] + f[1]) < P.Guard.StallLevelSum;
+                int stallSingle = P.Guard.StallFanLevel > 0 ? P.Guard.StallFanLevel : Math.Max(1, P.Guard.StallLevelSum / 2);
+                bool stalled = ThermalGuardLogic.IsStalled(cpuKnown, t, P.Guard.StallCpu, f[0], f[1], stallSingle, P.Guard.StallLevelSum);
                 // Two ticks, not one: a single sample landing inside a spike used to force maximum fan on an idle
                 // laptop, three times in one evening. Sensors hands over a median now, so this is the second
                 // layer rather than the only one. Twenty seconds costs nothing, since the chips throttle
@@ -1437,7 +1479,17 @@ namespace Ohman {
                     Log.Write("THERMAL GUARD engaged: cpu=" + (cpuKnown ? t.ToString("0") : "?") + " ambient=" + c + " fans=" + f[0] + "/" + f[1] + (stalled ? " (stalled)" : ""));
                     // "ambient", matching the Home page. Same 0x23 index 1 either way; HP's own device library calls it
                     // Ambient and Ohman called it chassis for a year, so the two lines disagreed on screen.
-                    Fire(Toast, "Thermal guard: fans to max (CPU " + (cpuKnown ? t.ToString("0") + "°" : "?") + ", ambient " + c + "°)", true);
+                    string fanAction = GuardFanAction;
+                    string actionText = fanAction == "max fan" ? "fans to max" : "fans to " + fanAction;
+                    string trigger;
+                    if (stalled) trigger = "CPU " + (cpuKnown ? t.ToString("0") + "°" : "?") + " >= " + P.Guard.StallCpu + "°, fans stalled";
+                    else if (cpuKnown && t >= GuardCpuHot && chassisUsable && c >= GuardChassisHot)
+                        trigger = "CPU " + t.ToString("0") + "° >= " + GuardCpuHot + "°, ambient " + c + "° >= " + GuardChassisHot + "°";
+                    else if (cpuKnown && t >= GuardCpuHot)
+                        trigger = "CPU " + t.ToString("0") + "° >= " + GuardCpuHot + "°";
+                    else
+                        trigger = "ambient " + c + "° >= " + GuardChassisHot + "°";
+                    Fire(Toast, "Thermal guard: " + actionText + " (" + trigger + ")", true);
                     lock (applySync) GuardFans();
                     Changed();
                 } else if (GuardActive) {
@@ -1445,7 +1497,8 @@ namespace Ohman {
                     // readback should be nowhere near zero. When it is, the command is not arriving, and a guard
                     // that keeps reporting "fans to max" while the machine sits at 98 C is worse than no guard.
                     // 1.1 did exactly that for minutes. It cannot fix this from here, but it must not be quiet.
-                    if (f[0] >= 0 && f[1] >= 0 && (f[0] + f[1]) < P.Guard.StallLevelSum) guardIgnoredTicks++; else guardIgnoredTicks = 0;
+                    bool fanStalledOrIgnored = f[0] >= 0 && f[1] >= 0 && (f[0] < stallSingle || f[1] < stallSingle || (f[0] + f[1]) < P.Guard.StallLevelSum);
+                    if (fanStalledOrIgnored) guardIgnoredTicks++; else guardIgnoredTicks = 0;
                     if (guardIgnoredTicks == 3) {
                         Log.Write("THERMAL GUARD is being ignored: commanded every tick and the firmware still reports "
                             + f[0] + "/" + f[1] + ". Fan commands are not reaching the fans.");
@@ -1454,7 +1507,7 @@ namespace Ohman {
                         guardStalled = true;
                         lock (applySync) GuardFans();
                     }
-                    bool safe = (!cpuKnown || t < GuardCpuSafe) && (!chassisUsable || c < GuardChassisSafe);
+                    bool safe = ThermalGuardLogic.IsGuardSafe(cpuKnown, t, GuardCpuSafe, chassisUsable, c, GuardChassisSafe);
                     // One warm sample no longer restarts the minute. A sensor sitting a degree under its own
                     // threshold crosses it now and then, and requiring sixty unbroken seconds meant the guard
                     // could hold maximum fan on a machine that had already cooled, indefinitely.

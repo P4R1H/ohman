@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 :: Builds Ohman with the C# compiler that ships inside Windows (.NET Framework 4.8) - no SDK needed.
 ::   build.cmd            -> Ohman.exe (real; asks for administrator rights), preview\Ohman.exe, tools\omenprobe.exe
 ::   build.cmd preview    -> only preview\Ohman.exe (same UI, simulated hardware, no elevation)
@@ -23,6 +23,9 @@ if exist app.ico (set ICO=/win32icon:app.ico) else (set ICO=)
 :: 2. preview build with the icon
 "%CSC%" /nologo /target:winexe /platform:x64 /optimize+ /warn:1 /out:preview\Ohman.exe /win32manifest:app.demo.manifest %ICO% %RES% %REFS% %SRC%
 if errorlevel 1 exit /b 1
+preview\Ohman.exe --test
+if errorlevel 1 exit /b 1
+if /i "%~1"=="test" exit /b 0
 if /i "%~1"=="preview" (echo Built preview\Ohman.exe & exit /b 0)
 
 :: 3. the real thing + the probe tool

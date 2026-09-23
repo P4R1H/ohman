@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman: WPF main window (layout in the embedded Ui.xaml): a rail on the left with Home, Fans, Keyboard and
 // Settings, one page visible at a time; the window morphs to each page's size. Also the tray icon, hotkeys and the
 // live readouts. Every size and colour here comes from the panel design.
@@ -818,8 +818,9 @@ namespace Ohman {
         }
         /// <summary>Switching the safety net off is the one thing in here that asks twice, wherever it is switched off from.</summary>
         bool ConfirmGuardOff() {
+            string action = E.GuardLevel > 0 ? E.Rpm(E.GuardLevel) : "maximum";
             return MessageBox.Show(IsVisible ? (Window)this : null,
-                "Turn the thermal guard off?\n\nThe guard forces both fans to maximum when the CPU passes " + E.P.Guard.CpuHot + "°, the chassis sensor passes " + E.P.Guard.ChassisHot + "°, or the fans read stalled while the machine is warm. With it off, nothing in " + Program.DisplayName + " will step in.\n\nTurn it off?",
+                "Turn the thermal guard off?\n\nThe guard forces " + action + " when the CPU passes " + E.GuardCpuHot + "°, the chassis sensor passes " + E.GuardChassisHot + "°, or the fans read stalled while the machine is warm. With it off, nothing in " + Program.DisplayName + " will step in.\n\nTurn it off?",
                 Program.DisplayName, MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
         }
         void BuildIcons() {
@@ -1565,7 +1566,7 @@ namespace Ohman {
                 txtFanApplied.Text = "Loud" + (ShowChassis(lastBiosTemp) ? " · ambient " + lastBiosTemp + "°" : "");
                 txtFanRight.Text = "Ctrl+Alt+M toggles";
             } else {
-                txtFanApplied.Text = E.GuardActive ? "Thermal guard: max fan until cool" : "Applied to " + E.ModeName;
+                txtFanApplied.Text = E.GuardActive ? "Thermal guard: " + E.GuardFanAction + " until cool" : "Applied to " + E.ModeName;
                 txtFanRight.Text = "CPU " + (double.IsNaN(E.CpuTemp) ? "--" : E.CpuTemp.ToString("0") + "°") + " · GPU " + (double.IsNaN(E.GpuTemp) ? "--" : E.GpuTemp.ToString("0") + "°");
             }
         }

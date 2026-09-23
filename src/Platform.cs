@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman: platform profiles. Everything model-specific lives here so that adding a laptop means adding a profile,
 // not touching the engine or the UI. A board that is not listed still runs: Platforms.Generic builds a profile
 // from what the firmware reports about itself.
@@ -51,7 +51,7 @@ namespace Ohman {
         public int CpuHot = 95, ChassisHot = 62;        // engage at or above either
         public int CpuSafe = 85, ChassisSafe = 54;      // release after SafeSeconds below both
         public int SafeSeconds = 60;
-        public int StallCpu = 75, StallLevelSum = 10;   // warm, but both fans reading under ~500 rpm
+        public int StallCpu = 75, StallLevelSum = 10, StallFanLevel = 5;   // warm, but fans reading under ~500 rpm
         public int MaxFanCoolBelow = 60, MaxFanCoolSeconds = 120;   // when a max-fan session hands itself back
         public int WarnAt = 80;                         // the amber temperature on the Home page
     }
