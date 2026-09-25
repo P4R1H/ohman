@@ -5,8 +5,10 @@
 # 15 seconds to see which register moves them, then hands them back and reopens Ohman. Writes ohman-fans.txt
 # to the Desktop.
 $ErrorActionPreference = 'Continue'
-if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole('Administrator')) {
-    Write-Host "Please open Terminal (Admin) and paste the line again." -ForegroundColor Yellow; return
+# The enum, not the string: IsInRole('Administrator') looks up the built-in *user* account of that name (RID 500)
+# and is false in every elevated window except that account's own, whatever the language of Windows.
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Host "This needs administrator rights. Close this window, right click the Start button and pick Terminal (Admin) on Windows 11, or Windows PowerShell (Admin) on Windows 10. Click Yes, then paste the line again." -ForegroundColor Yellow; return
 }
 $out = Join-Path ([Environment]::GetFolderPath('Desktop')) 'ohman-fans.txt'
 Set-Content $out "ohman fan check $(Get-Date -Format 'yyyy-MM-dd HH:mm')" -Encoding utf8

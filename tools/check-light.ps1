@@ -8,8 +8,10 @@ if ($PSVersionTable.PSEdition -eq 'Core') {
     # relaunching: a script that starts powershell.exe with a download-and-run command is what Defender blocks as ClickFix.
     Write-Host "This one needs Windows PowerShell. Search the Start menu for Windows PowerShell, right click it, Run as administrator, and paste the line there." -ForegroundColor Yellow; return
 }
-if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole('Administrator')) {
-    Write-Host "Please open Terminal (Admin) and paste the line again." -ForegroundColor Yellow; return
+# The enum, not the string: IsInRole('Administrator') looks up the built-in *user* account of that name (RID 500)
+# and is false in every elevated window except that account's own, whatever the language of Windows.
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Host "This needs administrator rights. Close this window, right click the Start button and pick Terminal (Admin) on Windows 11, or Windows PowerShell (Admin) on Windows 10. Click Yes, then paste the line again." -ForegroundColor Yellow; return
 }
 if (Get-Process Ohman -ErrorAction SilentlyContinue) {
     Write-Host "Quit Ohman first (right click its tray icon, Exit), then paste the line again." -ForegroundColor Yellow; return

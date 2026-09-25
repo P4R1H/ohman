@@ -20,7 +20,7 @@ W ""
 W "===== Ohman --lamps ====="
 if (-not (Test-Path $exe)) {
     W "  Ohman.exe not found beside the tools folder - keep this folder next to Ohman.exe"
-} elseif (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole('Administrator')) {
+} elseif (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     # Ohman asks for administrator, so a non-elevated parent cannot start it and the error it gives is a
     # page of PowerShell rather than a sentence. Say the one thing that fixes it instead.
     W "  not elevated - run lighttest.cmd rather than the .ps1, it asks for administrator and this section then fills in"
