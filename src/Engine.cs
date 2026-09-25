@@ -14,7 +14,7 @@ namespace Ohman {
 
     public enum FanMode { Auto = 0, Max = 1, Manual = 2, Custom = 3 }   // Custom = the user's own curve, per mode
     public enum KeyAction { Cycle = 0, Show = 1, MaxFan = 2, Off = 3, Run = 4 }
-    public enum GpuLevel { Base = 0, Boost = 1, Max = 2 }   // {cTGP,PPAB} = {0,0} / {0,1} / {1,1}, the three payloads OGH sends
+    public enum GpuLevel { Base = 0, Boost = 1 }   // Base is mode-aware; Boost is cTGP + PPAB (the former Max state)
 
     /// <summary>Fan, power-gain and GPU choices are remembered per performance mode (like tabs): switching to a mode applies its own set.</summary>
     public sealed class ModeProfile {
@@ -27,7 +27,7 @@ namespace Ohman {
         public int CurveRamp = 5;                   // seconds per 300 rpm step when following the curve (1 = at once, 10 = very gentle)
         public int TdpOffset = 0;
         public GpuLevel Gpu = GpuLevel.Boost;
-        public bool GpuAuto = true;                 // follow the mode: Eco->Base, Balanced->Boost, Performance->Max (what OGH does)
+        public bool GpuAuto = true;                 // follow the mode: Eco->Base, Balanced->Base, Performance->Boost
         public void Apply(string k, string v) {
             int n;
             bool b;
@@ -41,7 +41,7 @@ namespace Ohman {
                 case "Fan1": if (Settings.TryInt(v, out n)) Fan1 = n; break;
                 case "Fan2": if (Settings.TryInt(v, out n)) Fan2 = n; break;
                 case "TdpOffset": if (Settings.TryInt(v, out n)) TdpOffset = Math.Max(0, Math.Min(30, n)); break;   // the engine clamps again to the profile's range
-                case "Gpu": if (Settings.TryInt(v, out n)) Gpu = (GpuLevel)Math.Max(0, Math.Min(2, n)); break;
+                case "Gpu": if (Settings.TryInt(v, out n)) Gpu = (GpuLevel)Math.Max(0, Math.Min(2, n)); break;   // 2 is accepted long enough for Settings.Migrate to map legacy Max to Boost
                 case "GpuAuto": if (bool.TryParse(v, out b)) GpuAuto = b; break;
             }
         }
@@ -129,7 +129,7 @@ namespace Ohman {
 
         public bool FirstRun;                       // no state file yet: first launch on this machine
         public int Ver;                             // version of the file this was read from; 0 = written before versioning
-        public const int FileVer = 2;
+        public const int FileVer = 3;
         public static Settings Load() {
             var s = new Settings();
             try {
@@ -151,6 +151,10 @@ namespace Ohman {
             // v1: the OMEN key defaulted to Cycle. It now opens the window (Shift+F11 cycles), so a file that never
             // saw the new default and still says Cycle is the old default, not a choice.
             if (Ver < 2 && Key == KeyAction.Cycle) { Key = KeyAction.Show; Log.Write("settings: OMEN key moved to the new default (open the window)"); }
+            if (Ver < 3) {
+                foreach (var m in Modes) if ((int)m.Gpu >= 2) m.Gpu = GpuLevel.Boost;
+                Log.Write("settings: legacy GPU Max moved to Boost");
+            }
             if (Ver != FileVer) { Ver = FileVer; Save(); }
         }
 
@@ -368,6 +372,7 @@ namespace Ohman {
         readonly object applySync = new object();
         bool ecoForcedByBattery;
         int modeBeforeBattery = 1;
+        int ctgpSupport = -1;                         // -1 unknown, 0 rejected/not retained, 1 accepted; session only
 
         public Engine(IHardware hw, Settings s) { Hw = hw; S = s; }
 
@@ -380,7 +385,7 @@ namespace Ohman {
         public uint KeyId { get { return S.KeyId != 0 ? S.KeyId : P.KeyEventId; } }       // learned value wins, else the profile's
         public uint KeyData { get { return S.KeyId != 0 ? S.KeyData : P.KeyEventData; } }
         public GpuLevel EffectiveGpu { get { return S.GpuAuto ? GpuForMode(ModeIndex) : S.Gpu; } }
-        public static GpuLevel GpuForMode(int modeIndex) { return modeIndex == 0 ? GpuLevel.Base : modeIndex == 1 ? GpuLevel.Boost : GpuLevel.Max; }
+        public static GpuLevel GpuForMode(int modeIndex) { return modeIndex >= 2 ? GpuLevel.Boost : GpuLevel.Base; }
 
         // ---------- lifecycle ----------
         public DateTime LastUpdateCheck { get { return S.UpdateChecked == 0 ? DateTime.MinValue : new DateTime(S.UpdateChecked); } }
@@ -1234,10 +1239,41 @@ namespace Ohman {
         void ApplyPowerCore() { if (P.HasPowerGain) Try(delegate { Hw.SetConcurrentTdp(CurrentTdp); }, "Set power"); }
         void ApplyGpuCore() {
             if (!P.HasGpuPower) return;
-            // payloads come from the platform profile (Transcend 14: Base {0,0,1,75}, Boost {0,1,1,87}, Max {1,1,1,87} as OGH sends them)
             GpuLevel g = EffectiveGpu;
-            byte[] p = g == GpuLevel.Max ? P.GpuMax : g == GpuLevel.Boost ? P.GpuBoost : P.GpuBase;
-            Try(delegate { Hw.SetGpuPower(p[0] != 0, p[1] != 0, p[3]); }, "GPU power");
+            // Base follows OGH: only Performance (mode 0x31) requests cTGP without PPAB. Eco and Balanced both run
+            // firmware mode 0x30, which keeps the cTGP bit but never raises the GPU limit, so they use the standard payload.
+            // Boost is the old Max payload. A machine that rejects or does not retain cTGP gets the same request
+            // with only that bit cleared, and the result is cached for this session so Base never repeatedly fails.
+            byte[] p = g == GpuLevel.Boost ? P.GpuBoost : ModeIndex == 2 ? P.GpuBaseCtgp : P.GpuBase;
+            ApplyGpuPayload(p);
+        }
+
+        void ApplyGpuPayload(byte[] p) {
+            bool wantsCtgp = p[0] != 0;
+            if (!wantsCtgp || ctgpSupport == 0) { ApplyGpuFallback(p); return; }
+
+            string failure = null;
+            try {
+                Hw.SetGpuPower(true, p[1] != 0, p[3]);
+                GpuPowerState state = null;
+                for (int attempt = 0; attempt < 2; attempt++) {
+                    try { state = Hw.GetGpuPower(); break; }
+                    catch (Exception ex) { failure = ex.Message; if (attempt == 0) Thread.Sleep(100); }
+                }
+                if (state != null && state.CustomTgp) {
+                    if (ctgpSupport != 1) Log.Write("GPU cTGP probe: supported (" + state + ")");
+                    ctgpSupport = 1; LastError = ""; return;
+                }
+                if (state != null) failure = "read-back did not retain cTGP (" + state + ")";
+            } catch (Exception ex) { failure = ex.Message; }
+
+            ctgpSupport = 0;
+            Log.Write("GPU cTGP unavailable; using standard-TGP fallback" + (String.IsNullOrEmpty(failure) ? "" : " (" + failure + ")"));
+            ApplyGpuFallback(p);
+        }
+
+        void ApplyGpuFallback(byte[] p) {
+            Try(delegate { Hw.SetGpuPower(false, p[1] != 0, p[3]); }, "GPU power");
         }
 
         public void SetMode(int index, bool announce) {

@@ -620,11 +620,10 @@ namespace Ohman {
                 E.SetKey(a);
                 keyCmdRow.Visibility = a == KeyAction.Run ? Visibility.Visible : Visibility.Collapsed;
             };
-            gpuSeg = new Seg(new[] { "Base", "Boost", "Max", "Auto" },
-                new[] { "The GPU's standard power limit",
-                        "Lets the GPU borrow power from the CPU when it needs it",
-                        "A raised power limit as well as the borrowing",
-                        "Base in Eco, Boost in Balanced, Max in Performance" }, null, Seg.Kind.Row);
+            gpuSeg = new Seg(new[] { "Base", "Boost", "Auto" },
+                new[] { "Performance requests cTGP without borrowing; Eco and Balanced use the standard limit",
+                        "Uses cTGP and lets the GPU borrow power from the CPU",
+                        "Base in Eco and Balanced, Boost in Performance" }, null, Seg.Kind.Row);
             F<Border>("GpuSegHost").Child = gpuSeg;
             // Somebody watching clocks under load wants them to move; somebody on battery does not want the cost.
             // Only affects the open window: hidden, the rate is still decided by what is actually waiting on it.
@@ -639,7 +638,7 @@ namespace Ohman {
                 PollRate();
             };
             gpuSeg.Picked += delegate(int i) {
-                if (i == 3) Bg(delegate { E.SetGpu(E.S.Gpu, true, false); });
+                if (i == 2) Bg(delegate { E.SetGpu(E.S.Gpu, true, false); });
                 else { GpuLevel g = (GpuLevel)i; Bg(delegate { E.SetGpu(g, false, false); }); }
             };
             if (!E.P.HasGpuPower) gpuRow.Visibility = Visibility.Collapsed;
@@ -1909,7 +1908,7 @@ namespace Ohman {
                 slPower.Value = S.TdpOffset;
                 txtPower.Text = "+" + S.TdpOffset + " W";
                 GpuLevel g = E.EffectiveGpu;
-                string gpuName = g == GpuLevel.Max ? "GPU max" : g == GpuLevel.Boost ? "GPU boost" : "GPU base";
+                string gpuName = g == GpuLevel.Boost ? "GPU boost" : "GPU base";
                 // Two ways this number lies. 0 means the firmware does not implement 0x23 at all. And on a board
                 // nobody has measured, the scale is unknown: one 8BCD sits at 50 and above around the clock while
                 // the laptop is cool to the touch. We already refuse to let that sensor drive the fans there
@@ -1921,7 +1920,7 @@ namespace Ohman {
                 fanLinks.SetText(2, S.Fan == FanMode.Custom ? "Curve" : "Manual");
                 fanLinks.Select(S.Fan == FanMode.Auto ? 0 : S.Fan == FanMode.Max ? 1 : 2, IsVisible);
                 if (pollSeg != null) pollSeg.Select(S.PollMs <= 500 ? 0 : S.PollMs <= 1000 ? 1 : 2, IsVisible && cur == Page.Settings);
-                if (gpuSeg != null) { gpuSeg.Select(S.GpuAuto ? 3 : (int)g, IsVisible && cur == Page.Settings); txtGpuSub.Text = S.GpuAuto ? "Follows the mode" : g == GpuLevel.Max ? "Custom TGP + PPAB" : g == GpuLevel.Boost ? "PPAB" : "Base TGP"; }
+                if (gpuSeg != null) { gpuSeg.Select(S.GpuAuto ? 2 : (int)g, IsVisible && cur == Page.Settings); txtGpuSub.Text = S.GpuAuto ? "Follows the mode" : g == GpuLevel.Boost ? "cTGP + PPAB" : mi == 2 ? "cTGP, no PPAB" : "Standard TGP"; }
                 RefreshLighting();
                 if (cur == Page.Fans) RefreshFans(true);
                 keySeg.Select(Choice.Of(S.Key), IsVisible && cur == Page.Settings);
@@ -2039,7 +2038,7 @@ namespace Ohman {
                     if (t >= 0 && t != lastBiosTemp) {
                         lastBiosTemp = t;
                         GpuLevel g = E.EffectiveGpu;
-                        txtHomeStatus.Text = (E.P.HasGpuPower ? (g == GpuLevel.Max ? "GPU max" : g == GpuLevel.Boost ? "GPU boost" : "GPU base") : E.P.HasPowerGain ? E.CurrentTdp + " W" : "")
+                        txtHomeStatus.Text = (E.P.HasGpuPower ? (g == GpuLevel.Boost ? "GPU boost" : "GPU base") : E.P.HasPowerGain ? E.CurrentTdp + " W" : "")
                             + (ShowChassis(t) ? " · ambient " + t + "°" : "");
                     }
                     reading = false;
