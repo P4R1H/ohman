@@ -14,7 +14,7 @@ namespace Ohman {
 
     public enum FanMode { Auto = 0, Max = 1, Manual = 2, Custom = 3 }   // Custom = the user's own curve, per mode
     public enum KeyAction { Cycle = 0, Show = 1, MaxFan = 2, Off = 3, Run = 4 }
-    public enum GpuLevel { Base = 0, Boost = 1, Max = 2 }   // {cTGP,PPAB} = {0,0} / {0,1} / {1,1}, the three payloads OGH sends
+    public enum GpuLevel { Base = 0, Boost = 1 }   // Base is mode-aware; Boost is cTGP + PPAB (the former Max state)
 
     /// <summary>Fan, power-gain and GPU choices are remembered per performance mode (like tabs): switching to a mode applies its own set.</summary>
     public sealed class ModeProfile {
@@ -27,7 +27,7 @@ namespace Ohman {
         public int CurveRamp = 5;                   // seconds per 300 rpm step when following the curve (1 = at once, 10 = very gentle)
         public int TdpOffset = 0;
         public GpuLevel Gpu = GpuLevel.Boost;
-        public bool GpuAuto = true;                 // follow the mode: Eco->Base, Balanced->Boost, Performance->Max (what OGH does)
+        public bool GpuAuto = true;                 // follow the mode: Eco->Base, Balanced->Base, Performance/Unleashed->Boost
         public void Apply(string k, string v) {
             int n;
             bool b;
@@ -41,7 +41,7 @@ namespace Ohman {
                 case "Fan1": if (Settings.TryInt(v, out n)) Fan1 = n; break;
                 case "Fan2": if (Settings.TryInt(v, out n)) Fan2 = n; break;
                 case "TdpOffset": if (Settings.TryInt(v, out n)) TdpOffset = Math.Max(0, Math.Min(30, n)); break;   // the engine clamps again to the profile's range
-                case "Gpu": if (Settings.TryInt(v, out n)) Gpu = (GpuLevel)Math.Max(0, Math.Min(2, n)); break;
+                case "Gpu": if (Settings.TryInt(v, out n)) Gpu = (GpuLevel)Math.Max(0, Math.Min(2, n)); break;   // 2 is accepted long enough for Settings.Migrate to map legacy Max to Boost
                 case "GpuAuto": if (bool.TryParse(v, out b)) GpuAuto = b; break;
             }
         }
@@ -69,10 +69,14 @@ namespace Ohman {
     }
 
     public sealed class Settings {
-        public int ModeIndex = 1;                   // 0 Eco, 1 Balanced, 2 Performance
-        // one profile per mode; Performance defaults to OGH's +15 W gain, the others to +0
-        public readonly ModeProfile[] Modes = { new ModeProfile(), new ModeProfile(), new ModeProfile { TdpOffset = 15 } };
-        public ModeProfile Cur { get { return Modes[Math.Max(0, Math.Min(2, ModeIndex))]; } }
+        public int ModeIndex = 1;                   // 0 Eco, 1 Balanced, 2 Performance, 3 Unleashed (boards with PlatformProfile.ModeUnleashed)
+        // one profile per mode; Performance and Unleashed default to OGH's +15 W gain, the others to +0
+        // (OGH logs UnleashedModeTppOffset = 15 and sends 45 W = base 30 + 15 in Unleashed)
+        public const int MaxModes = 4;
+        // Performance and Unleashed default to GPU Base (cTGP without borrowing from the CPU), chosen outright rather
+        // than through Auto, which would give them Boost.
+        public readonly ModeProfile[] Modes = { new ModeProfile(), new ModeProfile(), new ModeProfile { TdpOffset = 15, Gpu = GpuLevel.Base, GpuAuto = false }, new ModeProfile { TdpOffset = 15, Gpu = GpuLevel.Base, GpuAuto = false } };
+        public ModeProfile Cur { get { return Modes[Math.Max(0, Math.Min(MaxModes - 1, ModeIndex))]; } }
         public FanMode Fan { get { return Cur.Fan; } set { Cur.Fan = value; } }
         public int Fan1 { get { return Cur.Fan1; } set { Cur.Fan1 = value; } }
         public int Fan2 { get { return Cur.Fan2; } set { Cur.Fan2 = value; } }
@@ -110,6 +114,12 @@ namespace Ohman {
         public int FanBeforeMax = 0;                // FanMode that Max interrupted; survives a restart
         public bool InfoDismissed = false;          // the first-on-this-board note, closed by the user
         public bool Guard = true;                   // thermal guard: force max fan when the machine runs away
+        public bool CpuLimits = true;               // write the profile's per-mode PL1/PL2 (boards with PlatformProfile.CpuPl1, driver installed)
+        public bool UnlCustom;                      // experimental: Unleashed takes PL1/PL2 from UnlPl1/UnlPl2 instead of the profile
+        public int UnlPl1 = 65, UnlPl2 = 80;        // those limits in watts, 5 W steps, clamped by the engine to the profile's ranges
+        public int EcoPl1 = 45;                     // Eco's PL1 (PL2 follows it), 5 W steps, clamped to the profile's range
+        public int EcoLowHz = -1;                   // Eco drops the built-in panel to its lowest rate: -1 = the profile's default, 0 off, 1 on
+        public int HzBeforeLow;                     // the rate the panel had before Eco or battery lowered it; 0 = nothing lowered (survives a crash)
         public int GuardCpu, GuardChassis;          // the guard's own limits, 0 = the profile's
         public int GuardLevel;                      // what it forces: 0 = max fan, else a fan level
         public int GuardHold;                       // seconds below the limits before it lets go, 0 = the profile's
@@ -125,16 +135,37 @@ namespace Ohman {
         public bool NoPersist;                      // set when --set overrides are in effect: never write them back to the file
         public int SavedModeOverride = -1;          // while battery forces Eco, the file keeps the user's own mode
 
-        static readonly string File_ = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Program.FileStem + ".state");
+        // One settings file per Windows user, so two people sharing the laptop (and the same Ohman.exe) each get
+        // their own modes, fans, limits and lighting. Files live beside the exe in Ohman-users\<SID>.state; the SID
+        // survives a renamed account. The old shared Ohman.state stays as the starting point for any user who has
+        // no file yet, so the first start after this change keeps everything, for whoever starts it.
+        static readonly string Legacy = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Program.FileStem + ".state");
+        static readonly string File_ = UserFile();
+        public static string FilePath { get { return File_; } }
+        public static string UserLabel {
+            get { try { return System.Security.Principal.WindowsIdentity.GetCurrent().Name; } catch { return Environment.UserName; } }
+        }
+        static string UserFile() {
+            try {
+                string sid = System.Security.Principal.WindowsIdentity.GetCurrent().User.Value;
+                return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Program.FileStem + "-users", sid + ".state");
+            } catch { return Legacy; }
+        }
+        public bool Inherited;                      // this user had no file yet and started from the shared one
 
         public bool FirstRun;                       // no state file yet: first launch on this machine
         public int Ver;                             // version of the file this was read from; 0 = written before versioning
-        public const int FileVer = 2;
+        public const int FileVer = 4;
         public static Settings Load() {
             var s = new Settings();
             try {
-                if (!File.Exists(File_)) { s.FirstRun = true; return s; }
-                foreach (string raw in File.ReadAllLines(File_)) {
+                string src = File_;
+                if (!File.Exists(File_)) {
+                    s.FirstRun = true;                                      // this user's first start: autostart is theirs to get
+                    if (File_ == Legacy || !File.Exists(Legacy)) return s;
+                    src = Legacy; s.Inherited = true;
+                }
+                foreach (string raw in File.ReadAllLines(src)) {
                     string line = raw.Trim();
                     int eq = line.IndexOf('=');
                     if (line.Length == 0 || line[0] == '#' || eq < 1) continue;
@@ -151,6 +182,16 @@ namespace Ohman {
             // v1: the OMEN key defaulted to Cycle. It now opens the window (Shift+F11 cycles), so a file that never
             // saw the new default and still says Cycle is the old default, not a choice.
             if (Ver < 2 && Key == KeyAction.Cycle) { Key = KeyAction.Show; Log.Write("settings: OMEN key moved to the new default (open the window)"); }
+            if (Ver < 3) {
+                foreach (var m in Modes) if ((int)m.Gpu >= 2) m.Gpu = GpuLevel.Boost;
+                Log.Write("settings: legacy GPU Max moved to Boost");
+            }
+            if (Ver < 4 && (!FirstRun || Inherited)) {
+                // v4: Performance and Unleashed default to GPU Base. Files written before carry the old default
+                // (Boost, directly or through Auto); move them once, after which the owner's choice stands.
+                for (int i = 2; i < MaxModes; i++) { Modes[i].Gpu = GpuLevel.Base; Modes[i].GpuAuto = false; }
+                Log.Write("settings: Performance and Unleashed GPU moved to the new default (Base)");
+            }
             if (Ver != FileVer) { Ver = FileVer; Save(); }
         }
 
@@ -158,8 +199,8 @@ namespace Ohman {
         public void Apply(string k, string v) {
             var s = this;
             try {
-                // per-mode keys: M0.Fan=… M1.TdpOffset=… (M0 Eco, M1 Balanced, M2 Performance)
-                if (k.Length > 3 && k[0] == 'M' && char.IsDigit(k[1]) && k[2] == '.') { int mi = k[1] - '0'; if (mi >= 0 && mi < 3) Modes[mi].Apply(k.Substring(3), v); return; }
+                // per-mode keys: M0.Fan=… M1.TdpOffset=… (M0 Eco, M1 Balanced, M2 Performance, M3 Unleashed)
+                if (k.Length > 3 && k[0] == 'M' && char.IsDigit(k[1]) && k[2] == '.') { int mi = k[1] - '0'; if (mi >= 0 && mi < MaxModes) Modes[mi].Apply(k.Substring(3), v); return; }
                 if (k.StartsWith("Hotkey.", StringComparison.Ordinal)) {
                     int hi = Array.IndexOf(HotkeyTable.Keys, k.Substring(7));
                     if (hi >= 0) s.HotkeyText[hi] = v.Trim();
@@ -172,7 +213,7 @@ namespace Ohman {
                     bool b;
                     switch (k) {
                         case "Ver": if (TryInt(v, out n)) s.Ver = n; break;
-                        case "ModeIndex": if (TryInt(v, out n)) s.ModeIndex = Math.Max(0, Math.Min(2, n)); break;
+                        case "ModeIndex": if (TryInt(v, out n)) s.ModeIndex = Math.Max(0, Math.Min(MaxModes - 1, n)); break;   // the engine clamps again to what the board offers
                         case "EcoCool": if (bool.TryParse(v, out b)) s.EcoCool = b; break;
                         case "Key": if (TryInt(v, out n)) s.Key = (KeyAction)Math.Max(0, Math.Min(4, n)); break;
                         case "KeyId": if (TryInt(v, out n)) s.KeyId = (uint)n; break;
@@ -205,6 +246,13 @@ namespace Ohman {
                         case "LowHzOnBattery": if (bool.TryParse(v, out b)) s.LowHzOnBattery = b; break;
                         case "TrayTemp": if (bool.TryParse(v, out b)) s.TrayTemp = b; break;
                         case "Guard": if (bool.TryParse(v, out b)) s.Guard = b; break;
+                        case "CpuLimits": if (bool.TryParse(v, out b)) s.CpuLimits = b; break;
+                        case "UnlCustom": if (bool.TryParse(v, out b)) s.UnlCustom = b; break;
+                        case "UnlPl1": if (TryInt(v, out n)) s.UnlPl1 = Math.Max(0, Math.Min(200, n)); break;   // the engine clamps again
+                        case "UnlPl2": if (TryInt(v, out n)) s.UnlPl2 = Math.Max(0, Math.Min(200, n)); break;
+                        case "EcoPl1": if (TryInt(v, out n)) s.EcoPl1 = Math.Max(0, Math.Min(200, n)); break;
+                        case "EcoLowHz": if (TryInt(v, out n)) s.EcoLowHz = Math.Max(-1, Math.Min(1, n)); break;
+                        case "HzBeforeLow": if (TryInt(v, out n)) s.HzBeforeLow = Math.Max(0, Math.Min(1000, n)); break;
                         case "GuardCpu": if (int.TryParse(v, out n) && n >= 70 && n <= 105) s.GuardCpu = n; break;
                         case "GuardChassis": if (int.TryParse(v, out n) && n >= 40 && n <= 80) s.GuardChassis = n; break;
                         case "GuardLevel": if (int.TryParse(v, out n) && n >= 0 && n <= 255) s.GuardLevel = n; break;
@@ -248,8 +296,8 @@ namespace Ohman {
                 sb.AppendLine("Ver=" + FileVer);
                 sb.AppendLine("ModeIndex=" + (SavedModeOverride >= 0 ? SavedModeOverride : ModeIndex));
                 sb.AppendLine("EcoCool=" + EcoCool);
-                sb.AppendLine("# per-mode profiles: M0 = Eco, M1 = Balanced, M2 = Performance");
-                for (int i = 0; i < 3; i++) Modes[i].Write(sb, "M" + i + ".");
+                sb.AppendLine("# per-mode profiles: M0 = Eco, M1 = Balanced, M2 = Performance, M3 = Unleashed");
+                for (int i = 0; i < MaxModes; i++) Modes[i].Write(sb, "M" + i + ".");
                 sb.AppendLine("Key=" + (int)Key);
                 sb.AppendLine("KeyId=" + KeyId);
                 sb.AppendLine("KeyData=" + KeyData);
@@ -269,6 +317,13 @@ namespace Ohman {
                 sb.AppendLine("KeyCommand=" + KeyCommand);
                 for (int i = 0; i < HotkeyTable.Count; i++) if (HotkeyText[i] != null) sb.AppendLine("Hotkey." + HotkeyTable.Keys[i] + "=" + HotkeyText[i]);   // only what differs from the defaults
                 sb.AppendLine("Guard=" + Guard);
+                sb.AppendLine("CpuLimits=" + CpuLimits);
+                sb.AppendLine("UnlCustom=" + UnlCustom);
+                sb.AppendLine("UnlPl1=" + UnlPl1);
+                sb.AppendLine("UnlPl2=" + UnlPl2);
+                sb.AppendLine("EcoPl1=" + EcoPl1);
+                sb.AppendLine("EcoLowHz=" + EcoLowHz);
+                sb.AppendLine("HzBeforeLow=" + HzBeforeLow);
                 if (GuardCpu > 0) sb.AppendLine("GuardCpu=" + GuardCpu);
                 if (GuardChassis > 0) sb.AppendLine("GuardChassis=" + GuardChassis);
                 if (GuardLevel > 0) sb.AppendLine("GuardLevel=" + GuardLevel);
@@ -295,7 +350,9 @@ namespace Ohman {
                 sb.AppendLine("StartHidden=" + StartHidden);
                 sb.AppendLine("# Name=   (optional: a different display name for the window and tray; no rebuild needed)");
                 if (!string.IsNullOrEmpty(Name)) sb.AppendLine("Name=" + Name);
-                File.WriteAllText(File_, sb.ToString());
+                string dir = Path.GetDirectoryName(File_);
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                File.WriteAllText(File_, "# " + Program.AppName + " settings for " + UserLabel + "\r\n" + sb.ToString());
             }
         }
     }
@@ -318,8 +375,12 @@ namespace Ohman {
         public event Action<uint, uint> AnyKeyEvent;      // every hpqBEvnt
         public event Action<Rgb[]> FrameChanged;           // an effect frame was written to the keyboard (worker thread)
 
-        public static readonly string[] ModeNames = { "Eco", "Balanced", "Performance" };
-        public byte[] ModeBytes { get { return new byte[] { S.EcoCool ? P.ModeCool : P.ModeEco, P.ModeBalanced, P.ModePerformance }; } }
+        public static readonly string[] ModeNames = { "Eco", "Balanced", "Performance", "Unleashed" };
+        public byte[] ModeBytes { get { return new byte[] { S.EcoCool ? P.ModeCool : P.ModeEco, P.ModeBalanced, P.ModePerformance, P.ModeUnleashed }; } }
+        /// <summary>Unleashed (OGH's L8, mode byte 0x04) exists only where the profile says so; everywhere else
+        /// the app has the three modes it always had and index 3 is never selected or sent.</summary>
+        public bool HasUnleashed { get { return P.ModeUnleashed != 0; } }
+        public int ModeCount { get { return HasUnleashed ? 4 : 3; } }
         public bool OnBattery;                              // mirrored into the SetMode payload like OGH does (BiosAutoFanControlInDc)
 
         // ---------- platform ----------
@@ -368,10 +429,11 @@ namespace Ohman {
         readonly object applySync = new object();
         bool ecoForcedByBattery;
         int modeBeforeBattery = 1;
+        int ctgpSupport = -1;                         // -1 unknown, 0 rejected/not retained, 1 accepted; session only
 
         public Engine(IHardware hw, Settings s) { Hw = hw; S = s; }
 
-        public int ModeIndex { get { return Math.Max(0, Math.Min(2, S.ModeIndex)); } }
+        public int ModeIndex { get { return Math.Max(0, Math.Min(ModeCount - 1, S.ModeIndex)); } }
         public byte ModeByte { get { return ModeBytes[ModeIndex]; } }
         public string ModeName { get { return ModeNames[ModeIndex]; } }
         public int BaseTdp { get { return Info.Valid && Info.DefaultConcurrentTdp > 0 ? Info.DefaultConcurrentTdp : P.TdpBase; } }
@@ -380,7 +442,7 @@ namespace Ohman {
         public uint KeyId { get { return S.KeyId != 0 ? S.KeyId : P.KeyEventId; } }       // learned value wins, else the profile's
         public uint KeyData { get { return S.KeyId != 0 ? S.KeyData : P.KeyEventData; } }
         public GpuLevel EffectiveGpu { get { return S.GpuAuto ? GpuForMode(ModeIndex) : S.Gpu; } }
-        public static GpuLevel GpuForMode(int modeIndex) { return modeIndex == 0 ? GpuLevel.Base : modeIndex == 1 ? GpuLevel.Boost : GpuLevel.Max; }
+        public static GpuLevel GpuForMode(int modeIndex) { return modeIndex >= 2 ? GpuLevel.Boost : GpuLevel.Base; }
 
         // ---------- lifecycle ----------
         public DateTime LastUpdateCheck { get { return S.UpdateChecked == 0 ? DateTime.MinValue : new DateTime(S.UpdateChecked); } }
@@ -462,7 +524,7 @@ namespace Ohman {
                         P = g;
                         Supported = true;
                         Generic = true;
-                        Log.Write("generic profile: " + g.Notes + " · modes " + g.ModeEco.ToString("X2") + "/" + g.ModeBalanced.ToString("X2") + "/" + g.ModePerformance.ToString("X2") + " · powerGain=" + g.HasPowerGain + " (base " + g.TdpBase + " W) · gpuPower=" + g.HasGpuPower + " · fan ceiling " + g.Curve.Ceiling);
+                        Log.Write("generic profile: " + g.Notes + " · modes " + g.ModeEco.ToString("X2") + "/" + g.ModeBalanced.ToString("X2") + "/" + g.ModePerformance.ToString("X2") + (g.ModeUnleashed != 0 ? "/" + g.ModeUnleashed.ToString("X2") + " (unleashed)" : "") + " · powerGain=" + g.HasPowerGain + " (base " + g.TdpBase + " W) · gpuPower=" + g.HasGpuPower + " · fan ceiling " + g.Curve.Ceiling);
                     } else Log.Write("generic profile not possible (thermal policy v" + Info.ThermalPolicy + "); read-only");
                 }
                 ApplyMeasuredCeiling();
@@ -479,16 +541,24 @@ namespace Ohman {
             if (!apply) { InitLight(); Log.Write("probe only: nothing was applied"); return; }
             // take the key over only where we can also take over the fans; on an unknown board OGH stays in charge
             if (S.SuppressOgh && !Hw.IsDemo && Supported) { KillOgh(); new Thread(delegate() { SetOghTasks(true); }) { IsBackground = true }.Start(); }
+            // A settings file written on a board with Unleashed (or hand-edited) can name a mode this board lacks.
+            if (S.ModeIndex >= ModeCount) { Log.Write("mode " + ModeNames[S.ModeIndex] + " not offered on this board: " + ModeNames[ModeCount - 1]); S.ModeIndex = ModeCount - 1; }
             if (S.EcoOnBattery && OnBattery && ModeIndex != 0) { ecoForcedByBattery = true; modeBeforeBattery = ModeIndex; S.SavedModeOverride = modeBeforeBattery; S.ModeIndex = 0; Log.Write("on battery at start: Eco (user mode " + ModeNames[modeBeforeBattery] + " kept)"); }
             // a mode's custom curve starts as this model's own curve; before the profile is known there is nothing to copy
             foreach (var m in S.Modes) {
                 if (m.CurveLevels == null) m.CurveLevels = VendorCurveAt(false);
                 if (m.GpuCurveLevels == null) m.GpuCurveLevels = VendorCurveAt(true);
             }
+            OpenSeat();
+            string seatWhy;
+            SeatOwner = ComputeSeat(out seatWhy); SeatWhy = seatWhy;
+            Log.Write("user: " + Settings.UserLabel + " · session " + mySession + " · settings " + Settings.FilePath + (SeatOwner ? "" : " · waiting: " + seatWhy));
             InitLight();
-            ApplyRefreshRate(OnBattery);
             NoteFanMode(S.Fan);
-            ApplyAll(false);
+            if (SeatOwner) {
+                ApplyRefreshRate(OnBattery);
+                ApplyAll(false);
+            }
             StartKeyWatcher();
             heartbeat = new System.Threading.Timer(delegate { Heartbeat(); }, null, S.HeartbeatSec * 1000, S.HeartbeatSec * 1000);
             guard = new System.Threading.Timer(delegate { GuardTick(); }, null, 10000, 10000);
@@ -526,6 +596,7 @@ namespace Ohman {
             return true;
         }
         void FanTick() {
+            if (!Seat()) return;
             if (!BiosOk && !Hw.IsDemo) return;
             bool leaveMax = false;
             try {
@@ -646,7 +717,9 @@ namespace Ohman {
                     Log.Write("handed the keyboard back to Windows Dynamic Lighting");
                 }
             } catch (Exception ex) { Log.Write("release lighting: " + ex.Message); }
+            if (!SeatOwner) { Log.Write("exit while another user's Ohman has the hardware: nothing handed back"); return; }
             ReleasePerKey();
+            lock (applySync) RestoreCpuLimits("exit");   // the CPU gets the firmware's own limits back
             if (!BiosOk || Hw.IsDemo || ReadOnly) return;
             try {
                 // Max fan is a flag the firmware holds until something clears it, and once we have exited nothing
@@ -707,6 +780,7 @@ namespace Ohman {
 
         bool Try(Action a, string what) {
             if (ReadOnly) { Log.Write("read-only (unsupported board '" + Board + "'): skipped " + what); return false; }
+            if (!SeatOwner) return false;                           // another user's Ohman has the hardware
             try { a(); LastError = ""; return true; }
             catch (Exception ex) { LastError = ex.Message; Log.Write("FAIL " + what + ": " + ex.Message); Fire(Toast, what + " failed: " + ex.Message, true); return false; }
         }
@@ -724,6 +798,7 @@ namespace Ohman {
                 ApplyFanCore();
                 ApplyPowerCore();
                 ApplyGpuCore();
+                ApplyCpuLimitsCore();
                 if (S.SyncWinPower) SetWinPowerOverlay(ModeIndex);
                 LastHeartbeat = DateTime.Now;
                 ApplyLightCore();
@@ -978,6 +1053,7 @@ namespace Ohman {
         /// <summary>Set by the fan test in the report process: 1 = the rpm pair moved the fans, 2 = the percent pair.</summary>
         public int EcPairFound;
         void CloseDriver() {
+            RestoreCpuLimits("driver closed");
             try { if (Cpu != null) Cpu.Dispose(); } catch { }
             try { if (Ec != null) Ec.Dispose(); } catch { }
             Cpu = null; Ec = null;
@@ -1234,10 +1310,286 @@ namespace Ohman {
         void ApplyPowerCore() { if (P.HasPowerGain) Try(delegate { Hw.SetConcurrentTdp(CurrentTdp); }, "Set power"); }
         void ApplyGpuCore() {
             if (!P.HasGpuPower) return;
-            // payloads come from the platform profile (Transcend 14: Base {0,0,1,75}, Boost {0,1,1,87}, Max {1,1,1,87} as OGH sends them)
             GpuLevel g = EffectiveGpu;
-            byte[] p = g == GpuLevel.Max ? P.GpuMax : g == GpuLevel.Boost ? P.GpuBoost : P.GpuBase;
-            Try(delegate { Hw.SetGpuPower(p[0] != 0, p[1] != 0, p[3]); }, "GPU power");
+            // Base follows OGH: only Performance (mode 0x31) and Unleashed (0x04, OGH with Smart Performance Gain
+            // off: 1,0,1,87) request cTGP without PPAB. Eco and Balanced both run firmware mode 0x30, which keeps
+            // the cTGP bit but never raises the GPU limit, so they use the standard payload.
+            // Boost is the old Max payload. A machine that rejects or does not retain cTGP gets the same request
+            // with only that bit cleared, and the result is cached for this session so Base never repeatedly fails.
+            byte[] p = g == GpuLevel.Boost ? P.GpuBoost : ModeIndex >= 2 ? P.GpuBaseCtgp : P.GpuBase;
+            ApplyGpuPayload(p);
+        }
+
+        void ApplyGpuPayload(byte[] p) {
+            bool wantsCtgp = p[0] != 0;
+            if (!wantsCtgp || ctgpSupport == 0) { ApplyGpuFallback(p); return; }
+
+            string failure = null;
+            try {
+                Hw.SetGpuPower(true, p[1] != 0, p[3]);
+                GpuPowerState state = null;
+                for (int attempt = 0; attempt < 2; attempt++) {
+                    try { state = Hw.GetGpuPower(); break; }
+                    catch (Exception ex) { failure = ex.Message; if (attempt == 0) Thread.Sleep(100); }
+                }
+                if (state != null && state.CustomTgp) {
+                    if (ctgpSupport != 1) Log.Write("GPU cTGP probe: supported (" + state + ")");
+                    ctgpSupport = 1; LastError = ""; return;
+                }
+                if (state != null) failure = "read-back did not retain cTGP (" + state + ")";
+            } catch (Exception ex) { failure = ex.Message; }
+
+            ctgpSupport = 0;
+            Log.Write("GPU cTGP unavailable; using standard-TGP fallback" + (String.IsNullOrEmpty(failure) ? "" : " (" + failure + ")"));
+            ApplyGpuFallback(p);
+        }
+
+        void ApplyGpuFallback(byte[] p) {
+            Try(delegate { Hw.SetGpuPower(false, p[1] != 0, p[3]); }, "GPU power");
+        }
+
+        // ---------- CPU power limits (MSR 0x610, through the driver) ----------
+        // Only on boards whose profile carries per-mode values, only with the driver's CPU module open, only
+        // while the owner leaves the switch on. Nothing here lowers a limit for temperature: the values are
+        // fixed per mode, and the thermal guard answers heat with the fans, as it always has.
+        public bool HasCpuLimits { get { return P.CpuPl1 != null && P.CpuPl2 != null && P.CpuPl1.Length >= ModeCount && P.CpuPl2.Length >= ModeCount; } }
+        /// <summary>Firmware route: 0x29 carries PL1/PL2 on this board, no driver needed.</summary>
+        public bool CpuLimitsViaFirmware { get { return HasCpuLimits && P.CpuLimitsViaBios && (BiosOk || Hw.IsDemo) && !ReadOnly; } }
+        public bool CpuLimitsReady { get { return HasCpuLimits && (Cpu != null || CpuLimitsViaFirmware); } }
+        public string CpuLimitsRoute = "";                  // "firmware", "firmware, unchecked" (no driver to read back) or "driver"
+        public bool HasEcoSlider { get { return HasCpuLimits && P.EcoPl1Range != null; } }
+        public bool HasUnleashedSliders { get { return HasCpuLimits && HasUnleashed && P.UnlPl1Range != null && P.UnlPl2Range != null; } }
+        /// <summary>A slider value: clamped to the profile's {min, max} and snapped to its 5 W steps.</summary>
+        static int Snap(int v, int[] range) {
+            int lo = range[0], hi = range[1];
+            v = Math.Max(lo, Math.Min(hi, v));
+            return Math.Min(hi, lo + (v - lo + 2) / 5 * 5);
+        }
+        public int EcoPl1 { get { return HasEcoSlider ? Snap(S.EcoPl1, P.EcoPl1Range) : 0; } }
+        public int UnlPl1 { get { return HasUnleashedSliders ? Snap(S.UnlPl1, P.UnlPl1Range) : 0; } }
+        public int UnlPl2 { get { return HasUnleashedSliders ? Snap(S.UnlPl2, P.UnlPl2Range) : 0; } }
+        /// <summary>Unleashed's PL2 as sent: PL2 may never sit below PL1, so a PL1 above the PL2 slider carries PL2 with it.</summary>
+        public int UnlPl2Effective { get { return Math.Max(UnlPl1, UnlPl2); } }
+        public bool UnleashedCustom { get { return S.UnlCustom && HasUnleashedSliders; } }
+        public int Pl1ForMode(int i) {
+            if (!HasCpuLimits) return 0;
+            if (i == 0 && HasEcoSlider) return EcoPl1;
+            if (i == 3 && UnleashedCustom) return UnlPl1;
+            return P.CpuPl1[i];
+        }
+        public int Pl2ForMode(int i) {
+            if (!HasCpuLimits) return 0;
+            if (i == 0 && HasEcoSlider) return EcoPl1;                // Eco is a strict cap: PL2 follows the slider
+            if (i == 3 && UnleashedCustom) return UnlPl2Effective;
+            return P.CpuPl2[i];
+        }
+        public string CpuLimitsWhy = "";                    // the last refusal, for Settings and the report; "" = fine
+        public int CpuPl1Written = -1, CpuPl2Written = -1;  // what we last put in the register, -1 = nothing
+        /// <summary>Our values for this mode were not accepted, so OMEN Gaming Hub's are in: CpuFallbackWhy says why.</summary>
+        public bool CpuLimitsFallback;
+        public string CpuFallbackWhy = "";
+        ulong cpuLimitsBefore;                              // the register as it was before our first write
+        bool cpuLimitsTouched;
+        string cpuTarget = "";                              // mode + requested pair the fallback state belongs to
+        int cpuReverts;                                     // consecutive heartbeats that found our pair overwritten
+        const int CpuRevertsToFallback = 3;                 // ~2 minutes of the firmware writing its own back
+
+        bool HasOghLimits { get { return P.OghPl1 != null && P.OghPl2 != null && P.OghPl1.Length >= ModeCount && P.OghPl2.Length >= ModeCount; } }
+
+        bool cpuFirmwareSent;                               // 0x29 carried a pair: exit puts the BIOS's own back
+        int cpuBefore1 = -1, cpuBefore2 = -1;               // the register in watts before our first write, when readable
+
+        /// <summary>One attempt at one pair, firmware first, then the driver. Remembers the register as found
+        /// before the very first write. wrote = something had to be written (the register did not hold it).</summary>
+        bool TryCpuLimits(int pl1, int pl2, out bool wrote, out string why) {
+            wrote = false;
+            why = "";
+            int r1 = 0, r2 = 0;
+            bool canRead = false;
+            if (Cpu != null) { try { canRead = Cpu.ReadPackageLimits(out r1, out r2); } catch { } }
+            if (canRead && cpuBefore1 < 0 && !cpuLimitsTouched && !cpuFirmwareSent) { cpuBefore1 = r1; cpuBefore2 = r2; }
+            if (canRead && r1 == pl1 && r2 == pl2) { if (CpuLimitsRoute.Length == 0) CpuLimitsRoute = CpuLimitsViaFirmware ? "firmware" : "driver"; return true; }
+            if (CpuLimitsViaFirmware) {
+                string fwWhy = "";
+                bool sent = false;
+                try { Hw.SetCpuPowerLimits(pl1, pl2); sent = true; } catch (Exception ex) { fwWhy = "firmware refused 0x29: " + ex.Message; }
+                if (sent) {
+                    cpuFirmwareSent = true;
+                    if (Cpu == null) {
+                        // Nothing to read it back with. The call is re-sent every heartbeat instead, which is what
+                        // the Power gain byte on the same command already does, so a reset after sleep heals too.
+                        CpuLimitsRoute = "firmware, unchecked";
+                        return true;
+                    }
+                    int b1 = 0, b2 = 0;
+                    if (Cpu.ReadPackageLimits(out b1, out b2) && b1 == pl1 && b2 == pl2) { wrote = true; CpuLimitsRoute = "firmware"; return true; }
+                    fwWhy = "firmware took 0x29 but 0x610 reads " + b1 + "/" + b2 + " W";
+                }
+                if (Cpu == null) { why = fwWhy; return false; }
+                Log.Write("cpu limits: " + fwWhy + "; trying the driver");
+            }
+            if (Cpu == null) { why = "needs the hardware driver"; return false; }
+            ulong before = 0;
+            bool ok = false;
+            try { ok = Cpu.SetPackageLimits(pl1, pl2, out before, out wrote, out why); }
+            catch (Exception ex) { why = ex.Message; }
+            if (!cpuLimitsTouched && before != 0) { cpuLimitsBefore = before; cpuLimitsTouched = true; }
+            if (ok) CpuLimitsRoute = "driver";
+            return ok;
+        }
+
+        // "Not accepted" is any of: the driver refused the write, the register reads back something else, or the
+        // pair keeps getting overwritten (CpuRevertsToFallback heartbeats in a row found the firmware's own values
+        // back). Any of them drops this mode to OMEN Gaming Hub's pair, which this machine is known to hold. The
+        // fallback lasts until the mode or the requested pair changes, when ours is tried again. Where ours is
+        // already OGH's (Eco, Balanced, Performance on 8E41) there is nothing lower to fall to, and the firmware's
+        // own limits stay, with the reason on the Settings row.
+        void ApplyCpuLimitsCore() {
+            if (!CpuLimitsReady) return;
+            if (!S.CpuLimits) { RestoreCpuLimits("switched off"); return; }
+            int m = ModeIndex, pl1 = Pl1ForMode(m), pl2 = Math.Max(pl1, Pl2ForMode(m));
+            int o1 = HasOghLimits ? P.OghPl1[m] : pl1, o2 = HasOghLimits ? Math.Max(o1, P.OghPl2[m]) : pl2;
+            bool canFall = o1 != pl1 || o2 != pl2;
+            string key = m + ":" + pl1 + "/" + pl2;
+            if (key != cpuTarget) { cpuTarget = key; cpuReverts = 0; CpuLimitsFallback = false; CpuFallbackWhy = ""; }
+            bool useOgh = CpuLimitsFallback && canFall;
+            int w1 = useOgh ? o1 : pl1, w2 = useOgh ? o2 : pl2;
+            bool wrote;
+            string why;
+            bool ok = TryCpuLimits(w1, w2, out wrote, out why);
+            if (ok) {
+                bool heldBefore = w1 == CpuPl1Written && w2 == CpuPl2Written;
+                if (wrote && heldBefore) {
+                    cpuReverts++;
+                    Log.Write("cpu limits: PL1 " + w1 + " / PL2 " + w2 + " W had been overwritten, put back (" + cpuReverts + " in a row)");
+                    if (!useOgh && canFall && cpuReverts >= CpuRevertsToFallback) {
+                        why = "overwritten " + cpuReverts + " times in a row";
+                        ok = false;                                          // fall through to the fallback below
+                    }
+                } else if (!wrote) cpuReverts = 0;                           // it held since the last look
+            }
+            if (!ok && !useOgh && canFall) {
+                Log.Write("cpu limits: PL1 " + pl1 + " / PL2 " + pl2 + " W not accepted (" + why + "); falling back to OMEN Gaming Hub's " + o1 + " / " + o2 + " W");
+                CpuLimitsFallback = true; CpuFallbackWhy = why; cpuReverts = 0;
+                useOgh = true; w1 = o1; w2 = o2;
+                ok = TryCpuLimits(w1, w2, out wrote, out why);
+            }
+            if (ok) {
+                if (w1 != CpuPl1Written || w2 != CpuPl2Written) Log.Write("cpu limits: PL1 " + w1 + " W · PL2 " + w2 + " W (" + ModeName + (useOgh ? ", OMEN Gaming Hub's values" : "") + ")");
+                CpuPl1Written = w1; CpuPl2Written = w2; CpuLimitsWhy = "";
+            } else {
+                if (why != CpuLimitsWhy) Log.Write("cpu limits: not applied - " + why + "; the firmware's own limits stay");
+                CpuLimitsWhy = why ?? "failed";
+                CpuPl1Written = CpuPl2Written = -1;
+            }
+        }
+        /// <summary>Hand the register back exactly as we found it. Called on exit, when the switch goes off and
+        /// before the driver closes; a no-op when we never wrote.</summary>
+        void RestoreCpuLimits(string reason) {
+            if (!cpuLimitsTouched && !cpuFirmwareSent) return;
+            string why = "";
+            bool ok = false;
+            // The firmware route first, with the pair the register held before us, or the BIOS's own boot pair
+            // when there was no driver to read it. Then the driver puts the exact raw register back on top.
+            if (cpuFirmwareSent && CpuLimitsViaFirmware) {
+                int b1 = cpuBefore1 > 0 ? cpuBefore1 : P.BootPl1, b2 = cpuBefore2 > 0 ? cpuBefore2 : P.BootPl2;
+                if (b1 > 0 && b2 > 0) {
+                    try { Hw.SetCpuPowerLimits(b1, b2); ok = true; why = "PL1 " + b1 + " / PL2 " + b2 + " W via firmware"; } catch (Exception ex) { why = ex.Message; }
+                }
+            }
+            if (cpuLimitsTouched && Cpu != null) {
+                string w2;
+                bool ok2 = false;
+                try { ok2 = Cpu.RestorePackageLimits(cpuLimitsBefore, out w2); } catch (Exception ex) { w2 = ex.Message; }
+                if (ok2) { ok = true; why = (why.Length > 0 ? why + ", " : "") + "register restored"; cpuLimitsTouched = false; }
+                else why = (why.Length > 0 ? why + "; " : "") + "driver restore failed: " + w2;
+            }
+            Log.Write("cpu limits: " + (ok ? "firmware values restored (" + reason + ": " + why + ")" : "restore failed (" + reason + "): " + why));
+            if (ok) cpuFirmwareSent = false;
+            CpuPl1Written = CpuPl2Written = -1;
+            CpuLimitsRoute = "";
+        }
+        public void SetCpuLimits(bool on) {
+            S.CpuLimits = on; S.Save();
+            lock (applySync) ApplyCpuLimitsCore();
+            Changed();
+        }
+        public void SetUnleashedCustom(bool on) {
+            S.UnlCustom = on; S.Save();
+            lock (applySync) ApplyCpuLimitsCore();
+            Changed();
+        }
+        public void SetUnleashedPl1(int watts) {
+            S.UnlPl1 = watts; S.UnlPl1 = UnlPl1; S.Save();
+            lock (applySync) ApplyCpuLimitsCore();
+            Changed();
+        }
+        public void SetUnleashedPl2(int watts) {
+            S.UnlPl2 = watts; S.UnlPl2 = UnlPl2; S.Save();
+            lock (applySync) ApplyCpuLimitsCore();
+            Changed();
+        }
+        public void SetEcoPl1(int watts) {
+            S.EcoPl1 = watts; S.EcoPl1 = EcoPl1; S.Save();
+            lock (applySync) ApplyCpuLimitsCore();
+            Changed();
+        }
+
+        // ---------- more than one Windows user ----------
+        // Each Windows user has a settings file of their own (Settings.FilePath), and with fast user switching
+        // each can have an Ohman running at once. Only one may drive the hardware, or two sets of fans, modes
+        // and limits would take turns every few seconds. The rule: the Ohman in the session on the screen (the
+        // active console session) owns it. An Ohman in a session that is not on screen keeps going only while no
+        // Ohman runs in the one that is, so a machine switched to a user without Ohman is not left unattended.
+        // Each instance marks its session with a named global mutex; the timers check the rule every tick and the
+        // instance that takes the hardware back re-applies its own user's settings at once.
+        [DllImport("kernel32.dll")] static extern uint WTSGetActiveConsoleSessionId();
+        readonly int mySession = System.Diagnostics.Process.GetCurrentProcess().SessionId;
+        System.Threading.Mutex seatMarker;
+        public bool SeatOwner = true;
+        public string SeatWhy = "";
+        const string SeatPrefix = @"Global\Ohman_Seat_";
+        void OpenSeat() {
+            if (Hw.IsDemo) return;
+            try {
+                var sec = new System.Security.AccessControl.MutexSecurity();
+                sec.AddAccessRule(new System.Security.AccessControl.MutexAccessRule(new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.WorldSid, null),
+                    System.Security.AccessControl.MutexRights.Synchronize, System.Security.AccessControl.AccessControlType.Allow));
+                bool created;
+                seatMarker = new System.Threading.Mutex(false, SeatPrefix + mySession, out created, sec);
+            } catch (Exception ex) { Log.Write("seat marker: " + ex.Message); }
+        }
+        bool ComputeSeat(out string why) {
+            why = "";
+            if (Hw.IsDemo) return true;
+            uint active;
+            try { active = WTSGetActiveConsoleSessionId(); } catch { return true; }
+            if (active == 0xFFFFFFFF || active == (uint)mySession) return true;
+            bool other = false;
+            try {
+                System.Threading.Mutex m;
+                if (System.Threading.Mutex.TryOpenExisting(SeatPrefix + active, System.Security.AccessControl.MutexRights.Synchronize, out m)) { other = true; m.Dispose(); }
+            } catch (UnauthorizedAccessException) { other = true; }       // it exists; we just may not open it
+            catch { }
+            if (other) why = "another Windows user's Ohman is on screen (session " + active + ")";
+            return !other;
+        }
+        /// <summary>May this instance touch the hardware now? Re-applies this user's settings when it gets it back.</summary>
+        bool Seat() {
+            if (Hw.IsDemo) return true;
+            string why;
+            bool own = ComputeSeat(out why);
+            if (own != SeatOwner) {
+                SeatOwner = own; SeatWhy = why;
+                if (own) {
+                    Log.Write("seat: " + Settings.UserLabel + " has the hardware again; applying this user's settings");
+                    System.Threading.ThreadPool.QueueUserWorkItem(delegate {
+                        try { curLevel1 = curLevel2 = -1; ApplyRefreshRate(OnBattery); ApplyAll(false); } catch (Exception ex) { Log.Write("seat apply: " + ex.Message); }
+                    });
+                } else Log.Write("seat: " + Settings.UserLabel + " steps back: " + why);
+                Changed();
+            }
+            return own;
         }
 
         public void SetMode(int index, bool announce) {
@@ -1245,7 +1597,7 @@ namespace Ohman {
             SetModeCore(index, announce);
         }
         void SetModeCore(int index, bool announce) {
-            index = Math.Max(0, Math.Min(2, index));
+            index = Math.Max(0, Math.Min(ModeCount - 1, index));
             S.ModeIndex = index;
             S.Save();
             NoteFanMode(S.Fan);                                      // the new mode brings its own fan setting with it
@@ -1255,8 +1607,10 @@ namespace Ohman {
                 if (!GuardActive) { ApplyFanCore(); lastFanWrite = DateTime.Now; }
                 ApplyPowerCore();
                 ApplyGpuCore();
+                ApplyCpuLimitsCore();
                 if (S.SyncWinPower) SetWinPowerOverlay(index);
             }
+            ApplyRefreshRate(OnBattery);                             // Eco's lowest rate on the way in, the owner's rate on the way out
             Changed();
         }
 
@@ -1337,12 +1691,14 @@ namespace Ohman {
 
         // ---------- heartbeat ----------
         void Heartbeat() {
+            if (!Seat()) return;
             try {
                 if (!BiosOk && !Hw.IsDemo) return;
                 lock (applySync) {
                     if (GuardActive) GuardFans();
                     Try(delegate { Hw.SetMode(ModeByte, FansByBios); }, "Set mode");   // fans are handled by FanTick; this only pins mode and power
                     ApplyPowerCore();
+                    ApplyCpuLimitsCore();                            // the BIOS writes its own 65/80 back after sleep; this puts ours back
                     LastHeartbeat = DateTime.Now;
                 }
                 if (S.SuppressOgh && !Hw.IsDemo && Supported) KillOgh();
@@ -1403,6 +1759,7 @@ namespace Ohman {
             Changed();
         }
         void GuardTick() {
+            if (!SeatOwner) return;
             if (!BiosOk || Hw.IsDemo || ReadOnly) return;      // read-only boards: nothing to force, the firmware's own limits apply
             if (!S.Guard) {
                 if (GuardActive) { GuardActive = false; guardSafeSince = DateTime.MinValue; guardStalled = false; guardIgnoredTicks = guardHotTicks = guardWarmTicks = 0; curLevel1 = curLevel2 = -1; lock (applySync) { ApplyFanCore(); lastFanWrite = DateTime.Now; } Changed(); }
@@ -1491,6 +1848,7 @@ namespace Ohman {
         public void OnPowerSource(bool onBattery) {
             bool changed = OnBattery != onBattery;
             OnBattery = onBattery;
+            if (!SeatOwner) return;                                   // another user's Ohman answers for the machine; ours catches up when it is back
             ApplyRefreshRate(onBattery);
             if (S.EcoOnBattery) {
                 // forced Eco is temporary: the file keeps the user's own mode (SavedModeOverride) and it comes back when plugged in
@@ -1562,6 +1920,7 @@ namespace Ohman {
         }
 
         void OnBiosEvent(object s, EventArrivedEventArgs e) {
+            if (!SeatOwner) return;                                   // every user's Ohman hears the OMEN key; only the one on screen answers it
             uint id = 0, data = 0;
             try { id = Convert.ToUInt32(e.NewEvent["EventID"]); data = Convert.ToUInt32(e.NewEvent["EventData"]); } catch { return; }
             LastEventId = id;
@@ -1604,16 +1963,41 @@ namespace Ohman {
         }
 
         // ---------- display refresh rate ----------
+        /// <summary>Eco lowers the built-in panel (OGH does, SetDisplayRefreshRate), on boards whose profile says so
+        /// unless the owner switched it off, or on if they switched it on anywhere.</summary>
+        public bool EcoLowHz { get { return S.EcoLowHz < 0 ? P.EcoLowHz : S.EcoLowHz == 1; } }
+        // Two reasons to run the panel at its lowest rate: Eco (EcoLowHz) and battery (LowHzOnBattery). Either one
+        // lowers it; it goes back only when neither applies, to the rate the owner picked here, or else to the one
+        // it had before we lowered it (kept in the settings, so a crash still gets it back), or else the highest.
+        // A rate picked while lowered is the owner's new choice: it is what comes back.
         void ApplyRefreshRate(bool onBattery) {
             try {
                 int[] rates = Display.Rates();
                 if (rates.Length < 2) return;
-                int want = S.LowHzOnBattery && onBattery ? Display.BatteryHz()
-                         : S.RefreshHz > 0 ? S.RefreshHz
-                         : S.LowHzOnBattery ? Display.HighestHz()   // we lowered it, so we put it back
+                bool ecoLow = EcoLowHz && ModeIndex == 0, batLow = S.LowHzOnBattery && onBattery;
+                bool low = ecoLow || batLow;
+                int cur = Display.CurrentHz();
+                int want;
+                if (low) {
+                    want = Display.BatteryHz();
+                    if (S.HzBeforeLow == 0 && cur > 0 && cur != want) { S.HzBeforeLow = cur; S.Save(); }
+                } else {
+                    want = S.RefreshHz > 0 ? S.RefreshHz
+                         : S.HzBeforeLow > 0 ? S.HzBeforeLow
+                         : S.LowHzOnBattery || EcoLowHz ? Display.HighestHz()   // we may have lowered it, so we put it back
                          : 0;
-                if (want > 0 && Display.CurrentHz() != want) Display.SetHz(want);
+                    if (S.HzBeforeLow != 0) { S.HzBeforeLow = 0; S.Save(); }
+                }
+                if (want > 0 && cur != want) {
+                    bool ok = Display.SetHz(want);
+                    Log.Write("refresh rate: " + want + " Hz" + (low ? " (" + (ecoLow ? "Eco" : "") + (ecoLow && batLow ? " + " : "") + (batLow ? "battery" : "") + ")" : "") + (ok ? "" : " FAILED"));
+                }
             } catch (Exception ex) { Log.Write("refresh rate: " + ex.Message); }
+        }
+        public void SetEcoLowHz(bool on) {
+            S.EcoLowHz = on ? 1 : 0; S.Save();
+            ApplyRefreshRate(OnBattery);
+            Changed();
         }
         public void SetRefreshRate(int hz) {
             S.RefreshHz = hz;
@@ -1728,6 +2112,7 @@ namespace Ohman {
         void StartEffect() { fxFailures = 0; if (fx == null) fx = new System.Threading.Timer(delegate { EffectTick(); }, null, 120, 120); else fx.Change(120, 120); }
         void StopEffect() { if (fx != null) fx.Change(Timeout.Infinite, Timeout.Infinite); }
         void EffectTick() {
+            if (!SeatOwner) return;
             if (Light == null || S.Light != 1 || S.LightEffect == 0) return;
             if (!Monitor.TryEnter(applySync, 50)) return;
             try {
@@ -1746,7 +2131,7 @@ namespace Ohman {
         [DllImport("powrprof.dll")] static extern uint PowerSetActiveOverlayScheme(ref Guid overlay);
         public void SetWinPowerOverlay(int modeIndex) {
             try {
-                Guid g = modeIndex == 0 ? OverlayEfficiency : modeIndex == 2 ? OverlayPerformance : OverlayBalanced;
+                Guid g = modeIndex == 0 ? OverlayEfficiency : modeIndex >= 2 ? OverlayPerformance : OverlayBalanced;   // Unleashed: OGH leaves Best performance in place
                 uint rc = PowerSetActiveOverlayScheme(ref g);
                 if (rc != 0) Log.Write("PowerSetActiveOverlayScheme rc=" + rc);
             } catch (Exception ex) { Log.Write("power overlay: " + ex.Message); }
@@ -1765,6 +2150,9 @@ namespace Ohman {
             try { sb.AppendLine("max fan: " + Hw.GetMaxFan()); } catch (Exception ex) { sb.AppendLine("max fan: " + ex.Message); }
             try { sb.AppendLine("gpu power: " + Hw.GetGpuPower()); } catch (Exception ex) { sb.AppendLine("gpu power: " + ex.Message); }
             sb.AppendLine("settings: mode=" + ModeName + " (BIOS 0x" + ModeByte.ToString("X2") + (OnBattery ? ", DC" : ", AC") + ") fan=" + S.Fan + " " + S.Fan1 + "/" + S.Fan2 + " tdp=" + CurrentTdp + "W gpu=" + EffectiveGpu + (S.GpuAuto ? "(auto)" : "") + " key=" + KeyId + "/" + KeyData + "→" + S.Key + " ecoCool=" + S.EcoCool);
+            sb.AppendLine("user: " + Settings.UserLabel + " · session " + mySession + " · " + (SeatOwner ? "has the hardware" : "stepped back: " + SeatWhy) + (seatMarker == null && !Hw.IsDemo ? " (no session marker)" : "") + " · settings " + Settings.FilePath);
+            if (HasCpuLimits) sb.AppendLine("cpu limits: " + (!S.CpuLimits ? "switched off" : !CpuLimitsReady ? "no route (no driver, firmware route off)" : CpuPl1Written >= 0 ? "PL1 " + CpuPl1Written + " W PL2 " + CpuPl2Written + " W" : "not applied (" + CpuLimitsWhy + ")")
+                + (CpuLimitsRoute.Length > 0 ? "  via " + CpuLimitsRoute : "") + (CpuLimitsFallback ? "  [OGH fallback: " + CpuFallbackWhy + "]" : "") + (HasEcoSlider ? "  eco PL1 " + EcoPl1 + " W" : "") + (UnleashedCustom ? "  experimental Unleashed PL1 " + UnlPl1 + " / PL2 " + UnlPl2Effective + " W" : ""));
             sb.AppendLine("graphics: " + (GpuMode >= 0 && GpuMode < 4 ? GpuModeNames[GpuMode] : "unknown") + " (offered mask 0x" + Info.GpuModes.ToString("X2") + ")" + (GpuModePending >= 0 ? " -> " + GpuModeNames[GpuModePending] + " after restart" : ""));
             sb.AppendLine("lighting: " + (Light == null ? "none" : Light.Describe + " mode=" + S.Light + " level=" + S.LightLevel + " colours=" + S.LightColors + " windowsControl=" + WinLighting.HasControl));
             sb.AppendLine("fan drive: written " + curLevel1 + "/" + curLevel2 + "  cpu " + Fmt(CpuTemp) + " (last single reading " + Fmt(CpuTempNow) + ")  gpu " + Fmt(GpuTemp) + "  ir " + Fmt(IrTemp) + "  guard=" + GuardActive + "  writeFailures=" + fanWriteFailures + "  route=" + Route);

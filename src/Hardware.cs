@@ -78,6 +78,9 @@ namespace Ohman {
         void SetMaxFan(bool on);
         void SetFanLevels(int fan1, int fan2);
         void SetConcurrentTdp(int watts);
+        /// <summary>0x29 with the PL bytes filled: CPU PL1/PL2 through the firmware, no driver. Byte order measured on
+        /// 8E41 (2026-09-25): byte 0 = PL2, byte 1 = PL1 (sent 32 3C, 0x610 read PL1 60 / PL2 50; 50 41 gave 65/80).</summary>
+        void SetCpuPowerLimits(int pl1, int pl2);
         void SetGpuPower(bool customTgp, bool ppab, int peakTemp);
         /// <summary>Graphics mode: 0 Hybrid, 1 Discrete, 2 Optimus, 3 iGPU only. Legacy mailbox (command 1 read / 2 write, type 0x52).</summary>
         int GetGpuMode();
@@ -101,7 +104,7 @@ namespace Ohman {
         public const uint OP_MAX_FAN_GET   = 0x26; // out4 -> [0]=1 when max
         public const uint OP_MAX_FAN_SET   = 0x27; // in {1|0}
         public const uint OP_SYSTEM_DATA   = 0x28; // out128
-        public const uint OP_CPU_POWER_SET = 0x29; // in {PL1, PL2, PL4, LimitWithGpu}, 0xFF = leave unchanged
+        public const uint OP_CPU_POWER_SET = 0x29; // in {PL2, PL1, PL4?, LimitWithGpu}, 0xFF = leave unchanged (PL2 first: measured on 8E41)
         public const uint OP_FAN_LEVEL_GET = 0x2D; // out128 -> [0]=fan1 [1]=fan2 (x100 RPM)
         public const uint OP_FAN_LEVEL_SET = 0x2E; // in {fan1, fan2, 0...}
         public const uint OP_FAN_TABLE_GET = 0x2F; // out128 -> [0]=fan count, [1]=entries, then {fan1, fan2, noise dB} triplets
@@ -264,6 +267,10 @@ namespace Ohman {
             Call(OP_CPU_POWER_SET, new byte[] { 0xFF, 0xFF, 0xFF, (byte)Math.Max(0, Math.Min(255, watts)) }, 0);
         }
 
+        public void SetCpuPowerLimits(int pl1, int pl2) {
+            Call(OP_CPU_POWER_SET, new byte[] { (byte)Math.Max(1, Math.Min(254, pl2)), (byte)Math.Max(1, Math.Min(254, pl1)), 0xFF, 0xFF }, 0);
+        }
+
         public void SetGpuPower(bool customTgp, bool ppab, int peakTemp) {
             Call(OP_GPU_POWER_SET, new byte[] { (byte)(customTgp ? 1 : 0), (byte)(ppab ? 1 : 0), 1, (byte)peakTemp }, 0);
         }
@@ -335,6 +342,7 @@ namespace Ohman {
         // on a real one, so a preview of a stopped fan showed it spinning at the mode's own speed.
         public void SetFanLevels(int a, int b) { m1 = a >= 0 ? a : -1; m2 = b >= 0 ? b : -1; }
         public void SetConcurrentTdp(int w) { tdp = w; }
+        public void SetCpuPowerLimits(int pl1, int pl2) { }
         public void SetGpuPower(bool c, bool p, int t) { ppab = p; }
         int gpuMode = 0;
         public int GetGpuMode() { return gpuMode; }

@@ -14,8 +14,25 @@ namespace Ohman {
         public string[] Boards;             // DMI baseboard product ids this profile applies to (Win32_BaseBoard.Product)
         public int ThermalPolicy = 1;       // expected byte 3 of system-design data (1 = modes 0x30/0x31/0x50)
         public byte ModeEco = 0x30, ModeBalanced = 0x30, ModePerformance = 0x31, ModeCool = 0x50;
+        /// <summary>OGH's Unleashed mode (L8), or 0 where the board has none: no fourth mode is shown or sent.
+        /// Set per board from an OGH capture (see Platforms.UnleashedBoards), never guessed from the policy.</summary>
+        public byte ModeUnleashed = 0;
+        /// <summary>CPU package limits in watts per mode (Eco, Balanced, Performance, Unleashed); null = this board's
+        /// CPU limits are never touched. OghPl1/OghPl2 are what OMEN Gaming Hub itself writes per mode: the fallback
+        /// when the CPU does not take ours. The ranges are the sliders: Eco PL1 (PL2 follows it), and the two
+        /// experimental Unleashed sliders, each {min, max} in watts, 5 W steps.</summary>
+        public int[] CpuPl1, CpuPl2, OghPl1, OghPl2;
+        public int[] EcoPl1Range, UnlPl1Range, UnlPl2Range;
+        /// <summary>The firmware takes PL1/PL2 on 0x29 (byte 0 PL2, byte 1 PL1), so no driver is needed for them; the
+        /// driver, when present, only checks the result and is the fallback. BootPl1/BootPl2 = what the BIOS itself
+        /// sets, put back on exit when there is no driver to read the original.</summary>
+        public bool CpuLimitsViaBios;
+        public int BootPl1, BootPl2;
+        /// <summary>Eco drops the built-in display to its lowest refresh rate, as OMEN Gaming Hub does (default of the
+        /// Settings switch; the owner can turn it off).</summary>
+        public bool EcoLowHz;
         public int TdpBase = 30, TdpGainMax = 15;   // concurrent CPU+GPU budget: base and the "Smart Performance Gain" range
-        public byte[] GpuBase = { 0, 0, 1, 75 }, GpuBoost = { 0, 1, 1, 87 }, GpuMax = { 1, 1, 1, 87 };
+        public byte[] GpuBase = { 0, 0, 1, 75 }, GpuBaseCtgp = { 1, 0, 1, 87 }, GpuBoost = { 1, 1, 1, 87 };
         public uint KeyEventId = 29, KeyEventData = 8613;   // hpqBEvnt of the OMEN key
         // Features that not every OMEN has. A model without one keeps the row hidden and never sends the command.
         public bool HasPowerGain = true;    // 0x29 concurrent CPU+GPU budget ("Smart Performance Gain")
@@ -243,8 +260,53 @@ namespace Ohman {
             if (p.Ec == null && Families.EcCandidate(board)) p.Ec = EcMap.Legacy();
             DriverFor need;
             if (p.DriverFor == DriverFor.None && DriverNeeds.TryGetValue(board ?? "", out need)) p.DriverFor = need;
+            byte unleashed;
+            if (p.ModeUnleashed == 0 && UnleashedBoards.TryGetValue(board ?? "", out unleashed)) p.ModeUnleashed = unleashed;
+            CpuLimitSpec lim;
+            if (p.CpuPl1 == null && CpuLimitBoards.TryGetValue(board ?? "", out lim)) {
+                p.CpuPl1 = lim.Pl1; p.CpuPl2 = lim.Pl2; p.OghPl1 = lim.OghPl1; p.OghPl2 = lim.OghPl2;
+                p.EcoPl1Range = lim.EcoPl1; p.UnlPl1Range = lim.UnlPl1; p.UnlPl2Range = lim.UnlPl2;
+                p.CpuLimitsViaBios = lim.ViaBios; p.BootPl1 = lim.BootPl1; p.BootPl2 = lim.BootPl2;
+                p.EcoLowHz = lim.EcoLowHz;
+            }
             return p;
         }
+
+        /// <summary>Boards where OMEN Gaming Hub offers Unleashed mode, with the byte it sends for it. Each entry is
+        /// an OGH capture from that board. What OGH does in Unleashed, and what Ohman does with this byte:
+        ///   0x1A  set mode {FF, 04, fansByBios, 00}            (Performance is 0x31, Eco/Balanced 0x30)
+        ///   0x22  GPU {1,1,1,87} with Smart Performance Gain, {1,0,1,87} with it off   (GPU boost / GPU base)
+        ///   0x29  concurrent budget 45 W = base 30 + UnleashedModeTppOffset 15; none with the gain off
+        /// OGH also writes PL1/PL2 (default 65/77) through the CPU's MSR, not the mailbox, and clips PL1 on the
+        /// chassis sensor; neither is part of this mode here.</summary>
+        /// <summary>One board's CPU limits and Eco display rule. Modes in Eco, Balanced, Performance, Unleashed order.</summary>
+        sealed class CpuLimitSpec {
+            public int[] Pl1, Pl2, OghPl1, OghPl2, EcoPl1, UnlPl1, UnlPl2;
+            public bool ViaBios, EcoLowHz;
+            public int BootPl1, BootPl2;
+        }
+        /// <summary>Per-mode CPU limits, one board at a time, each from that board's own evidence.</summary>
+        static readonly Dictionary<string, CpuLimitSpec> CpuLimitBoards = new Dictionary<string, CpuLimitSpec>(StringComparer.OrdinalIgnoreCase) {
+            // OMEN Transcend 14-fb1xxx (2025), Core Ultra 9 285H.
+            //  * Eco/Balanced/Performance: OGH's own values (HPOMENBG log 2026-09-24: SetPL1DefaultValue 45/77, 45/77,
+            //    65/77). Eco's PL1 is a slider (25-45 W, PL2 follows it; 25 W measured to hold under Cinebench).
+            //  * Unleashed 65/80: the BIOS's boot value read from 0x610 on 2026-09-25, identical in every mode. OGH's
+            //    own Unleashed is 65/77 (UnleashedModePowerLimit1/2), the fallback. The experimental sliders use OGH's
+            //    own Unleashed ranges: PL1 25-90 W, PL2 65-115 W.
+            //  * 0x29 carries PL2/PL1 without a driver (measured 2026-09-25: 32 3C read back PL1 60 / PL2 50; 50 41 gave
+            //    65/80; held across mode switches; PL2 65 respected). HWiNFO shows a second, dynamic copy (PL1 65,
+            //    PL2 80) that neither route reaches: PL2 100 in the register still bursts to ~80-83 W.
+            //  * OGH drops the built-in panel to 60 Hz in Eco and restores it on leaving (SetDisplayRefreshRate).
+            { "8E41", new CpuLimitSpec {
+                Pl1 = new[] { 45, 45, 65, 65 }, Pl2 = new[] { 45, 77, 77, 80 },
+                OghPl1 = new[] { 45, 45, 65, 65 }, OghPl2 = new[] { 77, 77, 77, 77 },
+                EcoPl1 = new[] { 25, 45 }, UnlPl1 = new[] { 25, 90 }, UnlPl2 = new[] { 65, 115 },
+                ViaBios = true, BootPl1 = 65, BootPl2 = 80, EcoLowHz = true } },
+        };
+
+        static readonly Dictionary<string, byte> UnleashedBoards = new Dictionary<string, byte>(StringComparer.OrdinalIgnoreCase) {
+            { "8E41", 0x04 },    // OMEN Transcend 14-fb1xxx (2025): HPOMENBG log 2026-09-24, "255,4,0,0" on every Unleashed apply
+        };
 
         /// <summary>Boards whose mailbox is known to refuse a control the EC can do. Each entry is a field report.</summary>
         static readonly Dictionary<string, DriverFor> DriverNeeds = new Dictionary<string, DriverFor>(StringComparer.OrdinalIgnoreCase) {
@@ -261,7 +323,7 @@ namespace Ohman {
                 ThermalPolicy = 1,
                 ModeEco = 0x30, ModeBalanced = 0x30, ModePerformance = 0x31, ModeCool = 0x50,
                 TdpBase = 30, TdpGainMax = 15,
-                GpuBase = new byte[] { 0, 0, 1, 75 }, GpuBoost = new byte[] { 0, 1, 1, 87 }, GpuMax = new byte[] { 1, 1, 1, 87 },
+                GpuBase = new byte[] { 0, 0, 1, 75 }, GpuBaseCtgp = new byte[] { 1, 0, 1, 87 }, GpuBoost = new byte[] { 1, 1, 1, 87 },
                 KeyEventId = 29, KeyEventData = 8613,
                 RpmPerLevel = 100,
                 Notes = "Core Ultra 9 185H + RTX 4070. Modes, fans, power and GPU verified 2026-09-08 against OMEN Gaming Hub 1101.2608 logs and code; four-zone keyboard lighting verified on the device 2026-09-12."

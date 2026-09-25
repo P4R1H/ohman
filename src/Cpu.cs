@@ -11,7 +11,11 @@
 // AMD (Amd17Cpu.cs): the die temperature is not an MSR but SMN register THM_TCON_CUR_TMP 0x59800; energy is
 // MSR_PKG_ENERGY_STAT 0xC001029B.
 //
-// Reads only. PL1/PL2 are writable through the same module and wait for a tester.
+// Reads, plus one write: PL1/PL2 in MSR_PKG_POWER_LIMIT 0x610, which the IntelMSR module allows (its write
+// allow-list is 0x601, 0x610, 0x150, 0x607/0x608 and 0x1A4). Only the two limit fields and their enable bits
+// change; the time windows, clamp bits and the lock are left as the firmware set them, and a locked register
+// is never written. Measured on 8E41 (2026-09-25): the BIOS writes PL1 65 / PL2 80 at every boot and in every
+// mode, the register is not locked, and OMEN Gaming Hub writes its own per-mode values here.
 using System;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -62,6 +66,31 @@ namespace Ohman {
         bool light;
 
         public virtual void Dispose() { if (Module != null) Module.Dispose(); }
+
+        /// <summary>Set PL1 and PL2 in watts. before is the raw register as it was, for a later restore; zero
+        /// when nothing could be read. wrote says a write was needed (the register did not already hold them).
+        /// why says what stopped it.</summary>
+        public bool SetPackageLimits(int pl1W, int pl2W, out ulong before, out bool wrote, out string why) {
+            lock (sync) {
+                LastWrote = false;
+                bool ok = SetLimitsCore(pl1W, pl2W, out before, out why);
+                wrote = LastWrote;
+                return ok;
+            }
+        }
+        protected bool LastWrote;
+        /// <summary>PL1/PL2 as the register holds them now, in watts. False when it cannot be read.</summary>
+        public bool ReadPackageLimits(out int pl1W, out int pl2W) {
+            lock (sync) return ReadLimitsCore(out pl1W, out pl2W);
+        }
+        protected virtual bool ReadLimitsCore(out int pl1W, out int pl2W) { pl1W = pl2W = 0; return false; }
+        /// <summary>Put back a raw value SetPackageLimits returned as before.</summary>
+        public bool RestorePackageLimits(ulong raw, out string why) {
+            lock (sync) return RestoreLimitsCore(raw, out why);
+        }
+        protected virtual bool SetLimitsCore(int pl1W, int pl2W, out ulong before, out string why) { before = 0; why = "power limits are not writable on this CPU"; return false; }
+        protected virtual bool RestoreLimitsCore(ulong raw, out string why) { why = "power limits are not writable on this CPU"; return false; }
+        protected int WriteMsr(uint msr, ulong v) { int n; return Module.Execute("ioctl_write_msr", new ulong[] { msr, v }, null, out n); }
 
         // Architectural on both vendors. APERF counts cycles the core actually ran, MPERF counts them at the
         // base clock, so their ratio over an interval is the average multiplier for that interval. Windows'
@@ -218,6 +247,53 @@ namespace Ohman {
             t.Mhz = Clock();
             return t;
         }
+
+        protected override bool SetLimitsCore(int pl1W, int pl2W, out ulong before, out string why) {
+            before = 0;
+            ulong v;
+            if (powerUnit == 0 && Msr(MSR_RAPL_POWER_UNIT, out v)) {
+                powerUnit = 1.0 / (1 << (int)(v & 0xF));
+                EnergyUnit = 1.0 / (1 << (int)((v >> 8) & 0x1F));
+            }
+            if (powerUnit <= 0) { why = "power unit unreadable"; return false; }
+            if (!Msr(MSR_PKG_POWER_LIMIT, out v)) { why = "0x610 unreadable"; return false; }
+            before = v;
+            if ((v & (1ul << 63)) != 0) { why = "0x610 is locked by the firmware"; return false; }
+            ulong u1 = (ulong)Math.Round(pl1W / powerUnit), u2 = (ulong)Math.Round(pl2W / powerUnit);
+            if (u1 == 0 || u2 == 0 || u1 > 0x7FFF || u2 > 0x7FFF) { why = "limit out of range for this CPU's power unit"; return false; }
+            ulong want = v;
+            want = (want & ~0x7FFFul) | u1 | (1ul << 15);                        // PL1 value + enable
+            want = (want & ~(0x7FFFul << 32)) | (u2 << 32) | (1ul << 47);        // PL2 value + enable
+            if (want == v) { why = ""; return true; }                            // already there: no write
+            LastWrote = true;
+            int rc = WriteMsr(MSR_PKG_POWER_LIMIT, want);
+            if (rc != 0) { why = "write refused: " + PawnIoModule.Win32(rc); return false; }
+            ulong back;
+            if (Msr(MSR_PKG_POWER_LIMIT, out back) && back != want) { why = "written but read back 0x" + back.ToString("X16"); return false; }
+            why = "";
+            return true;
+        }
+        protected override bool ReadLimitsCore(out int pl1W, out int pl2W) {
+            pl1W = pl2W = 0;
+            ulong v;
+            if (powerUnit == 0 && Msr(MSR_RAPL_POWER_UNIT, out v)) {
+                powerUnit = 1.0 / (1 << (int)(v & 0xF));
+                EnergyUnit = 1.0 / (1 << (int)((v >> 8) & 0x1F));
+            }
+            if (powerUnit <= 0 || !Msr(MSR_PKG_POWER_LIMIT, out v)) return false;
+            pl1W = (int)Math.Round((v & 0x7FFF) * powerUnit);
+            pl2W = (int)Math.Round(((v >> 32) & 0x7FFF) * powerUnit);
+            return true;
+        }
+        protected override bool RestoreLimitsCore(ulong raw, out string why) {
+            ulong v;
+            if (!Msr(MSR_PKG_POWER_LIMIT, out v)) { why = "0x610 unreadable"; return false; }
+            if ((v & (1ul << 63)) != 0) { why = "0x610 is locked by the firmware"; return false; }
+            if (v == raw) { why = ""; return true; }
+            int rc = WriteMsr(MSR_PKG_POWER_LIMIT, raw & ~(1ul << 63));         // never set the lock on the way out
+            why = rc == 0 ? "" : "write refused: " + PawnIoModule.Win32(rc);
+            return rc == 0;
+        }
     }
 
     /// <summary>AMD Ryzen, family 17h to 1Ah. No power limits or throttle reasons: those live in the SMU's
@@ -266,11 +342,15 @@ namespace Ohman {
     public sealed class DemoCpu : CpuRegisters {
         readonly Random rnd = new Random();
         double temp = 52;
+        int pl1 = 65, pl2 = 80;
         public DemoCpu() : base(null) { }
         public override string Describe { get { return "simulated"; } }
+        protected override bool SetLimitsCore(int a, int b, out ulong before, out string why) { before = ((ulong)(pl2 * 8) << 32) | (ulong)(pl1 * 8); LastWrote = a != pl1 || b != pl2; pl1 = a; pl2 = b; why = ""; return true; }
+        protected override bool ReadLimitsCore(out int a, out int b) { a = pl1; b = pl2; return true; }
+        protected override bool RestoreLimitsCore(ulong raw, out string why) { pl1 = (int)((raw & 0x7FFF) / 8); pl2 = (int)(((raw >> 32) & 0x7FFF) / 8); why = ""; return true; }
         protected override CpuTelemetry PollCore() {
             temp = Math.Max(38, Math.Min(88, temp + rnd.Next(-2, 3)));
-            return new CpuTelemetry { DieTemp = temp, TjMax = 110, Pl1 = 45, Pl2 = 80, Pl1On = true, Pl2On = true, Watts = 12 + rnd.Next(0, 9), Mhz = 2300 + rnd.Next(0, 1800), Throttle = temp > 84 ? "power limit" : "" };
+            return new CpuTelemetry { DieTemp = temp, TjMax = 110, Pl1 = pl1, Pl2 = pl2, Pl1On = true, Pl2On = true, Watts = 12 + rnd.Next(0, 9), Mhz = 2300 + rnd.Next(0, 1800), Throttle = temp > 84 ? "power limit" : "" };
         }
     }
 }

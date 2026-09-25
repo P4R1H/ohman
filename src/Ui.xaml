@@ -289,7 +289,7 @@
 
   <!-- the pages: one host, one visible at a time; its natural size drives the window (code) -->
   <Grid Grid.Column="1" ClipToBounds="True">
-    <Grid x:Name="PageHost" HorizontalAlignment="Left" VerticalAlignment="Top" Width="398">
+    <Grid x:Name="PageHost" HorizontalAlignment="Left" VerticalAlignment="Top" Width="450">
 
       <!-- ============ HOME ============ -->
       <StackPanel x:Name="PageHome" Margin="24,24,24,20">
@@ -371,6 +371,38 @@
           <TextBlock Text="Power gain" Style="{StaticResource Row}" ToolTip="What OMEN Gaming Hub calls Smart Performance Gain: a bigger shared CPU + GPU power budget"/>
           <Slider x:Name="SlPower" Grid.Column="1" Style="{StaticResource Sl}" Minimum="0" Maximum="15" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="18,0,18,0"/>
           <TextBlock x:Name="TxtPower" Grid.Column="2" Style="{StaticResource MonoVal}" Width="46" Text="+0 W"/>
+        </Grid>
+        <!-- Eco only: the CPU's power limit (PL1, PL2 follows it) -->
+        <Grid x:Name="EcoPl1Row" Margin="0,20,0,0" Visibility="Collapsed">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <TextBlock Text="CPU power" Style="{StaticResource Row}" ToolTip="Eco's CPU power limit. PL2 follows it, so this is a hard cap. Below 35 W is under Intel's minimum assured power for this CPU: it still works, just slower under load"/>
+          <Slider x:Name="SlEcoPl1" Grid.Column="1" Style="{StaticResource Sl}" Minimum="25" Maximum="45" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="18,0,18,0"/>
+          <TextBlock x:Name="TxtEcoPl1" Grid.Column="2" Style="{StaticResource MonoVal}" Width="46" Text="45 W"/>
+        </Grid>
+        <!-- experimental, Unleashed only, and only once its switch in Settings is on -->
+        <Grid x:Name="Pl1Row" Margin="0,20,0,0" Visibility="Collapsed">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <TextBlock Text="CPU PL1" Style="{StaticResource Row}" ToolTip="Experimental: the CPU's long-term power limit in Unleashed. HWiNFO showed a second, dynamic PL1 of 65 W on this laptop; above it the CPU may stay at 65 W"/>
+          <Slider x:Name="SlPl1" Grid.Column="1" Style="{StaticResource Sl}" Minimum="25" Maximum="90" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="18,0,18,0"/>
+          <TextBlock x:Name="TxtPl1" Grid.Column="2" Style="{StaticResource MonoVal}" Width="46" Text="65 W"/>
+        </Grid>
+        <Grid x:Name="Pl2Row" Margin="0,20,0,0" Visibility="Collapsed">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <TextBlock Text="CPU PL2" Style="{StaticResource Row}" ToolTip="Experimental: the CPU's short-term power limit in Unleashed. It never sits below PL1: a higher PL1 carries it along. HWiNFO showed a second, dynamic PL2 of 80 W on this laptop; above it the burst may stop at 80 W"/>
+          <Slider x:Name="SlPl2" Grid.Column="1" Style="{StaticResource Sl}" Minimum="65" Maximum="115" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="18,0,18,0"/>
+          <TextBlock x:Name="TxtPl2" Grid.Column="2" Style="{StaticResource MonoVal}" Width="46" Text="80 W"/>
         </Grid>
         <Grid x:Name="LightRow" Margin="0,20,0,0" Background="Transparent" Cursor="Hand">
           <Grid.ColumnDefinitions>
@@ -708,6 +740,26 @@
                 <ToggleButton x:Name="TgGuard" Grid.Column="2" Style="{StaticResource Switch}"/>
               </Grid>
             </Border>
+            <Border x:Name="CpuLimitsRow" Visibility="Collapsed" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <TextBlock Text="CPU power limits" Style="{StaticResource Row}" ToolTip="PL1/PL2 per mode: Balanced 45/77 W, Performance 65/77 W (OMEN Gaming Hub's values), Unleashed 65/80 W (the BIOS's own); Eco's is the slider on Home. If the CPU does not take a value, OMEN Gaming Hub's is used instead. Never lowered for temperature. Off = the firmware's own limits"/>
+                  <TextBlock x:Name="TxtCpuLimitsSub" Style="{StaticResource RowSub}" TextWrapping="Wrap"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgCpuLimits" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
+            <Border x:Name="Pl2ExpRow" Visibility="Collapsed" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <TextBlock Text="Experimental power limits in Unleashed" Style="{StaticResource Row}"/>
+                  <TextBlock x:Name="TxtPl2ExpSub" Style="{StaticResource RowSub}" TextWrapping="Wrap"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgPl2Exp" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
 
             <TextBlock x:Name="SecDisplay" Text="DISPLAY" Margin="0,26,0,6"/>
             <Border x:Name="GfxRow" Visibility="Collapsed" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
@@ -738,6 +790,16 @@
                   <TextBlock Text="Back to your choice when plugged in" Style="{StaticResource RowSub}"/>
                 </StackPanel>
                 <ToggleButton x:Name="TgLowHzBattery" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
+            <Border x:Name="EcoHzRow" Visibility="Collapsed" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <TextBlock Text="Lowest refresh rate in Eco" Style="{StaticResource Row}"/>
+                  <TextBlock Text="Back to your choice when you leave Eco" Style="{StaticResource RowSub}"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgEcoHz" Grid.Column="1" Style="{StaticResource Switch}"/>
               </Grid>
             </Border>
 

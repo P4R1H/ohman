@@ -119,7 +119,7 @@ namespace Ohman {
             sb.AppendLine("Board " + e.Board + ", " + (e.Supported ? (e.Generic ? "driven from the firmware's own answers" : "verified profile") : "NOT DRIVEN - read-only"));
             if (e.P != null)
                 sb.AppendLine("Mode bytes: eco 0x" + e.P.ModeEco.ToString("X2") + " balanced 0x" + e.P.ModeBalanced.ToString("X2")
-                    + " performance 0x" + e.P.ModePerformance.ToString("X2") + " (v" + e.P.ThermalPolicy + ")"
+                    + " performance 0x" + e.P.ModePerformance.ToString("X2") + (e.P.ModeUnleashed != 0 ? " unleashed 0x" + e.P.ModeUnleashed.ToString("X2") : "") + " (v" + e.P.ThermalPolicy + ")"
                     + (e.P.ModeEco == e.P.ModeBalanced ? "  [eco and balanced are the same byte on this firmware]" : ""));
             sb.AppendLine("Fans: " + e.FanCount + "   Lighting: " + (e.Light == null ? "none detected" : e.Light.Describe));
             sb.AppendLine("Power gain: " + (e.P != null && e.P.HasPowerGain ? "yes" : "no") + "   GPU power: " + (e.P != null && e.P.HasGpuPower ? "yes" : "no"));
@@ -337,7 +337,7 @@ namespace Ohman {
             sb.AppendLine("  bios ok:  " + e.BiosOk + (e.LastError.Length > 0 ? "   last error: " + Scrub(e.LastError) : ""));
             if (e.P != null)
                 sb.AppendLine("  modes:    eco 0x" + e.P.ModeEco.ToString("X2") + " balanced 0x" + e.P.ModeBalanced.ToString("X2")
-                    + " performance 0x" + e.P.ModePerformance.ToString("X2") + " cool 0x" + e.P.ModeCool.ToString("X2")
+                    + " performance 0x" + e.P.ModePerformance.ToString("X2") + (e.P.ModeUnleashed != 0 ? " unleashed 0x" + e.P.ModeUnleashed.ToString("X2") : "") + " cool 0x" + e.P.ModeCool.ToString("X2")
                     + "   (v" + e.P.ThermalPolicy + ")"
                     + (e.P.ModeEco == e.P.ModeBalanced ? "   <- eco and balanced are the same byte on this firmware" : ""));
             sb.AppendLine("  lighting: " + (e.Light == null ? "none detected" : e.Light.Describe + (e.Light.Inert ? "  (firmware answers but drives nothing; per-key board)" : "")));

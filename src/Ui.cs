@@ -30,18 +30,19 @@ namespace Ohman {
 
     public sealed class MainWindow : Window {
         enum Page { Home = 0, Fans = 1, Keyboard = 2, Settings = 3 }
-        const double RailW = 62, PageW = 398, KbdPageW = 638, SettingsH = 640;
+        const double RailW = 62, PageW = 450, KbdPageW = 638, SettingsH = 640;   // 450: four modes (Unleashed) without clipping "Performance"
 
         Osd osd;
         public void Flash(string title, string detail, int modeIndex) {
             if (osd == null) osd = new Osd();
-            string[] paths = { LEAF, SCALE, BOLT };
+            string[] paths = { LEAF, SCALE, BOLT, FLAME };
             osd.Flash(title, detail, modeIndex >= 0 ? Ui.ModeColor(modeIndex) : Ui.Accent.Color, modeIndex >= 0 ? paths[modeIndex] : FAN);
         }
         const string FAN = "M12 12 C9.6 8.4 8.4 5 10.3 2 C14.6 2.4 15.9 6.6 12 9 M12 12 C15.3 13.2 17.6 16.2 16.6 19.6 C12.5 20.6 9.4 17.6 12 15 M12 12 C11.1 15.4 8 17.8 4.6 16.4 C4 12.2 7.2 9.8 12 9";
         const string LEAF = "M4 20 C4 11 10 4 20 4 C20 13 14 20 4 20 Z M4 20 L13 11";
         const string SCALE = "M12 3 L12 21 M8 21 L16 21 M4 7 L20 7 M4 7 L1.5 13 A2.5 2 0 0 0 6.5 13 Z M20 7 L17.5 13 A2.5 2 0 0 0 22.5 13 Z";
         const string BOLT = "M13 2 L4 14 L11 14 L10 22 L20 9 L13 9 Z";
+        const string FLAME = "M12 2 C13 6 18 8.5 18 14 A6 6 0 0 1 6 14 C6 10.5 8.5 9 9 5.5 C10.8 7.2 11 9 11.2 10.5 C12.8 8.8 12.8 5.5 12 2 Z";
         const string ICO_HOME_RING = "M12 3.5 A8.5 8.5 0 1 0 12 20.5 A8.5 8.5 0 1 0 12 3.5 Z";
         const string ICO_HOME_DOT = "M12 8.6 A3.4 3.4 0 1 0 12 15.4 A3.4 3.4 0 1 0 12 8.6 Z";
         const string ICO_UPDATE = "M12 4 V14.2 M7.6 10.2 L12 14.8 L16.4 10.2 M4.6 19 H19.4";
@@ -124,6 +125,12 @@ namespace Ohman {
         TextBox txtKeyCmd;
         Ellipse keyDot;
         ToggleButton tgSuppress, tgHotkeys, tgAutostart, tgEcoBattery, tgSyncPower, tgLowHzBattery, tgTrayTemp, tgGuard, tgUpdateAuto;
+        // CPU power limits: the Settings switch, the experimental Unleashed PL2 switch, and its slider on Home
+        FrameworkElement cpuLimitsRow, pl2ExpRow, pl2Row, pl1Row, ecoPl1Row, ecoHzRow;
+        ToggleButton tgCpuLimits, tgPl2Exp, tgEcoHz;
+        TextBlock txtCpuLimitsSub, txtPl2ExpSub, txtPl2, txtPl1, txtEcoPl1;
+        Slider slPl2, slPl1, slEcoPl1;
+        DispatcherTimer pl2Debounce, pl1Debounce, ecoPl1Debounce;
         // hotkeys
         Button btnHotkeys;
         TextBlock txtHotkeysSub;
@@ -150,9 +157,9 @@ namespace Ohman {
         TextBlock txtToast;
         readonly List<WF.ToolStripMenuItem> trayHz = new List<WF.ToolStripMenuItem>();
         WF.NotifyIcon tray;
-        readonly WF.ToolStripMenuItem[] trayModes = new WF.ToolStripMenuItem[3];
-        readonly SD.Icon[] icons = new SD.Icon[3];
-        readonly BitmapSource[] appIcons = new BitmapSource[3];
+        readonly WF.ToolStripMenuItem[] trayModes = new WF.ToolStripMenuItem[Settings.MaxModes];
+        readonly SD.Icon[] icons = new SD.Icon[Settings.MaxModes];
+        readonly BitmapSource[] appIcons = new BitmapSource[Settings.MaxModes];
         bool syncing, exiting, reading, autostart;
         int shownMode = -1, lastBiosTemp = -1;
         int[] lastFans;
@@ -166,7 +173,8 @@ namespace Ohman {
         static readonly string[] ModeSubs = {
             "Windows efficiency mode · GPU base power",
             "Default thermal policy · GPU boost",
-            "Performance thermal policy · GPU max"
+            "Performance thermal policy · GPU max",
+            "Unleashed thermal policy · GPU max"
         };
 
         const int WM_HOTKEY = 0x0312;
@@ -312,6 +320,23 @@ namespace Ohman {
             powerRow = F<FrameworkElement>("PowerRow");
             slPower = F<Slider>("SlPower");
             txtPower = F<TextBlock>("TxtPower");
+            pl2Row = F<FrameworkElement>("Pl2Row");
+            pl1Row = F<FrameworkElement>("Pl1Row");
+            slPl1 = F<Slider>("SlPl1");
+            txtPl1 = F<TextBlock>("TxtPl1");
+            ecoPl1Row = F<FrameworkElement>("EcoPl1Row");
+            slEcoPl1 = F<Slider>("SlEcoPl1");
+            txtEcoPl1 = F<TextBlock>("TxtEcoPl1");
+            ecoHzRow = F<FrameworkElement>("EcoHzRow");
+            tgEcoHz = F<ToggleButton>("TgEcoHz");
+            slPl2 = F<Slider>("SlPl2");
+            txtPl2 = F<TextBlock>("TxtPl2");
+            cpuLimitsRow = F<FrameworkElement>("CpuLimitsRow");
+            pl2ExpRow = F<FrameworkElement>("Pl2ExpRow");
+            tgCpuLimits = F<ToggleButton>("TgCpuLimits");
+            tgPl2Exp = F<ToggleButton>("TgPl2Exp");
+            txtCpuLimitsSub = F<TextBlock>("TxtCpuLimitsSub");
+            txtPl2ExpSub = F<TextBlock>("TxtPl2ExpSub");
             lightRow = F<FrameworkElement>("LightRow");
             txtLightSub = F<TextBlock>("TxtLightSub");
             miniHost = F<Border>("MiniHost");
@@ -453,6 +478,11 @@ namespace Ohman {
             slFloor.Minimum = E.P.Curve.Floor;
             slFloor.Maximum = E.P.Curve.Floor + (E.P.Curve.Ceiling - E.P.Curve.Floor) * 2 / 3;
             slPower.Maximum = E.MaxOffset;
+            if (E.HasUnleashedSliders) {
+                slPl1.Minimum = E.P.UnlPl1Range[0]; slPl1.Maximum = E.P.UnlPl1Range[1];
+                slPl2.Minimum = E.P.UnlPl2Range[0]; slPl2.Maximum = E.P.UnlPl2Range[1];
+            }
+            if (E.HasEcoSlider) { slEcoPl1.Minimum = E.P.EcoPl1Range[0]; slEcoPl1.Maximum = E.P.EcoPl1Range[1]; }
         }
         /// <summary>DragMove runs its own modal move loop; a morph started inside it would fight USER for the position,
         /// so content changes during a drag just resize at the end.</summary>
@@ -518,7 +548,10 @@ namespace Ohman {
         }
 
         void BuildHome() {
-            modeSeg = new Seg(Engine.ModeNames, ModeSubs, null, Seg.Kind.Page);
+            // Unleashed is a fourth segment only on boards whose profile has its byte; everywhere else the row is unchanged.
+            string[] modeNames = new string[E.ModeCount];
+            Array.Copy(Engine.ModeNames, modeNames, modeNames.Length);
+            modeSeg = new Seg(modeNames, ModeSubs, null, Seg.Kind.Page);
             F<Border>("ModeHost").Child = modeSeg;
             modeSeg.Picked += ApplyModeAsync;
             fanLinks = new LinkSeg(new[] { "Auto", "Max", "Manual" }, 18, 13, 3, new[] { "This model's own curve", "Both fans at full speed", "Your own levels or curve, on the Fans page" });
@@ -620,11 +653,10 @@ namespace Ohman {
                 E.SetKey(a);
                 keyCmdRow.Visibility = a == KeyAction.Run ? Visibility.Visible : Visibility.Collapsed;
             };
-            gpuSeg = new Seg(new[] { "Base", "Boost", "Max", "Auto" },
-                new[] { "The GPU's standard power limit",
-                        "Lets the GPU borrow power from the CPU when it needs it",
-                        "A raised power limit as well as the borrowing",
-                        "Base in Eco, Boost in Balanced, Max in Performance" }, null, Seg.Kind.Row);
+            gpuSeg = new Seg(new[] { "Base", "Boost", "Auto" },
+                new[] { E.HasUnleashed ? "Performance and Unleashed request cTGP without borrowing; Eco and Balanced use the standard limit" : "Performance requests cTGP without borrowing; Eco and Balanced use the standard limit",
+                        "Uses cTGP and lets the GPU borrow power from the CPU",
+                        E.HasUnleashed ? "Base in Eco and Balanced, Boost in Performance and Unleashed" : "Base in Eco and Balanced, Boost in Performance" }, null, Seg.Kind.Row);
             F<Border>("GpuSegHost").Child = gpuSeg;
             // Somebody watching clocks under load wants them to move; somebody on battery does not want the cost.
             // Only affects the open window: hidden, the rate is still decided by what is actually waiting on it.
@@ -639,7 +671,7 @@ namespace Ohman {
                 PollRate();
             };
             gpuSeg.Picked += delegate(int i) {
-                if (i == 3) Bg(delegate { E.SetGpu(E.S.Gpu, true, false); });
+                if (i == 2) Bg(delegate { E.SetGpu(E.S.Gpu, true, false); });
                 else { GpuLevel g = (GpuLevel)i; Bg(delegate { E.SetGpu(g, false, false); }); }
             };
             if (!E.P.HasGpuPower) gpuRow.Visibility = Visibility.Collapsed;
@@ -692,6 +724,12 @@ namespace Ohman {
                 Bg(delegate { E.SetGuard(on); });
             });
             OnSwitch(tgUpdateAuto, delegate(bool on) { Bg(delegate { E.SetUpdateOnLaunch(on); }); });
+            OnSwitch(tgCpuLimits, delegate(bool on) { Bg(delegate { E.SetCpuLimits(on); }); });
+            OnSwitch(tgPl2Exp, delegate(bool on) {
+                if (on && !ConfirmExperimentalLimits()) { Synced(delegate { tgPl2Exp.IsChecked = false; }); return; }
+                Bg(delegate { E.SetUnleashedCustom(on); });
+            });
+            OnSwitch(tgEcoHz, delegate(bool on) { Bg(delegate { E.SetEcoLowHz(on); }); });
             OnSwitch(tgDriver, delegate(bool on) { Bg(delegate { E.SetDriverUse(on); }); });
             // One link, whose meaning is the row's state: install, update, restart, troubleshoot, remove.
             btnDriver.MouseLeftButtonUp += delegate { DriverAction(); };
@@ -822,8 +860,13 @@ namespace Ohman {
                 "Turn the thermal guard off?\n\nThe guard forces both fans to maximum when the CPU passes " + E.P.Guard.CpuHot + "°, the chassis sensor passes " + E.P.Guard.ChassisHot + "°, or the fans read stalled while the machine is warm. With it off, nothing in " + Program.DisplayName + " will step in.\n\nTurn it off?",
                 Program.DisplayName, MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
         }
+        bool ConfirmExperimentalLimits() {
+            return MessageBox.Show(IsVisible ? (Window)this : null,
+                "Turn on the experimental power limit sliders?\n\nIn Unleashed they set the CPU's long-term limit (PL1, " + E.P.UnlPl1Range[0] + " to " + E.P.UnlPl1Range[1] + " W) and short-term limit (PL2, " + E.P.UnlPl2Range[0] + " to " + E.P.UnlPl2Range[1] + " W), the same ranges OMEN Gaming Hub offers. Above 65/80 W is more than this laptop's BIOS sets, so the CPU runs hotter and louder under load. The thermal guard stays on.\n\nHWiNFO showed a second, dynamic copy of both limits on this laptop (PL1 65 W, PL2 80 W) that neither the firmware call nor the driver can change; above those the CPU may stay capped there.\n\nTurn them on?",
+                Program.DisplayName, MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
+        }
         void BuildIcons() {
-            for (int i = 0; i < 3; i++) icons[i] = MakeIcon(Ui.ModeColor(i), 32);     // tray: 32 px, the mark fills the box
+            for (int i = 0; i < E.ModeCount; i++) icons[i] = MakeIcon(Ui.ModeColor(i), 32);     // tray: 32 px, the mark fills the box
         }
         void SetAppIcon(int mode) {
             try {
@@ -962,7 +1005,7 @@ namespace Ohman {
             var head = new WF.ToolStripMenuItem(Program.DisplayName + "   " + Program.Version) { Enabled = false };
             menu.Items.Add(head);
             menu.Items.Add(new WF.ToolStripSeparator());
-            for (int i = 0; i < 3; i++) {
+            for (int i = 0; i < E.ModeCount; i++) {
                 int idx = i;
                 var it = Item(Engine.ModeNames[i], delegate { ApplyModeAsync(idx); });
                 trayModes[i] = it;
@@ -1021,7 +1064,7 @@ namespace Ohman {
         void RefreshTray() {
             if (tray == null) return;
             var S = E.S;
-            for (int i = 0; i < 3; i++) trayModes[i].Checked = i == E.ModeIndex;
+            for (int i = 0; i < E.ModeCount; i++) trayModes[i].Checked = i == E.ModeIndex;
             for (int i = 0; i < trayFan.Count; i++) trayFan[i].Checked = S.Fan == Choice.FanModes[i];
             int hzNow = Display.CurrentHz();
             foreach (var it in trayHz) it.Checked = (int)it.Tag == hzNow;
@@ -1048,6 +1091,26 @@ namespace Ohman {
             btnClose.Click += delegate { HideToTray(); };
             powerDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
             powerDebounce.Tick += delegate { powerDebounce.Stop(); int off = (int)slPower.Value; Bg(delegate { E.SetTdpOffset(off, false); }); };
+            // The three limit sliders: the label follows the thumb at once, the write waits for it to settle.
+            pl2Debounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+            pl2Debounce.Tick += delegate { pl2Debounce.Stop(); int w = (int)slPl2.Value; Bg(delegate { E.SetUnleashedPl2(w); }); };
+            slPl2.ValueChanged += delegate {
+                txtPl2.Text = Math.Max((int)slPl2.Value, (int)slPl1.Value) + " W";
+                if (!syncing) { pl2Debounce.Stop(); pl2Debounce.Start(); }
+            };
+            pl1Debounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+            pl1Debounce.Tick += delegate { pl1Debounce.Stop(); int w = (int)slPl1.Value; Bg(delegate { E.SetUnleashedPl1(w); }); };
+            slPl1.ValueChanged += delegate {
+                txtPl1.Text = (int)slPl1.Value + " W";
+                txtPl2.Text = Math.Max((int)slPl2.Value, (int)slPl1.Value) + " W";   // PL2 is carried along by a higher PL1
+                if (!syncing) { pl1Debounce.Stop(); pl1Debounce.Start(); }
+            };
+            ecoPl1Debounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+            ecoPl1Debounce.Tick += delegate { ecoPl1Debounce.Stop(); int w = (int)slEcoPl1.Value; Bg(delegate { E.SetEcoPl1(w); }); };
+            slEcoPl1.ValueChanged += delegate {
+                EcoPl1Text((int)slEcoPl1.Value);
+                if (!syncing) { ecoPl1Debounce.Stop(); ecoPl1Debounce.Start(); }
+            };
             slPower.ValueChanged += delegate {
                 txtPower.Text = "+" + (int)slPower.Value + " W";
                 if (!syncing) { powerDebounce.Stop(); powerDebounce.Start(); }
@@ -1599,6 +1662,7 @@ namespace Ohman {
             if (rates.Length < 2) return;
             hzRow.Visibility = Visibility.Visible;
             lowHzRow.Visibility = Visibility.Visible;
+            ecoHzRow.Visibility = Visibility.Visible;
             var names = new string[rates.Length];
             var tags = new object[rates.Length];
             for (int i = 0; i < rates.Length; i++) { names[i] = i == rates.Length - 1 ? rates[i] + " Hz" : rates[i].ToString(CultureInfo.InvariantCulture); tags[i] = rates[i]; }
@@ -1661,6 +1725,50 @@ namespace Ohman {
         static void Slow(Action a) { ThreadPool.QueueUserWorkItem(delegate { try { a(); } catch (Exception ex) { Log.Write("slow: " + ex); } }); }
         /// <summary>Set controls from state without the handlers reading it back as a user action. Restores the
         /// previous value, so it nests: a Refresh inside a Synced block cannot clear the flag underneath it.</summary>
+        /// <summary>The Settings rows and the Home slider for the CPU limits. Rows only exist on boards whose
+        /// profile has per-mode limits; the slider only in Unleashed, once its owner has switched it on.</summary>
+        /// <summary>Under Intel's 35 W minimum assured power for the 285H the value turns amber: allowed, and slower.</summary>
+        void EcoPl1Text(int w) {
+            txtEcoPl1.Text = w + " W";
+            if (w < 35) { txtEcoPl1.Foreground = Ui.Brush(Ui.Warn); txtEcoPl1.ToolTip = "Below Intel's 35 W minimum assured power for this CPU: it still works, just slower under load"; }
+            else { txtEcoPl1.ClearValue(TextBlock.ForegroundProperty); txtEcoPl1.ToolTip = null; }
+        }
+        void RefreshCpuLimits(int mi) {
+            var S = E.S;
+            bool offered = E.HasCpuLimits;
+            bool rowsWere = cpuLimitsRow.Visibility == Visibility.Visible, expWas = pl2ExpRow.Visibility == Visibility.Visible, slWas = pl2Row.Visibility == Visibility.Visible;
+            cpuLimitsRow.Visibility = offered ? Visibility.Visible : Visibility.Collapsed;
+            if (offered) {
+                bool ready = E.CpuLimitsReady;
+                tgCpuLimits.IsEnabled = ready;
+                tgCpuLimits.IsChecked = S.CpuLimits;
+                txtCpuLimitsSub.Text = !ready ? "Needs the hardware driver or a firmware that takes them"
+                    : !S.CpuLimits ? "Off · the firmware's own limits"
+                    : E.CpuLimitsWhy.Length > 0 ? "Not applied: " + E.CpuLimitsWhy
+                    : E.CpuPl1Written >= 0 ? "Now PL1 " + E.CpuPl1Written + " W · PL2 " + E.CpuPl2Written + " W" + (E.CpuLimitsRoute.Length > 0 ? " · via " + E.CpuLimitsRoute : "")
+                        + (E.CpuLimitsFallback ? " · OMEN Gaming Hub's values, ours were not accepted (" + E.CpuFallbackWhy + ")" : " · set per mode")
+                    : "Set per mode";
+            }
+            bool exp = offered && E.HasUnleashedSliders && S.CpuLimits;
+            pl2ExpRow.Visibility = exp ? Visibility.Visible : Visibility.Collapsed;
+            if (exp) {
+                tgPl2Exp.IsChecked = S.UnlCustom;
+                txtPl2ExpSub.Text = S.UnlCustom ? "PL1 and PL2 sliders on Home in Unleashed · now " + E.UnlPl1 + " / " + E.UnlPl2Effective + " W"
+                    : "Adds PL1 (" + E.P.UnlPl1Range[0] + "-" + E.P.UnlPl1Range[1] + " W) and PL2 (" + E.P.UnlPl2Range[0] + "-" + E.P.UnlPl2Range[1] + " W) sliders on Home in Unleashed";
+            }
+            bool slider = exp && S.UnlCustom && E.CpuLimitsReady && mi == 3;
+            pl1Row.Visibility = pl2Row.Visibility = slider ? Visibility.Visible : Visibility.Collapsed;
+            if (slider) {
+                slPl1.Value = E.UnlPl1; slPl2.Value = E.UnlPl2;
+                txtPl1.Text = E.UnlPl1 + " W"; txtPl2.Text = E.UnlPl2Effective + " W";
+            }
+            bool eco = offered && E.HasEcoSlider && S.CpuLimits && E.CpuLimitsReady && mi == 0;
+            bool ecoWas = ecoPl1Row.Visibility == Visibility.Visible;
+            ecoPl1Row.Visibility = eco ? Visibility.Visible : Visibility.Collapsed;
+            if (eco) { slEcoPl1.Value = E.EcoPl1; EcoPl1Text(E.EcoPl1); }
+            if (slWas != slider || ecoWas != eco) Remeasure(Page.Home);
+            if (rowsWere != offered || expWas != exp) Remeasure(Page.Settings);
+        }
         void Synced(Action a) {
             bool was = syncing;
             syncing = true;
@@ -1909,7 +2017,7 @@ namespace Ohman {
                 slPower.Value = S.TdpOffset;
                 txtPower.Text = "+" + S.TdpOffset + " W";
                 GpuLevel g = E.EffectiveGpu;
-                string gpuName = g == GpuLevel.Max ? "GPU max" : g == GpuLevel.Boost ? "GPU boost" : "GPU base";
+                string gpuName = g == GpuLevel.Boost ? "GPU boost" : "GPU base";
                 // Two ways this number lies. 0 means the firmware does not implement 0x23 at all. And on a board
                 // nobody has measured, the scale is unknown: one 8BCD sits at 50 and above around the clock while
                 // the laptop is cool to the touch. We already refuse to let that sensor drive the fans there
@@ -1921,15 +2029,17 @@ namespace Ohman {
                 fanLinks.SetText(2, S.Fan == FanMode.Custom ? "Curve" : "Manual");
                 fanLinks.Select(S.Fan == FanMode.Auto ? 0 : S.Fan == FanMode.Max ? 1 : 2, IsVisible);
                 if (pollSeg != null) pollSeg.Select(S.PollMs <= 500 ? 0 : S.PollMs <= 1000 ? 1 : 2, IsVisible && cur == Page.Settings);
-                if (gpuSeg != null) { gpuSeg.Select(S.GpuAuto ? 3 : (int)g, IsVisible && cur == Page.Settings); txtGpuSub.Text = S.GpuAuto ? "Follows the mode" : g == GpuLevel.Max ? "Custom TGP + PPAB" : g == GpuLevel.Boost ? "PPAB" : "Base TGP"; }
+                if (gpuSeg != null) { gpuSeg.Select(S.GpuAuto ? 2 : (int)g, IsVisible && cur == Page.Settings); txtGpuSub.Text = S.GpuAuto ? "Follows the mode" : g == GpuLevel.Boost ? "cTGP + PPAB" : mi >= 2 ? "cTGP, no PPAB" : "Standard TGP"; }
                 RefreshLighting();
                 if (cur == Page.Fans) RefreshFans(true);
                 keySeg.Select(Choice.Of(S.Key), IsVisible && cur == Page.Settings);
                 keyCmdRow.Visibility = S.Key == KeyAction.Run ? Visibility.Visible : Visibility.Collapsed;
                 if (!txtKeyCmd.IsKeyboardFocused) txtKeyCmd.Text = S.KeyCommand;
                 tgLowHzBattery.IsChecked = S.LowHzOnBattery;
+                tgEcoHz.IsChecked = E.EcoLowHz;
                 tgTrayTemp.IsChecked = S.TrayTemp;
                 tgGuard.IsChecked = S.Guard;
+                RefreshCpuLimits(mi);
                 tgUpdateAuto.IsChecked = S.UpdateOnLaunch;
                 int hzNow = Display.CurrentHz();
                 if (hzSeg != null) for (int i = 0; i < hzSeg.Count; i++) if ((int)hzSeg.Tags[i] == hzNow) hzSeg.Select(i, IsVisible && cur == Page.Settings);
@@ -2039,7 +2149,7 @@ namespace Ohman {
                     if (t >= 0 && t != lastBiosTemp) {
                         lastBiosTemp = t;
                         GpuLevel g = E.EffectiveGpu;
-                        txtHomeStatus.Text = (E.P.HasGpuPower ? (g == GpuLevel.Max ? "GPU max" : g == GpuLevel.Boost ? "GPU boost" : "GPU base") : E.P.HasPowerGain ? E.CurrentTdp + " W" : "")
+                        txtHomeStatus.Text = (E.P.HasGpuPower ? (g == GpuLevel.Boost ? "GPU boost" : "GPU base") : E.P.HasPowerGain ? E.CurrentTdp + " W" : "")
                             + (ShowChassis(t) ? " · ambient " + t + "°" : "");
                     }
                     reading = false;
@@ -2056,7 +2166,7 @@ namespace Ohman {
             }
         }
         void CycleWithFlash() {
-            int next = (E.ModeIndex + 1) % 3;
+            int next = (E.ModeIndex + 1) % E.ModeCount;
             Flash(Engine.ModeNames[next] + " mode", ModeSubs[next], next);
             ApplyModeAsync(next);
         }
@@ -2509,12 +2619,34 @@ namespace Ohman {
         }
 
         // ---------- autostart (scheduled task with highest privileges = no UAC prompt at logon) ----------
+        /// <summary>One logon task per Windows user ("Ohman-<user>"): a single shared name meant the second user to
+        /// switch autostart on silently took the first one's away.</summary>
+        static string TaskName {
+            get {
+                var sb = new System.Text.StringBuilder(Program.AppName + "-");
+                foreach (char c in Environment.UserName) sb.Append(char.IsLetterOrDigit(c) || c == '-' || c == '_' ? c : '_');
+                return sb.ToString();
+            }
+        }
         void QueryAutostartAsync() {
             Slow(delegate {
-                bool on = RunSchtasks("/Query /TN " + Program.AppName) == 0;
+                bool on = RunSchtasks("/Query /TN " + TaskName) == 0;
+                if (!on && !E.Hw.IsDemo && RunSchtasks("/Query /TN " + Program.AppName) == 0) {
+                    // The task from before per-user names. Adopt it if it starts Ohman for this user; leave it alone
+                    // if it is somebody else's.
+                    string old = SchtasksOut("/Query /TN " + Program.AppName + " /XML");
+                    string sid = "";
+                    try { sid = System.Security.Principal.WindowsIdentity.GetCurrent().User.Value; } catch { }
+                    if (sid.Length > 0 && old.IndexOf(sid, StringComparison.OrdinalIgnoreCase) >= 0) {
+                        Log.Write("autostart: moving this user's logon task to " + TaskName);
+                        SetAutostart(true);
+                        if (autostart) RunSchtasks("/Delete /TN " + Program.AppName + " /F");
+                        on = autostart;
+                    }
+                }
                 if (on && !E.Hw.IsDemo) {
                     // tasks made by 1.1 stop the app when the laptop goes on battery; re-register those once
-                    string xml = SchtasksOut("/Query /TN " + Program.AppName + " /XML");
+                    string xml = SchtasksOut("/Query /TN " + TaskName + " /XML");
                     if (xml.IndexOf("<StopIfGoingOnBatteries>true", StringComparison.OrdinalIgnoreCase) >= 0 || xml.IndexOf("<DisallowStartIfOnBatteries>true", StringComparison.OrdinalIgnoreCase) >= 0) {
                         Log.Write("logon task has battery restrictions; re-registering it");
                         SetAutostart(true);
@@ -2537,9 +2669,9 @@ namespace Ohman {
                 // registered from XML: a task made with plain "schtasks /Create" stops the app when the laptop goes on battery and refuses to start it on battery
                 string tmp = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Program.FileStem + "-task.xml");
                 try { System.IO.File.WriteAllText(tmp, TaskXml(exe), System.Text.Encoding.Unicode); } catch (Exception ex) { Log.Write("task xml: " + ex.Message); }
-                rc = RunSchtasks("/Create /TN " + Program.AppName + " /XML \"" + tmp + "\" /F");
+                rc = RunSchtasks("/Create /TN " + TaskName + " /XML \"" + tmp + "\" /F");
                 try { System.IO.File.Delete(tmp); } catch { }
-            } else rc = RunSchtasks("/Delete /TN " + Program.AppName + " /F");
+            } else rc = RunSchtasks("/Delete /TN " + TaskName + " /F");
             Log.Write("autostart " + on + " rc=" + rc);
             autostart = on && rc == 0;
             if (!E.S.FirstRun) Dispatcher.BeginInvoke((Action)delegate { ShowToast(rc == 0 ? (on ? "Starts with Windows" : "Autostart removed") : "schtasks failed (" + rc + ")", rc != 0); });
