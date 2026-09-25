@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+﻿// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman: the support report: everything needed to add or fix a laptop, gathered in one go.
 //
 // This exists because the first day of reports was mostly people being asked for one more thing. Every question

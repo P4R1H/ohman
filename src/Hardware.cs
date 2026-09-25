@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+﻿// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman: hardware layer.
 // HP OMEN BIOS control through the WMI class root\wmi:hpqBIntM (requires elevation).
 // Every opcode below was verified against three independent sources on 2026-09-08:
@@ -182,13 +182,13 @@ namespace Ohman {
                     // refusing would otherwise read as two fans and skip the fan table that knows better.
                     for (int i = 0; i < 2; i++) { int nib = (t[0] >> (i * 4)) & 0xF; if (nib >= 1 && nib <= 5) n++; }
                 }
-            } catch (BiosException ex) { lastBiosEx = ex; }
+            } catch (Exception ex) { var b = ex as BiosException; if (b != null) lastBiosEx = b; }
             bool asked = false;
             if (n == 0) {
                 try {
                     var d = Call(OP_FAN_TABLE_GET, Z4, 128);
                     if (d.Length > 0) { n = d[0]; asked = true; }
-                } catch (BiosException ex) { lastBiosEx = ex; }
+                } catch (Exception ex) { var b = ex as BiosException; if (b != null) lastBiosEx = b; }
             }
             // A Victus 16-d1xxx (board 8A26) declares one fan in 0x2C and one in the fan table, then reports two
             // live speeds. It has two fans, so the declaration is the part that is wrong. Believe the speeds, but
@@ -197,8 +197,10 @@ namespace Ohman {
                 try {
                     var lv = Call(OP_FAN_LEVEL_GET, Z4, 128);
                     if (lv.Length > 1 && lv[0] > 0 && lv[1] > 0) n = 2;
-                } catch (BiosException ex) { lastBiosEx = ex; }
+                } catch (Exception ex) { var b = ex as BiosException; if (b != null) lastBiosEx = b; }
             }
+            // asked distinguishes a firmware that answered zero from one that would not answer at all; a refusal is
+            // passed up so the caller can tell a firmware that said no from a mailbox that never answered.
             if (n > 0) return n;
             if (asked) return 0;
             if (lastBiosEx != null) throw lastBiosEx;

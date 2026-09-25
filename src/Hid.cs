@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+﻿// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman: raw HID, and the HID Lighting And Illumination ("LampArray") interface on top of it.
 //
 // Why this file exists: HP's BIOS mailbox cannot light a per-key keyboard. On those machines the firmware still
@@ -38,12 +38,6 @@ namespace Ohman {
         [StructLayout(LayoutKind.Sequential)]
         struct InterfaceData { public int Size; public Guid Class; public int Flags; public IntPtr Reserved; }
 
-        [StructLayout(LayoutKind.Sequential)]
-        struct DevInfoData { public int Size; public Guid ClassGuid; public int DevInst; public IntPtr Reserved; }
-
-        [StructLayout(LayoutKind.Sequential)]
-        struct DevPropKey { public Guid FmtId; public uint Pid; }
-
         [DllImport("hid.dll")] static extern void HidD_GetHidGuid(out Guid g);
         [DllImport("hid.dll")] static extern bool HidD_GetAttributes(IntPtr h, ref Attributes a);
         [DllImport("hid.dll")] static extern bool HidD_GetPreparsedData(IntPtr h, out IntPtr pp);
@@ -59,12 +53,6 @@ namespace Ohman {
         static extern bool SetupDiEnumDeviceInterfaces(IntPtr set, IntPtr info, ref Guid g, int index, ref InterfaceData data);
         [DllImport("setupapi.dll", CharSet = CharSet.Unicode)]
         static extern bool SetupDiGetDeviceInterfaceDetail(IntPtr set, ref InterfaceData data, IntPtr detail, int size, out int needed, IntPtr info);
-        [DllImport("setupapi.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        static extern bool SetupDiGetDeviceInterfaceDetail(IntPtr set, ref InterfaceData data, IntPtr detail, int size, out int needed, ref DevInfoData devData);
-        [DllImport("setupapi.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        static extern bool SetupDiGetDevicePropertyW(IntPtr set, ref DevInfoData devData, ref DevPropKey propKey, out uint propType, byte[] propBuffer, int propBufferSize, out int requiredSize, uint flags);
-        [DllImport("setupapi.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        static extern bool SetupDiGetDeviceRegistryPropertyW(IntPtr set, ref DevInfoData devData, uint property, out uint regDataType, byte[] buffer, uint bufferSize, out uint requiredSize);
         [DllImport("setupapi.dll")] static extern bool SetupDiDestroyDeviceInfoList(IntPtr set);
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
@@ -76,47 +64,11 @@ namespace Ohman {
         const int FILE_SHARE_READ = 1, FILE_SHARE_WRITE = 2, OPEN_EXISTING = 3;
         internal static readonly IntPtr Invalid = new IntPtr(-1);
 
-        static readonly DevPropKey PkeyInLocalMachineContainer = new DevPropKey {
-            FmtId = new Guid(0x8c7da011, 0x3297, 0x475d, 0x9c, 0x8e, 0x24, 0x5d, 0x64, 0x2e, 0x4e, 0x36),
-            Pid = 16384
-        };
-        const uint DEVPROP_TYPE_BOOLEAN = 0x00000011;
-        const uint SPDRP_CAPABILITIES = 0x0000000F;
-        const uint CM_DEVCAP_REMOVABLE = 0x00000004;
-
-        static bool? GetInLocalContainer(IntPtr set, ref DevInfoData devData) {
-            try {
-                var key = PkeyInLocalMachineContainer;
-                uint type;
-                int req;
-                byte[] buf = new byte[8];
-                if (SetupDiGetDevicePropertyW(set, ref devData, ref key, out type, buf, buf.Length, out req, 0)) {
-                    if (type == DEVPROP_TYPE_BOOLEAN && req > 0) return buf[0] != 0;
-                }
-            } catch { }
-            return null;
-        }
-
-        static bool? GetRemovable(IntPtr set, ref DevInfoData devData) {
-            try {
-                uint regType, req;
-                byte[] buf = new byte[4];
-                if (SetupDiGetDeviceRegistryPropertyW(set, ref devData, SPDRP_CAPABILITIES, out regType, buf, (uint)buf.Length, out req)) {
-                    if (req >= 4) {
-                        uint caps = (uint)(buf[0] | (buf[1] << 8) | (buf[2] << 16) | (buf[3] << 24));
-                        return (caps & CM_DEVCAP_REMOVABLE) != 0;
-                    }
-                }
-            } catch { }
-            return null;
-        }
-
         /// <summary>One HID collection: its path and what its report descriptor says it is.</summary>
         internal sealed class Info {
             public string Path, Product;
             public ushort VendorId, ProductId, UsagePage, Usage;
             public int InputLen, OutputLen, FeatureLen;
-            public bool? InLocalContainer, Removable;
             public override string ToString() {
                 return "VID_" + VendorId.ToString("X4") + " PID_" + ProductId.ToString("X4") +
                     " usage " + UsagePage.ToString("X2") + "/" + Usage.ToString("X2") +
@@ -137,13 +89,9 @@ namespace Ohman {
                 var data = new InterfaceData();
                 data.Size = Marshal.SizeOf(typeof(InterfaceData));
                 for (int i = 0; SetupDiEnumDeviceInterfaces(set, IntPtr.Zero, ref guid, i, ref data); i++) {
-                    var devData = new DevInfoData();
-                    devData.Size = Marshal.SizeOf(typeof(DevInfoData));
-                    string path = DetailPath(set, ref data, ref devData);
+                    string path = DetailPath(set, ref data);
                     if (path == null) continue;
-                    bool? inLocal = GetInLocalContainer(set, ref devData);
-                    bool? removable = GetRemovable(set, ref devData);
-                    var info = Describe(path, inLocal, removable);
+                    var info = Describe(path);
                     if (info != null) found.Add(info);
                 }
             } catch (Exception ex) { Log.Write("hid enumerate: " + ex.Message); }
@@ -151,7 +99,7 @@ namespace Ohman {
             return found;
         }
 
-        static string DetailPath(IntPtr set, ref InterfaceData data, ref DevInfoData devData) {
+        static string DetailPath(IntPtr set, ref InterfaceData data) {
             int needed;
             SetupDiGetDeviceInterfaceDetail(set, ref data, IntPtr.Zero, 0, out needed, IntPtr.Zero);
             if (needed <= 0) return null;
@@ -160,12 +108,12 @@ namespace Ohman {
                 // SP_DEVICE_INTERFACE_DETAIL_DATA is { DWORD cbSize; TCHAR DevicePath[1]; } and cbSize must be the
                 // size of that declaration, not of the buffer: 8 with 64-bit packing, 6 on 32-bit.
                 Marshal.WriteInt32(buf, IntPtr.Size == 8 ? 8 : 4 + Marshal.SystemDefaultCharSize);
-                if (!SetupDiGetDeviceInterfaceDetail(set, ref data, buf, needed, out needed, ref devData)) return null;
+                if (!SetupDiGetDeviceInterfaceDetail(set, ref data, buf, needed, out needed, IntPtr.Zero)) return null;
                 return Marshal.PtrToStringUni(new IntPtr(buf.ToInt64() + 4));
             } finally { Marshal.FreeHGlobal(buf); }
         }
 
-        static Info Describe(string path, bool? inLocalContainer, bool? removable) {
+        static Info Describe(string path) {
             IntPtr h = CreateFile(path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, IntPtr.Zero, OPEN_EXISTING, 0, IntPtr.Zero);
             if (h == Invalid) return null;
             IntPtr pp = IntPtr.Zero;
@@ -180,9 +128,7 @@ namespace Ohman {
                     Path = path, VendorId = attrs.VendorId, ProductId = attrs.ProductId,
                     UsagePage = caps.UsagePage, Usage = caps.Usage,
                     InputLen = caps.InputReportByteLength, OutputLen = caps.OutputReportByteLength,
-                    FeatureLen = caps.FeatureReportByteLength,
-                    InLocalContainer = inLocalContainer,
-                    Removable = removable
+                    FeatureLen = caps.FeatureReportByteLength
                 };
                 var name = new byte[254];
                 if (HidD_GetProductString(h, name, name.Length)) {
@@ -203,34 +149,10 @@ namespace Ohman {
         internal static bool SetFeature(IntPtr h, byte[] buf) { return HidD_SetFeature(h, buf, buf.Length); }
     }
 
-    /// <summary>HID Lighting And Illumination interface.</summary>
-    public interface ILampArray : IDisposable {
-        int LampCount { get; }
-        ushort VendorId { get; }
-        ushort ProductId { get; }
-        uint Kind { get; }
-        int WidthMicrometres { get; }
-        int HeightMicrometres { get; }
-        uint MinUpdateMicroseconds { get; }
-        string Path { get; }
-        string Product { get; }
-        string Describe { get; }
-        ushort[] KeyUsage { get; }
-        int[] X { get; }
-        int[] Y { get; }
-        bool UsableAsPerKey { get; }
-        bool Internal { get; }
-        bool AnyProgrammable { get; }
-        bool Programmable(int lamp);
-        void TakeOver(bool ours);
-        void SetAll(Rgb c, int intensity);
-        void SetLamps(int[] ids, Rgb[] colors, int intensity);
-    }
-
     /// <summary>A keyboard that implements HID "Lighting And Illumination" (usage page 0x59, usage 0x01): the device
     /// tells us how many lamps it has, where each one is and which key it sits under, and takes colours back as
     /// feature reports. Report ids and field order are the spec's.</summary>
-    public sealed class LampArray : ILampArray {
+    public sealed class LampArray : IDisposable {
         public const ushort UsagePageLighting = 0x59, UsageLampArray = 0x01;
         const byte RepAttributes = 1, RepLampRequest = 2, RepLampResponse = 3, RepMultiUpdate = 4, RepRangeUpdate = 5, RepControl = 6;
         const byte FlagUpdateComplete = 0x01;
@@ -239,22 +161,15 @@ namespace Ohman {
 
         IntPtr handle = Hid.Invalid;
         readonly int featureLen;
-        public string Path { get; private set; }
-        public string Product { get; private set; }
-        public ushort VendorId { get; private set; }
-        public ushort ProductId { get; private set; }
-        public int LampCount { get; private set; }
-        public uint Kind { get; private set; }
-        public uint MinUpdateMicroseconds { get; private set; }
-        public int WidthMicrometres { get; private set; }
-        public int HeightMicrometres { get; private set; }
-        public bool? InLocalContainer { get; private set; }
-        public bool? Removable { get; private set; }
+        public readonly string Path, Product;
+        public readonly ushort VendorId, ProductId;
+        public readonly int LampCount;
+        public readonly uint Kind, MinUpdateMicroseconds;
+        public readonly int WidthMicrometres, HeightMicrometres;
         /// <summary>Lamp i sits under this HID keyboard usage (page 0x07), or 0 when the device does not say.</summary>
-        public ushort[] KeyUsage { get; private set; }
+        public readonly ushort[] KeyUsage;
         /// <summary>Lamp i's position in micrometres from the top-left of the bounding box.</summary>
-        public int[] X { get; private set; }
-        public int[] Y { get; private set; }
+        public readonly int[] X, Y;
         readonly bool[] programmable;
 
         LampArray(IntPtr h, Hid.Info info, byte[] attrs) {
@@ -264,8 +179,6 @@ namespace Ohman {
             Product = info.Product;
             VendorId = info.VendorId;
             ProductId = info.ProductId;
-            InLocalContainer = info.InLocalContainer;
-            Removable = info.Removable;
             LampCount = U16(attrs, 1);
             WidthMicrometres = I32(attrs, 3);
             HeightMicrometres = I32(attrs, 7);
@@ -313,29 +226,13 @@ namespace Ohman {
         /// 16), Primax, Chicony, ITE.</summary>
         public bool Internal {
             get {
-                return IsDeviceInternal(Path, VendorId, InLocalContainer, Removable);
+                if ((Path ?? "").IndexOf("HID_DEVICE_SYSTEM_VHF", StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                return VendorId == 0x0D62 || VendorId == 0x0461 || VendorId == 0x04F2 || VendorId == 0x048D;
             }
         }
 
-        public static bool IsDeviceInternal(string path, ushort vendorId, bool? inLocalContainer, bool? removable) {
-            string p = path ?? "";
-            if (p.IndexOf("HID_DEVICE_SYSTEM_VHF", StringComparison.OrdinalIgnoreCase) >= 0) return true;
-            if (p.IndexOf("ACPI#", StringComparison.OrdinalIgnoreCase) >= 0 || p.IndexOf(@"\\?\ACPI", StringComparison.OrdinalIgnoreCase) >= 0) return true;
-
-            bool knownVendor = vendorId == 0x0D62 || vendorId == 0x0461 || vendorId == 0x04F2 || vendorId == 0x048D;
-            if (!knownVendor) return false;
-
-            if (inLocalContainer.HasValue && !inLocalContainer.Value) return false;
-            if (removable.HasValue && removable.Value) return false;
-
-            return true;
-        }
-
-        public static Func<ILampArray> KeyboardFinder;
-
         /// <summary>The best per-key keyboard on this machine, or null. Everything else found is closed again.</summary>
-        public static ILampArray FindKeyboard() {
-            if (KeyboardFinder != null) return KeyboardFinder();
+        public static LampArray FindKeyboard() {
             LampArray best = null;
             foreach (var la in All()) {
                 if (!la.UsableAsPerKey || (best != null && la.LampCount <= best.LampCount)) { la.Dispose(); continue; }
@@ -388,8 +285,8 @@ namespace Ohman {
                 var b = new byte[featureLen];
                 b[0] = RepControl;
                 b[1] = (byte)(ours ? 0 : 1);   // AutonomousMode
-                if (!Hid.SetFeature(handle, b)) throw new System.IO.IOException("HID SetFeature failed for TakeOver");
-            } catch (Exception ex) { Log.Write("lamparray control: " + ex.Message); throw; }
+                Hid.SetFeature(handle, b);
+            } catch (Exception ex) { Log.Write("lamparray control: " + ex.Message); }
         }
 
         /// <summary>Paint every lamp the same colour in one report.</summary>
@@ -406,8 +303,8 @@ namespace Ohman {
                 b[7] = c.G;
                 b[8] = c.B;
                 b[9] = (byte)intensity;
-                if (!Hid.SetFeature(handle, b)) throw new System.IO.IOException("HID SetFeature failed for SetAll");
-            } catch (Exception ex) { Log.Write("lamparray range update: " + ex.Message); throw; }
+                Hid.SetFeature(handle, b);
+            } catch (Exception ex) { Log.Write("lamparray range update: " + ex.Message); }
         }
 
         /// <summary>Paint individual lamps. The spec carries eight per report, and only the last report of a batch
@@ -433,9 +330,9 @@ namespace Ohman {
                         b[ch + 2] = c.B;
                         b[ch + 3] = (byte)intensity;
                     }
-                    if (!Hid.SetFeature(handle, b)) throw new System.IO.IOException("HID SetFeature failed for SetLamps");
+                    if (!Hid.SetFeature(handle, b)) break;
                 }
-            } catch (Exception ex) { Log.Write("lamparray multi update: " + ex.Message); throw; }
+            } catch (Exception ex) { Log.Write("lamparray multi update: " + ex.Message); }
         }
 
         public void Dispose() {
@@ -449,14 +346,14 @@ namespace Ohman {
     /// with one "zone" per lamp. Everything downstream (selection, painting, the effect frames, the drawing) already
     /// works in zone indices and needs no change; the keyboard page just has 100-odd of them instead of four.</summary>
     public sealed class PerKeyLighting : ILighting, IDisposable {
-        readonly ILampArray lamps;
+        readonly LampArray lamps;
         readonly int[] ids;
         readonly Rgb[] shown;                 // HID lighting has no colour readback, so what we last wrote is all we know
         readonly int[] leader;                // lamp whose colour each lamp copies; -1 paints its own (KeyboardLayouts.Followers)
         int backlight = 0x80 | 100;
         bool held;                            // the device is off its own animations and showing ours
 
-        public PerKeyLighting(ILampArray la) {
+        public PerKeyLighting(LampArray la) {
             lamps = la;
             ids = new int[la.LampCount];
             shown = new Rgb[la.LampCount];
@@ -468,27 +365,23 @@ namespace Ohman {
             // across restarts. Black asserts nothing, and it is what "I have not set this key" should look like.
             for (int i = 0; i < la.LampCount; i++) { ids[i] = i; shown[i] = new Rgb(0, 0, 0); }
             leader = KeyboardLayouts.Followers(la);
-            // Constructing does not acquire: discovery must not modify ownership.
+            // Not taken here: the first paint takes it. Constructing this to describe the keyboard (the support
+            // report, a probe-only start) used to switch the keyboard off its own lighting and never give it back.
         }
-
-        public bool Held { get { return held; } }
 
         void Hold() { if (held) return; lamps.TakeOver(true); held = true; }
         /// <summary>Hand the keyboard back to its own animations. Taking it was never undone: the keyboard stayed in
         /// host mode on our last colours after Ohman quit or was uninstalled, and OMEN Gaming Hub could not change
         /// it back. The next write takes it again.</summary>
-        public void Release() {
-            if (!held) return;
-            try { lamps.TakeOver(false); } catch { }
-            finally { held = false; }
-        }
+        public void Release() { if (!held) return; lamps.TakeOver(false); held = false; }
+        public void Dispose() { Release(); try { lamps.Dispose(); } catch { } }
 
         public LightKind Kind { get { return LightKind.PerKey; } }
         public bool Inert { get { return false; } }
         public int Zones { get { return lamps.LampCount; } }
         public string Describe { get { return lamps.LampCount + " keys"; } }
         public bool Numpad { get { return lamps.LampCount > 90; } }
-        public ILampArray Device { get { return lamps; } }
+        public LampArray Device { get { return lamps; } }
 
         public Rgb[] GetColors() { return (Rgb[])shown.Clone(); }
 
@@ -506,22 +399,12 @@ namespace Ohman {
 
         void Paint() {
             Hold();
-            try {
-                if ((backlight & 0x80) == 0) { lamps.SetAll(new Rgb(0, 0, 0), 0); return; }
-                // Lamps no drawn key owns (the spacebar's other four LEDs, the second LED of wide keys, the keys HP adds
-                // beside the numpad) copy the key they sit under or beside. Painted black they read as dead keys.
-                var c = new Rgb[shown.Length];
-                for (int i = 0; i < c.Length; i++) c[i] = shown[leader[i] >= 0 ? leader[i] : i];
-                lamps.SetLamps(ids, c, (backlight & 0x7F) * 255 / 100);
-            } catch {
-                Release();
-                throw;
-            }
-        }
-
-        public void Dispose() {
-            Release();
-            try { lamps.Dispose(); } catch { }
+            if ((backlight & 0x80) == 0) { lamps.SetAll(new Rgb(0, 0, 0), 0); return; }
+            // Lamps no drawn key owns (the spacebar's other four LEDs, the second LED of wide keys, the keys HP adds
+            // beside the numpad) copy the key they sit under or beside. Painted black they read as dead keys.
+            var c = new Rgb[shown.Length];
+            for (int i = 0; i < c.Length; i++) c[i] = shown[leader[i] >= 0 ? leader[i] : i];
+            lamps.SetLamps(ids, c, (backlight & 0x7F) * 255 / 100);
         }
     }
 }

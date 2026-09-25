@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+﻿// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman: control engine: settings, apply logic, keep-alive heartbeat, OMEN key watcher, OGH suppression.
 using System;
 using System.Collections.Generic;
@@ -715,12 +715,7 @@ namespace Ohman {
         /// keyboard that works. Nothing here writes a performance byte, so ReadOnly has no say over it.</summary>
         bool TryLight(Action a, string what) {
             try { a(); return true; }
-            catch (Exception ex) {
-                ReleasePerKey();
-                Log.Write("FAIL " + what + ": " + ex.Message);
-                Fire(Toast, what + " failed: " + ex.Message, true);
-                return false;
-            }
+            catch (Exception ex) { Log.Write("FAIL " + what + ": " + ex.Message); Fire(Toast, what + " failed: " + ex.Message, true); return false; }
         }
 
         bool Try(Action a, string what) {
@@ -1801,18 +1796,15 @@ namespace Ohman {
     }
 
     public static class FirmwareVerificationLogic {
-        /// <summary>Decide whether mailbox communication is healthy based on the two passive probes.
-        /// Preserves the distinction between firmware command refusal (BiosException) and mailbox failure.</summary>
+        /// <summary>Decide whether the mailbox is alive from the two passive probes. A refusal (BiosException) is the
+        /// firmware answering, so the mailbox works even when both probes are refused: board 8574 refuses 0x28 and
+        /// still switches modes. Only when neither probe got an answer of any kind is the mailbox dead.</summary>
         public static bool EvaluateBiosProbes(Exception exFan, Exception exInfo, out string failureReason) {
             failureReason = null;
-            if (exFan != null && exInfo != null) {
-                bool unsupported = (exFan is BiosException) || (exInfo is BiosException);
-                failureReason = unsupported
-                    ? "firmware responded with unsupported command (" + (exInfo is BiosException ? exInfo.Message : exFan.Message) + ")"
-                    : "mailbox communication failed (" + exInfo.Message + ")";
-                return false;
-            }
-            return true;
+            if (exFan == null || exInfo == null) return true;
+            if (exFan is BiosException || exInfo is BiosException) return true;
+            failureReason = "mailbox communication failed (" + exInfo.Message + ")";
+            return false;
         }
     }
 }

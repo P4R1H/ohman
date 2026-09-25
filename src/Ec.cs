@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+﻿// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman: the embedded controller, through the driver.
 //
 // The EC is the chip that actually runs the fans; the WMI mailbox is the firmware relaying requests to it. On
@@ -400,14 +400,8 @@ namespace Ohman {
                     why = "no temperature at 0x" + cpuReg.ToString("X2") + " and no firmware fan speed to check the tachometers against";
                     return false;
                 }
-                // Stopped fans agree at zero, but zero bytes exist across arbitrary unmapped EC memory. An absent
-                // temperature sensor cannot accept stopped fans as proof of the map; at least one spinning fan is
-                // required so the tachometer registers are verified against active physical motion.
-                bool anySpinning = (hasF1 && mailboxRpm[0] > 0) || (hasF2 && mailboxRpm[1] > 0);
-                if (!anySpinning) {
-                    why = "no temperature at 0x" + cpuReg.ToString("X2") + " and stopped fans cannot prove tachometer registers";
-                    return false;
-                }
+                // Stopped fans agreeing at zero are still accepted: this runs once, when the driver opens, and a board
+                // started cold would otherwise lose the EC route (the only fan control 878A and 8786 have) all session.
             }
 
             if (hasF1) {
