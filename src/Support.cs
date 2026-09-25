@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman: the support report: everything needed to add or fix a laptop, gathered in one go.
 //
 // This exists because the first day of reports was mostly people being asked for one more thing. Every question
@@ -273,8 +273,28 @@ namespace Ohman {
                 if (!r.Any) sb.AppendLine("  ec: no answer (" + Scrub(e.Ec.LastError) + ")");
                 else {
                     sb.AppendLine("  ec temperatures: CPU " + (r.Cpu >= 0 ? r.Cpu + " C" : "--") + "   GPU " + (r.Gpu >= 0 ? r.Gpu + " C" : "--"));
+                    string mb1Str = (f != null && f.Length > 0 && f[0] >= 0) ? (f[0] * 100).ToString() : "--";
+                    string mb2Str = (f != null && f.Length > 1 && f[1] >= 0) ? (f[1] * 100).ToString() : "--";
                     sb.AppendLine("  ec fan rpm:      " + (r.Rpm1 >= 0 ? r.Rpm1.ToString() : "--") + " / " + (r.Rpm2 >= 0 ? r.Rpm2.ToString() : "--")
-                        + "   mailbox 0x2D: " + (f != null ? (f[0] * 100) + " / " + (f[1] * 100) : "--") + "   <- these should agree; if not, the map does not fit this board");
+                        + "   mailbox 0x2D: " + mb1Str + " / " + mb2Str);
+
+                    string t1Status = "unverified (no mailbox reading)";
+                    if (f != null && f.Length > 0 && f[0] >= 0 && r.Rpm1 >= 0) {
+                        int want1 = f[0] * 100, slack1 = Math.Max(500, want1 / 4);
+                        int diff1 = Math.Abs(r.Rpm1 - want1);
+                        t1Status = diff1 <= slack1
+                            ? "PASS (diff " + diff1 + " <= " + slack1 + ")"
+                            : "FAIL (ec " + r.Rpm1 + " vs mb " + want1 + ", diff " + diff1 + " > slack " + slack1 + ")";
+                    }
+                    string t2Status = "unverified (no mailbox reading)";
+                    if (f != null && f.Length > 1 && f[1] >= 0 && r.Rpm2 >= 0) {
+                        int want2 = f[1] * 100, slack2 = Math.Max(500, want2 / 4);
+                        int diff2 = Math.Abs(r.Rpm2 - want2);
+                        t2Status = diff2 <= slack2
+                            ? "PASS (diff " + diff2 + " <= " + slack2 + ")"
+                            : "FAIL (ec " + r.Rpm2 + " vs mb " + want2 + ", diff " + diff2 + " > slack " + slack2 + ")";
+                    }
+                    sb.AppendLine("  tach verification: fan1 " + t1Status + " · fan2 " + t2Status);
                     sb.AppendLine("  ec control:      manual 0x" + (r.Manual >= 0 ? r.Manual.ToString("X2") : "??") + "   countdown " + (r.Countdown >= 0 ? r.Countdown + " s" : "--")
                         + "   mode 0x" + (r.Mode >= 0 ? r.Mode.ToString("X2") : "??") + "   charge " + (r.Charge >= 0 ? r.Charge.ToString() : "--"));
                 }
