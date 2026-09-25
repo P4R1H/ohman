@@ -11,7 +11,8 @@
 // AMD (Amd17Cpu.cs): the die temperature is not an MSR but SMN register THM_TCON_CUR_TMP 0x59800; energy is
 // MSR_PKG_ENERGY_STAT 0xC001029B.
 //
-// Reads only. PL1/PL2 are writable through the same module and wait for a tester.
+// Reads, and on Intel one write: MSR_PKG_POWER_LIMIT, which the stock signed IntelMSR module allow-lists
+// (is_allowed_msr_write: MSR_PKG_POWER_LIMIT among six), to set the limit OGH itself sets per mode.
 using System;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -116,6 +117,12 @@ namespace Ohman {
             return 0;
         }
 
+        /// <summary>Set the package limits OGH sets for this mode. Null when they are in place, else why not.
+        /// The first value read is kept and put back by RestorePackageLimits.</summary>
+        public virtual string SetPackageLimits(int pl1, int pl2) { return "not on this CPU"; }
+        public virtual void RestorePackageLimits() { }
+        protected bool WriteMsr(uint msr, ulong v) { return Module != null && Module.Call("ioctl_write_msr", new ulong[] { msr, v }, null); }
+
         protected bool Msr(uint msr, out ulong v) {
             var o = new ulong[1];
             bool ok = Module.Call("ioctl_read_msr", new ulong[] { msr }, o);
@@ -181,6 +188,40 @@ namespace Ohman {
         bool baseTried;
         double powerUnit;
         public IntelCpu(PawnIoModule module) : base(module) { }
+        ulong firstLimit;
+        bool firstKnown;
+        readonly object limitSync = new object();
+        const ulong LimitBits = 0x7FFFul | (0x7FFFul << 32);
+
+        public override string SetPackageLimits(int pl1, int pl2) {
+            lock (limitSync) {
+                ulong v;
+                if (powerUnit == 0) { if (!Msr(MSR_RAPL_POWER_UNIT, out v)) return "power unit unreadable"; powerUnit = 1.0 / (1 << (int)(v & 0xF)); }
+                if (!Msr(MSR_PKG_POWER_LIMIT, out v)) return "0x610 unreadable";
+                if ((v & (1ul << 63)) != 0) return "0x610 is locked by the firmware";
+                if (!firstKnown) {
+                    firstLimit = v; firstKnown = true;
+                    Log.Write("cpu limits before Ohman: PL1 " + ((v & 0x7FFF) * powerUnit).ToString("0") + " W, PL2 " + (((v >> 32) & 0x7FFF) * powerUnit).ToString("0") + " W");
+                }
+                // The value is OGH's own for this mode (Platforms.CpuLimits); 15..125 W is a sanity bound, PL2 never under PL1.
+                double w1 = Math.Max(15, Math.Min(125, pl1)), w2 = Math.Max(w1, Math.Min(125, pl2));
+                ulong u1 = (ulong)Math.Round(w1 / powerUnit) & 0x7FFF, u2 = (ulong)Math.Round(w2 / powerUnit) & 0x7FFF;
+                // Time windows and clamp bits stay as the firmware set them; only the two limits and their enables move.
+                ulong nv = (v & ~LimitBits) | u1 | (1ul << 15) | (u2 << 32) | (1ul << 47);
+                if (nv == v) return null;
+                if (!WriteMsr(MSR_PKG_POWER_LIMIT, nv)) return "the driver refused the write";
+                ulong back;
+                if (!Msr(MSR_PKG_POWER_LIMIT, out back) || (back & LimitBits) != (nv & LimitBits)) return "written, but 0x610 did not keep it";
+                return null;
+            }
+        }
+        public override void RestorePackageLimits() {
+            lock (limitSync) {
+                ulong v;
+                if (!firstKnown || !Msr(MSR_PKG_POWER_LIMIT, out v) || v == firstLimit || (v & (1ul << 63)) != 0) return;
+                if (WriteMsr(MSR_PKG_POWER_LIMIT, firstLimit)) Log.Write("cpu limits put back as they were before Ohman");
+            }
+        }
         public override string Describe { get { return "Intel MSR" + (tjMax > 0 ? " · TjMax " + tjMax : ""); } }
 
         protected override CpuTelemetry PollCore() {

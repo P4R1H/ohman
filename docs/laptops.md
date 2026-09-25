@@ -68,11 +68,12 @@ are written down:
 | Victus 15-fb0xxx | `8A3D` | from `hp-wmi`, no quiet mode |
 | Victus 16-r0xxx | `8BC2` ✓ | OMEN bytes; `hp-wmi` lists it as OMEN despite the name |
 | Victus 16 S / R (2023–2024) | `8B2F`, `8BBE` ✓, `8BD4`, `8BD5` ✓, `8C99`, `8C9C` | from `hp-wmi`, no quiet mode |
-| Victus 15 and 16, other models | `88D9`, `88DA`, `88EE` ✓, `8A26` ✓, `8A3E`, `8C2F`, `8C30`, `8C3F`, `8D07`, `8DCD`, `8DCF` ✓, `8E5E` | from the firmware |
+| Victus 15 and 16, other models | `88D9`, `88DA`, `88EE` ✓, `8A26` ✓, `8A3E`, `8C2F`, `8C30`, `8C3F`, `8D07`, `8DCD`, `8DCF` ✓, `8E5C` ✓, `8E5E` | from the firmware |
 
 "from the firmware" is the same path every unlisted OMEN takes: Ohman asks the board which firmware generation
-it is and drives it with that generation's bytes. It works, and nobody has yet confirmed on a Victus 15 that
-the quiet mode is the byte we think it is. The kernel's own Victus 16-r0xxx entry takes OMEN bytes despite the
+it is and drives it with that generation's bytes. On a v0 Victus that includes the quiet byte `0x03` for Eco:
+OMEN Gaming Hub sends it on `8DCD`, and on `8E5C` (Victus 15-fa2xxx, 2025) the owner found Eco, Balanced and
+Performance each change the fans. The kernel's own Victus 16-r0xxx entry takes OMEN bytes despite the
 name, so the badge on the lid does not decide this, only a readback from the machine does.
 
 `8A3D` is the exception and shows how this gets settled: it is a Victus 15-fb0xxx, and it reached `hp-wmi`

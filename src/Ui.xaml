@@ -767,6 +767,17 @@
                 <ToggleButton x:Name="TgTrayTemp" Grid.Column="1" Style="{StaticResource Switch}"/>
               </Grid>
             </Border>
+            <!-- For white-only backlights: no firmware answer tells them from RGB, so the owner decides. -->
+            <Border x:Name="LightPageRow" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <TextBlock Text="Keyboard lighting controls" Style="{StaticResource Row}"/>
+                  <TextBlock x:Name="TxtLightPageSub" Text="Turn off for a white-only backlight. Fn still switches it" Style="{StaticResource RowSub}"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgLightPage" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
             <Border BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
               <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>

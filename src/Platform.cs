@@ -20,6 +20,12 @@ namespace Ohman {
         // Features that not every OMEN has. A model without one keeps the row hidden and never sends the command.
         public bool HasPowerGain = true;    // 0x29 concurrent CPU+GPU budget ("Smart Performance Gain")
         public bool HasGpuPower = true;     // 0x22 cTGP / PPAB (discrete NVIDIA GPU with Dynamic Boost)
+        /// <summary>The CPU package limit OGH's AdaptivePowerControl sets on entering each mode (Eco, Balanced,
+        /// Performance), in watts, read from OGH's own log on that board ("SetPL1DefaultValue"). Null = Ohman
+        /// never writes one. Only the default is copied, not OGH's adaptive walk below it.</summary>
+        public int[] CpuPl1;
+        public int CpuPl2;                  // 0 = the same as PL1, which is what OGH's 0x29 payload carries on AMD
+        public CpuLimitRoute CpuLimitVia = CpuLimitRoute.None;
         public FanCurve Curve = FanCurve.Transcend14();
         public int RpmPerLevel = 100;       // what one fan level is worth on screen; 0 = the levels are already a percentage
         public GuardLimits Guard = new GuardLimits();
@@ -31,6 +37,11 @@ namespace Ohman {
         public EcMap Ec;
         public string Notes;
     }
+
+    /// <summary>How OGH itself sets the CPU package limit on a board: 0x29 {PL1, PL2, FF, FF} through the mailbox
+    /// (AMD boards, e.g. 8BCD), or MSR_PKG_POWER_LIMIT through its driver ("Algorithm goes with MSR for Intel
+    /// platform", 8E41). Ohman's MSR route needs PawnIO; without it nothing is written.</summary>
+    public enum CpuLimitRoute { None, Mailbox, Msr }
 
     /// <summary>The controls a board's firmware refuses through the mailbox. Set from evidence, one board at a time.</summary>
     [Flags]
@@ -243,8 +254,24 @@ namespace Ohman {
             if (p.Ec == null && Families.EcCandidate(board)) p.Ec = EcMap.Legacy();
             DriverFor need;
             if (p.DriverFor == DriverFor.None && DriverNeeds.TryGetValue(board ?? "", out need)) p.DriverFor = need;
+            CpuLimitSpec cl;
+            if (p.CpuPl1 == null && CpuLimits.TryGetValue(board ?? "", out cl)) {
+                p.CpuPl1 = cl.Pl1; p.CpuPl2 = cl.Pl2; p.CpuLimitVia = cl.Via;
+                if (cl.NoConcurrent) p.HasPowerGain = false;
+            }
             return p;
         }
+
+        sealed class CpuLimitSpec { public CpuLimitRoute Via; public int[] Pl1; public int Pl2; public bool NoConcurrent; }
+        /// <summary>Per-mode CPU limits, each from OGH's own log on that board. Never copied to a neighbour.</summary>
+        static readonly Dictionary<string, CpuLimitSpec> CpuLimits = new Dictionary<string, CpuLimitSpec>(StringComparer.OrdinalIgnoreCase) {
+            // OMEN 16-xd0 (Ryzen 7 7840HS). OGH: IsTppSupport = False, so it never sends the concurrent byte, and
+            // sends 0x29 {PL, PL, FF, FF} with PL 55 in Eco and L2, 60 in L7; three owners' logs agree (#21, #30, #39).
+            { "8BCD", new CpuLimitSpec { Via = CpuLimitRoute.Mailbox, Pl1 = new[] { 55, 55, 60 }, NoConcurrent = true } },
+            // OMEN Transcend 14 (2025) is a candidate: OGH sets PL1 45 in L2 and 65 in L7/L8 (PL2 77) by MSR, and
+            // unmanaged 0x610 reads 65 / 77, so Balanced runs about 20 W over OGH's. Not enabled: lowering every
+            // owner's Balanced is a product decision, and Eco has a single source (PR #62's log).
+        };
 
         /// <summary>Boards whose mailbox is known to refuse a control the EC can do. Each entry is a field report.</summary>
         static readonly Dictionary<string, DriverFor> DriverNeeds = new Dictionary<string, DriverFor>(StringComparer.OrdinalIgnoreCase) {
@@ -274,7 +301,7 @@ namespace Ohman {
         /// widens the thermal guard: it lets the chassis sensor arm a trigger before the sensor has read cool
         /// once, and makes release stricter, so an unexpected sensor scale costs a noisy fan, never less cooling.</summary>
         static readonly string[] OwnerReported = { "8748", "8EEC", "8DCF", "88D2", "88EE", "8BAB", "8A26",
-                                                   "8BCD", "8BAD", "8787", "8E10", "8BBE", "8A4C", "8BB3", "8BCA", "8BD5", "8BC2", "8E35", "8C76", "8A25", "8D87" };
+                                                   "8BCD", "8BAD", "8787", "8E10", "8BBE", "8A4C", "8BB3", "8BCA", "8BD5", "8BC2", "8E35", "8C76", "8A25", "8D87", "8E5C" };
         public static bool Reported(string board) { return Families.In(OwnerReported, board); }
 
         public static string BoardOverride;         // --board: test aid

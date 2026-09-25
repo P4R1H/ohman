@@ -101,12 +101,15 @@ namespace Ohman {
         public int LightLevel = 100;                // brightness 0..100, applied by scaling the colours (firmware level byte is unverified)
         public int LightEffect = 0;                 // 0 static, 1 breathe, 2 cycle, 3 wave (software effects, ~8 frames/s)
         public int LightSpeed = 3;                  // 1..5
-        public int RefreshHz = 0;                   // chosen panel refresh rate (0 = leave Windows alone)
+        public bool HideLight = false;              // the owner turned the keyboard controls off: nothing is read or written to it
+        public int RefreshHz = 0;                  // chosen panel refresh rate (0 = leave Windows alone)
         public bool LowHzOnBattery = false;         // lowest refresh rate on battery, back to RefreshHz (or the highest) on AC
         public bool TrayTemp = true;                // CPU temperature drawn on the tray icon
         public int PollMs = 2000;                   // sensor refresh while the window is open
         public bool TookWinLighting = false;        // we switched Windows Dynamic Lighting off and owe it back
         public bool PerKeyReset = false;            // the one-time clear of the all-white per-key array
+        public bool McuLightChosen = false;         // a Primax per-key keyboard is left alone until its owner picks a mode
+        public string AutostartExe = "";            // the exe the logon task was last registered for
         public int FanBeforeMax = 0;                // FanMode that Max interrupted; survives a restart
         public bool InfoDismissed = false;          // the first-on-this-board note, closed by the user
         public bool Guard = true;                   // thermal guard: force max fan when the machine runs away
@@ -190,6 +193,8 @@ namespace Ohman {
                         case "PollMs": { int pm; if (int.TryParse(v, out pm) && pm >= 500 && pm <= 5000) s.PollMs = pm; break; }
                         case "TookWinLighting": if (bool.TryParse(v, out b)) s.TookWinLighting = b; break;
                         case "PerKeyReset": if (bool.TryParse(v, out b)) s.PerKeyReset = b; break;
+                        case "McuLightChosen": if (bool.TryParse(v, out b)) s.McuLightChosen = b; break;
+                        case "AutostartExe": s.AutostartExe = v.Length > 400 ? "" : v; break;
                         case "FanBeforeMax": if (TryInt(v, out n)) s.FanBeforeMax = Math.Max(0, Math.Min(3, n)); break;
                         case "LatestVersion": s.LatestVersion = v.Length > 24 ? v.Substring(0, 24) : v; break;
                         case "WinX": if (TryInt(v, out n)) s.WinX = n; break;
@@ -201,6 +206,7 @@ namespace Ohman {
                         case "LightLevel": if (TryInt(v, out n)) s.LightLevel = Math.Max(0, Math.Min(100, n)); break;
                         case "LightEffect": if (TryInt(v, out n)) s.LightEffect = Math.Max(0, Math.Min(3, n)); break;
                         case "LightSpeed": if (TryInt(v, out n)) s.LightSpeed = Math.Max(1, Math.Min(5, n)); break;
+                        case "HideLight": if (bool.TryParse(v, out b)) s.HideLight = b; break;
                         case "RefreshHz": if (TryInt(v, out n)) s.RefreshHz = Math.Max(0, Math.Min(500, n)); break;
                         case "LowHzOnBattery": if (bool.TryParse(v, out b)) s.LowHzOnBattery = b; break;
                         case "TrayTemp": if (bool.TryParse(v, out b)) s.TrayTemp = b; break;
@@ -263,6 +269,7 @@ namespace Ohman {
                 sb.AppendLine("LightLevel=" + LightLevel);
                 sb.AppendLine("LightEffect=" + LightEffect);
                 sb.AppendLine("LightSpeed=" + LightSpeed);
+                if (HideLight) sb.AppendLine("HideLight=True");
                 sb.AppendLine("RefreshHz=" + RefreshHz);
                 sb.AppendLine("LowHzOnBattery=" + LowHzOnBattery);
                 sb.AppendLine("TrayTemp=" + TrayTemp);
@@ -289,6 +296,8 @@ namespace Ohman {
                 sb.AppendLine("PollMs=" + PollMs);
                 sb.AppendLine("TookWinLighting=" + TookWinLighting);
                 sb.AppendLine("PerKeyReset=" + PerKeyReset);
+                sb.AppendLine("McuLightChosen=" + McuLightChosen);
+                if (AutostartExe.Length > 0) sb.AppendLine("AutostartExe=" + AutostartExe);
                 sb.AppendLine("FanBeforeMax=" + FanBeforeMax);
                 sb.AppendLine("WinX=" + WinX);
                 sb.AppendLine("WinY=" + WinY);
@@ -441,18 +450,13 @@ namespace Ohman {
                 // fewer opcodes threw before BiosOk was ever set and the whole app went read-only, including the
                 // mode switching that board can do perfectly well. Nothing here is allowed to decide that any more:
                 // the mailbox works if 0x28 answers, and every other capability is probed on its own below.
-                Exception exFan = null;
                 try { FanCount = Hw.GetFanCountPassive(); }   // never the 0x10 query here: it is the keep-alive trigger
-                catch (Exception ex) { exFan = ex; FanCount = -1; Log.Write("no fan table (" + ex.Message + "): fan readout unavailable"); }
+                catch (Exception ex) { FanCount = -1; Log.Write("no fan table (" + ex.Message + "): fan readout unavailable"); }
                 // Some firmware refuses 0x28 outright (rc 3). That is an answer, not a dead mailbox, so it must not
                 // abort the rest of the check: a board can still have its mode bytes from a contributed readback.
-                Exception exInfo = null;
                 try { Info = Hw.GetSystemInfo(); }
-                catch (Exception ex) { exInfo = ex; Info = new SystemInfo(); Log.Write("system data (0x28) unavailable: " + ex.Message); }
+                catch (Exception ex) { Info = new SystemInfo(); Log.Write("system data (0x28) unavailable: " + ex.Message); }
 
-                string probeFailure;
-                if (!FirmwareVerificationLogic.EvaluateBiosProbes(exFan, exInfo, out probeFailure))
-                    throw new InvalidOperationException(probeFailure);
 
                 BiosOk = true;                                 // the mailbox answers; what it will answer is decided below
                 if (!Info.Valid) Log.Write("no system data: power gain and graphics cannot be offered on this board");
@@ -476,6 +480,7 @@ namespace Ohman {
                 // Byte 7 advertises which graphics modes exist, but 8BC2 advertises them and then refuses 0x52
                 // both ways: rc 3 reading, rc 6 writing. Its owner could pick a mode and nothing happened, so a
                 // firmware that will not say which mode it is in does not get to be asked to change it.
+                try { maxFlagOn = Hw.GetMaxFan(); if (maxFlagOn) Log.Write("max fan flag is set at start"); } catch { }
                 try { GpuMode = Hw.GetGpuMode(); graphicsReadable = true; }
                 catch (Exception ex) { Log.Write("graphics mode read: " + ex.Message + " - graphics switching not offered"); }
                 Log.Write("BIOS ok: fans=" + FanCount + " policy=v" + Info.ThermalPolicy + " swFan=" + Info.SwFanControl + " defPL4=" + Info.DefaultPl4 + "W baseTdp=" + Info.DefaultConcurrentTdp + "W raw=" + Info.Hex + (Hw.IsDemo ? " (DEMO)" : ""));
@@ -607,17 +612,20 @@ namespace Ohman {
             if (BiosOk && !Hw.IsDemo && !ReadOnly) {
                 try {
                     lock (applySync) {
-                        Try(delegate { Hw.SetMode(P.ModeBalanced, true); }, "Reset mode");
-                        exitMode = P.ModeBalanced;   // Park re-sends the mode on the way out; it must not undo this one
+                        // Max off and a level written while the fans are still ours; after the mode command below
+                        // hands them to the BIOS, a level write is ignored (the #57 second step would not land).
                         MaxFan(false, "Reset max fan");
                         if (Route == FanRoute.Ec) ReleaseEcFans("reset");
                         else WriteLevels(P.Curve.Fallback, P.Curve.Fallback, "Reset fan level");
+                        Try(delegate { Hw.SetMode(P.ModeBalanced, true); }, "Reset mode");
+                        exitMode = P.ModeBalanced;   // Park re-sends the mode on the way out; it must not undo this one
                     }
                     done.Add("set the mode back to balanced and handed the fans back");
                 } catch (Exception ex) { Log.Write("reset firmware: " + ex.Message); }
             }
             try {
-                if (Light != null && !Hw.IsDemo) {
+                // A Primax keyboard has no backlight byte to put back; releasing it below and the next restart do.
+                if (Light != null && !Hw.IsDemo && !(Light is McuKeyboardLighting)) {
                     TryLight(delegate { Light.SetBacklight(true, 100); }, "Reset backlight");
                     done.Add("turned the keyboard backlight back on");
                 }
@@ -641,6 +649,13 @@ namespace Ohman {
         /// the firmware for about two minutes, which on a restart is most of the next boot: an owner who quit at
         /// idle got Fallback back at the login screen and read it as the fans maxing out.</param>
         public void Park(bool quiet) {
+            // The timers and the work queue are still alive until Dispose, and any of them could undo what follows:
+            // the Max keep-alive re-sends 0x27 {1}, the guard sends max, the heartbeat re-sends the mode without the
+            // BIOS byte. Stop them first so the last word to the firmware is ours.
+            try { if (fanTimer != null) fanTimer.Change(Timeout.Infinite, Timeout.Infinite); } catch { }
+            try { if (guard != null) guard.Change(Timeout.Infinite, Timeout.Infinite); } catch { }
+            try { if (heartbeat != null) heartbeat.Change(Timeout.Infinite, Timeout.Infinite); } catch { }
+            stopping = true; try { workReady.Set(); } catch { }
             // Give the keyboard back before anything else. To paint it at all we switch Windows Dynamic Lighting
             // off, and we were never switching it back: quitting left the keyboard frozen on the last thing we
             // wrote, with Windows told to keep out of it. One owner uninstalled Ohman, rebooted, and still had
@@ -661,7 +676,8 @@ namespace Ohman {
                 // leave it there" - which on the way out means leaving it there for good. Two owners reported the
                 // fans running flat out until they rebooted or slept the machine, one after using Max, one after
                 // the guard fired. Whatever we were doing, the fans go back to the firmware before we go.
-                MaxFan(false, "Max fan off on exit");
+                int cur = Math.Max(curLevel1, curLevel2);     // before MaxFan(false), which may write the ceiling
+                lock (applySync) MaxFan(false, "Max fan off on exit");
                 // The level is still written high on purpose. The firmware replays the last pair for about two
                 // minutes before its own curve resumes, and that is the handover: a hot machine keeps its cooling
                 // across it rather than dropping to a middling level the moment we quit.
@@ -670,7 +686,6 @@ namespace Ohman {
                 // because it was hot, restarted, and left with its fans stopped for the two minutes the EC
                 // replays the last pair. Quiet only means "do not raise a level we know"; not knowing one is
                 // exactly the case Fallback exists for.
-                int cur = Math.Max(curLevel1, curLevel2);
                 int want = quiet && cur >= 0 ? cur : Math.Max(P.Curve.Fallback, cur);
                 // On the EC route the fans are handed back rather than parked: the EC resumes its own curve on
                 // its own clock once manual mode is cleared, and there is no replay of the last level to survive.
@@ -718,10 +733,13 @@ namespace Ohman {
             catch (Exception ex) { Log.Write("FAIL " + what + ": " + ex.Message); Fire(Toast, what + " failed: " + ex.Message, true); return false; }
         }
 
-        bool Try(Action a, string what) {
+        bool Try(Action a, string what) { return Try(a, what, true); }
+        /// <summary>toast false: log only. For a command re-sent by the heartbeat, one toast says it; forty-five
+        /// seconds later the same toast says nothing new (8D26: "Set power failed" on every heartbeat).</summary>
+        bool Try(Action a, string what, bool toast) {
             if (ReadOnly) { Log.Write("read-only (unsupported board '" + Board + "'): skipped " + what); return false; }
             try { a(); LastError = ""; return true; }
-            catch (Exception ex) { LastError = ex.Message; Log.Write("FAIL " + what + ": " + ex.Message); Fire(Toast, what + " failed: " + ex.Message, true); return false; }
+            catch (Exception ex) { LastError = ex.Message; Log.Write("FAIL " + what + ": " + ex.Message); if (toast) Fire(Toast, what + " failed: " + ex.Message, true); return false; }
         }
         void Fire(Action<string, bool> h, string m, bool err) { if (h != null) { try { h(m, err); } catch { } } }
         void Changed() { var h = StateChanged; if (h != null) { try { h(); } catch { } } }
@@ -733,6 +751,7 @@ namespace Ohman {
         public void ApplyAll(bool announce) {
             lock (applySync) {
                 if (!BiosOk && !Hw.IsDemo) return;
+                ClearMaxFirst();
                 Try(delegate { Hw.SetMode(ModeByte, FansByBios); }, "Set mode");
                 ApplyFanCore();
                 ApplyPowerCore();
@@ -991,6 +1010,7 @@ namespace Ohman {
         /// <summary>Set by the fan test in the report process: 1 = the rpm pair moved the fans, 2 = the percent pair.</summary>
         public int EcPairFound;
         void CloseDriver() {
+            try { if (Cpu != null) Cpu.RestorePackageLimits(); } catch { }   // exit, removal, switched off: as we found it
             try { if (Cpu != null) Cpu.Dispose(); } catch { }
             try { if (Ec != null) Ec.Dispose(); } catch { }
             Cpu = null; Ec = null;
@@ -1119,8 +1139,22 @@ namespace Ohman {
         /// So the first time Max is asked for, the next readings are watched (NoteFanLevelsCore); a flag that moved
         /// nothing is remembered, and from then on Max is the ceiling written as a level, with the flag still sent.
         void MaxFan(bool on, string what) {
-            Try(delegate { Hw.GetFanCount(); Hw.SetMaxFan(on); }, what);
-            if (!on) { maxAskedAt = DateTime.MinValue; return; }
+            bool sent = Try(delegate { Hw.GetFanCount(); Hw.SetMaxFan(on); }, what);
+            if (!on) {
+                maxAskedAt = DateTime.MinValue;
+                // Clearing the flag is not enough on these firmwares. hp-wmi's hp_wmi_fan_speed_max_reset:
+                // "Disabling max fan speed on Victus s1xxx laptops needs a 2nd step", a 0x2E write straight
+                // after 0x27 {0}; the OMEN v1 boards (8BCD, 8C78) take that same fan path. Auto only wrote a
+                // level when its target differed from the last one written, and the flag never writes one, so
+                // Max -> Auto on an unchanged temperature sent no level at all and the fans stayed at maximum
+                // until Manual or Curve wrote a different pair (#57, #21). The ceiling first makes the next write
+                // a change whatever it is, and it is where the fans already are, so it never costs any air.
+                if (maxFlagOn && sent && Route == FanRoute.Mailbox && CanSetFanLevels)
+                    WriteLevels(P.Curve.Ceiling, P.Curve.Ceiling, what + ": leaving max");
+                if (sent) maxFlagOn = false;
+                return;
+            }
+            if (sent) maxFlagOn = true;
             if (Route == FanRoute.Ec) WriteLevelsEc(P.Curve.Ceiling, P.Curve.Ceiling, what + " via EC");
             else if (S.MaxIgnored) WriteLevels(P.Curve.Ceiling, P.Curve.Ceiling, what + " as a level");
             // Not from a stall: stopped fans that take a while to answer max are the firmware recovering, not ignoring
@@ -1128,6 +1162,10 @@ namespace Ohman {
             // can only prove the flag, never condemn it.
             else if (!maxProven && maxAskedAt == DateTime.MinValue && !guardStalled && lastFanSeen != 0) { maxAskedAt = DateTime.Now; maxAskedFrom = lastFanSeen; }
         }
+        bool maxFlagOn;                            // the firmware holds the max-fan flag (sent by us, or found set at start)
+        /// <summary>Before a mode command that may hand the fans to the BIOS (FansByBios): a max flag still set and
+        /// no longer wanted is cleared first, while its second-step level write can still land. Caller holds applySync.</summary>
+        void ClearMaxFirst() { if (maxFlagOn && S.Fan != FanMode.Max && !GuardActive) MaxFan(false, "Max fan off"); }
         DateTime maxAskedAt = DateTime.MinValue;   // when an unproven max flag was sent and is being watched
         int maxAskedFrom, lastFanSeen = -1;        // the fan reading before it, and the latest reading (-1 none yet)
         bool maxProven;                            // the flag has been seen raising the fans this run
@@ -1244,7 +1282,37 @@ namespace Ohman {
             return P.RpmPerLevel > 0 ? (level * P.RpmPerLevel).ToString(CultureInfo.InvariantCulture) + " rpm" : Percent(level) + " of top speed";
         }
         public string Percent(int level) { return (int)Math.Round(100.0 * level / Math.Max(1, P.Curve.Ceiling)) + "%"; }
-        void ApplyPowerCore() { if (P.HasPowerGain) Try(delegate { Hw.SetConcurrentTdp(CurrentTdp); }, "Set power"); }
+        // A firmware that refuses 0x29 refuses it on every heartbeat. 8D26 in iGPU-only mode answers "Generic
+        // failure" (the WMI call itself fails, not a BIOS return code), and the toast came back every 45 s. Three
+        // refusals in a row are an answer: stop sending it, hide the row, say so once. A new start asks again.
+        int powerFailures;
+        public bool PowerRefused;
+        void ApplyPowerCore() {
+            if (P.HasPowerGain && !PowerRefused && !ReadOnly) {
+                if (Try(delegate { Hw.SetConcurrentTdp(CurrentTdp); }, "Set power", powerFailures == 0)) powerFailures = 0;
+                else if (++powerFailures >= 3) {
+                    PowerRefused = true;
+                    Log.Write("power gain: 0x29 refused " + powerFailures + " times running (" + LastError + ")" + (GpuMode == 3 ? " in iGPU-only mode" : "") + "; not sent again this session");
+                    Changed();
+                }
+            }
+            ApplyCpuLimits();
+        }
+        int cpuLimitFailures;
+        string cpuLimitWhy;
+        /// <summary>The package limit OGH sets for this mode, where the profile has one from OGH's own log. Re-sent
+        /// with the heartbeat, as OGH re-applies it: a limit some other HP component left behind does not survive.</summary>
+        void ApplyCpuLimits() {
+            if (P.CpuPl1 == null || P.CpuPl1.Length < 3 || ReadOnly || cpuLimitFailures >= 3) return;
+            int pl1 = P.CpuPl1[ModeIndex], pl2 = P.CpuPl2 > 0 ? Math.Max(pl1, P.CpuPl2) : pl1;
+            if (P.CpuLimitVia == CpuLimitRoute.Mailbox) {
+                if (Try(delegate { Hw.SetCpuPowerLimits(pl1, pl2); }, "CPU power limit", cpuLimitFailures == 0)) cpuLimitFailures = 0;
+                else if (++cpuLimitFailures >= 3) Log.Write("cpu power limit: refused three times; not sent again this session");
+            } else if (P.CpuLimitVia == CpuLimitRoute.Msr && Cpu != null) {
+                string why = Cpu.SetPackageLimits(pl1, pl2);
+                if (why != cpuLimitWhy) { cpuLimitWhy = why; Log.Write(why == null ? "cpu limits: PL1 " + pl1 + " W, PL2 " + pl2 + " W (" + ModeName + ", OGH's values)" : "cpu limits not set: " + why); }
+            }
+        }
         void ApplyGpuCore() {
             if (!P.HasGpuPower) return;
             // payloads come from the platform profile (Transcend 14: Base {0,0,1,75}, Boost {0,1,1,87}, Max {1,1,1,87} as OGH sends them)
@@ -1264,6 +1332,7 @@ namespace Ohman {
             NoteFanMode(S.Fan);                                      // the new mode brings its own fan setting with it
             lock (applySync) {
                 // the mode's own profile comes with it: fans, power gain and GPU power are remembered per mode
+                ClearMaxFirst();
                 if (Try(delegate { Hw.SetMode(ModeByte, FansByBios); }, "Set mode")) { if (announce) Say(ModeName + " mode"); }
                 if (!GuardActive) { ApplyFanCore(); lastFanWrite = DateTime.Now; }
                 ApplyPowerCore();
@@ -1283,6 +1352,7 @@ namespace Ohman {
             // Max fan is a detour, not a destination: remember what it interrupted so leaving it puts the fans
             // back under the curve the owner drew rather than handing them to the firmware's own.
             if (mode == FanMode.Max && S.Fan != FanMode.Max) { maxSince = DateTime.MinValue; fanBeforeMax = S.Fan; }   // saved with S below
+            bool leavingMax = S.Fan == FanMode.Max && mode != FanMode.Max;
             NoteFanMode(mode);
             S.Fan = mode;
             S.Fan1 = P.Curve.ClampOrOff(f1);
@@ -1291,6 +1361,7 @@ namespace Ohman {
             if (GuardActive && mode != FanMode.Max) { Say("Thermal guard is holding max fan; " + Choice.Fan[Choice.Of(mode)] + " resumes when cool"); Changed(); return; }
             // On battery the mode command carries who drives the fans (FansByBios), and that follows the fan
             // mode: leaving Auto has to take control back before the first level is written.
+            if (leavingMax) lock (applySync) MaxFan(false, "Max fan off");
             if (OnBattery) lock (applySync) Try(delegate { Hw.SetMode(ModeByte, FansByBios); }, "Set mode");
             lock (applySync) { ApplyFanCore(); lastFanWrite = DateTime.Now; }
             if (announce) Say(mode == FanMode.Max ? "Max fan" : mode == FanMode.Manual ? "Fans " + Rpm(S.Fan1) + " / " + Rpm(S.Fan2) : mode == FanMode.Custom ? "Fans on your curve" : "Fans auto");
@@ -1346,6 +1417,25 @@ namespace Ohman {
         public void SetSyncWinPower(bool on) { S.SyncWinPower = on; S.Save(); if (on) SetWinPowerOverlay(ModeIndex); Changed(); }
         public void SetLowHzOnBattery(bool on) { S.LowHzOnBattery = on; S.Save(); Changed(); }
         public void SetTrayTemp(bool on) { S.TrayTemp = on; S.Save(); Changed(); }
+        /// <summary>Hiding takes effect now: the effect timer stops, Windows gets back a keyboard we took from it,
+        /// and Light goes null so nothing reaches the keyboard again. Showing it again needs a restart, because
+        /// the window builds the keyboard page once, from the keyboard it found at start.</summary>
+        public void SetHideLight(bool hide) {
+            S.HideLight = hide;
+            S.Save();
+            if (hide) {
+                lock (applySync) {
+                    StopEffect();
+                    ReleasePerKey();
+                    if (!Hw.IsDemo && S.TookWinLighting) {
+                        try { WinLighting.SetControl(true); S.TookWinLighting = false; S.Save(); } catch (Exception ex) { Log.Write("release lighting: " + ex.Message); }
+                    }
+                    Light = null;
+                }
+            }
+            Log.Write("keyboard lighting " + (hide ? "hidden in Settings" : "shown again from the next start"));
+            Changed();
+        }
         public void SetUpdateOnLaunch(bool on) { S.UpdateOnLaunch = on; S.Save(); Changed(); }
 
         // ---------- heartbeat ----------
@@ -1640,15 +1730,33 @@ namespace Ohman {
         void InitLight(bool apply = true) {
             try {
                 Light = Hw.IsDemo ? (ILighting)new DemoLighting() : (BiosOk ? BiosLighting.Detect() : null);   // not !ReadOnly: see TryLight
+                // The owner said there is nothing here worth a page. No firmware answer tells a white-only backlight
+                // from a four-zone RGB one (8E10 and 878A both report support byte 06, type 0, and a full colour
+                // table), so this is their call, not ours. Detect has only read; from here on nothing is written, and
+                // the Fn key keeps working because the firmware handles it without us. Not on the probe-only path:
+                // the support report should still say what keyboard this is.
+                if (apply && Light != null && S.HideLight) { Log.Write("keyboard lighting: hidden in Settings (" + Light.Describe + " detected); the keyboard is left alone"); Light = null; return; }
                 // A per-key board answers the firmware calls and lights nothing by them. Its colours live on the
                 // keyboard's own HID lighting interface, so look for that before giving up on it.
+                // The Primax keyboards of the 2021-2024 OMEN 16/17 (0461:4E9A / 4E9B) come first: they have no
+                // LampArray at all, and on the machine that proved it the only LampArray present was a Logitech
+                // driver's. HP's own MCU protocol on their mi_02 interface is what OGH uses (McuKeyboard.cs).
+                // Detecting it only asks (two GETs), so it is safe on a probe-only start too.
                 if (!Hw.IsDemo && Light != null && Light.Inert) {
-                    var la = LampArray.FindKeyboard();
-                    if (la != null) Light = new PerKeyLighting(la);
-                    else Log.Write("per-key board with no HID lighting interface we can drive; colours left to Windows");
+                    var mcu = McuKeyboardLighting.Detect();
+                    if (mcu != null) Light = mcu;
+                    else {
+                        var la = LampArray.FindKeyboard();
+                        if (la != null) Light = new PerKeyLighting(la);
+                        else Log.Write("per-key board with no HID lighting interface we can drive; colours left to Windows");
+                    }
                     if (apply) WinLighting.Warm();
                 }
                 if (Light == null) return;
+                // Until its owner picks a mode, a Primax keyboard keeps showing whatever its own firmware shows: we
+                // cannot read its map back, and a saved mode from the years it was inert ("off", mostly) would
+                // otherwise blank it the first time this build starts. The colours start black, not invented.
+                if (apply && Light is McuKeyboardLighting && !S.McuLightChosen) S.LightColors = "";
                 // One-time repair. Before this build a per-key keyboard was initialised to white for every lamp,
                 // and InitLight then saved that array as the owner's own colours. It is the right length, so it
                 // parses cleanly and would be painted straight back. Drop it once and let the new default stand.
@@ -1662,11 +1770,16 @@ namespace Ohman {
                 LightColors = ParseColors(S.LightColors, Light.Zones);
                 if (LightColors == null) {
                     LightColors = fw;
-                    if (apply) S.LightColors = JoinColors(fw);    // first run: keep what the keyboard shows now
+                    // Nothing is written until the owner picks a mode, and the map cannot be read back, so a white
+                    // start is only what the first pick of Static shows, instead of blanking the keyboard.
+                    if (Light is McuKeyboardLighting) for (int i = 0; i < LightColors.Length; i++) LightColors[i] = new Rgb(255, 255, 255);
+                    if (apply) S.LightColors = JoinColors(LightColors);    // first run: keep what the keyboard shows now
                 }
                 int lightMode = S.Light;
                 if (lightMode < 0) {
-                    lightMode = WinLighting.HasControl ? 2 : ((Light.GetBacklight() & BiosLighting.ON_FLAG) != 0 ? 1 : 0);
+                    // A Primax keyboard has no Dynamic Lighting entry of its own; HasControl would report whatever
+                    // other device is listed (a Logitech driver on 8BAD), so it starts as "ours, lit".
+                    lightMode = Light is McuKeyboardLighting ? 1 : WinLighting.HasControl ? 2 : ((Light.GetBacklight() & BiosLighting.ON_FLAG) != 0 ? 1 : 0);
                     if (apply) S.Light = lightMode;
                 }
                 Log.Write("lighting: " + Light.Describe + ", mode " + (apply ? S.Light : lightMode) + ", effect " + S.LightEffect + ", level " + S.LightLevel + (WinLighting.Present ? ", Windows Dynamic Lighting present" + (WinLighting.HasControl ? " (in control)" : "") : ""));
@@ -1685,20 +1798,27 @@ namespace Ohman {
         /// <summary>Push the chosen lighting state to the keyboard. Caller holds applySync.</summary>
         void ReleasePerKey() {
             try { var pk = Light as PerKeyLighting; if (pk != null) pk.Release(); } catch (Exception ex) { Log.Write("release per-key: " + ex.Message); }
+            try { var mk = Light as McuKeyboardLighting; if (mk != null) mk.Release(); } catch (Exception ex) { Log.Write("release mcu keyboard: " + ex.Message); }
         }
+        /// <summary>A Primax keyboard its owner has not asked us to light yet: nothing is written to it.</summary>
+        public bool LightUntouched { get { return Light is McuKeyboardLighting && !S.McuLightChosen; } }
         void ApplyLightCore() {
             if (Light == null) return;
             StopEffect();
             // A keyboard nothing here can light is left entirely alone, Windows' switch included: taking Dynamic
             // Lighting "for" it took whatever else was listed, a Logitech driver on one OMEN 17.
             if (Light.Inert) return;
+            bool mcu = Light is McuKeyboardLighting;
+            // Windows cannot drive a Primax keyboard (it has no LampArray), so "Windows" there means hands off, and
+            // Dynamic Lighting is never switched either way on its behalf.
+            if (mcu && (LightUntouched || S.Light == 2)) return;
             if (S.Light == 2) { ReleasePerKey(); WinLighting.SetControl(true); return; }      // Windows paints; we stay out of it
             // Record that we took it. Plenty of people switch Dynamic Lighting off themselves because it fights
             // vendor software, and handing it back on exit to someone who never had it on would be us turning a
             // Windows feature on behind their back.
             // HasControl, not Present: Present only counts HP's virtual device, and a Darfon per-key keyboard can be
             // listed with no virtual device beside it, which left Windows repainting over us.
-            if (WinLighting.HasControl) { S.TookWinLighting = true; S.Save(); WinLighting.SetControl(false); }   // take the keyboard first or Windows overwrites us
+            if (!mcu && WinLighting.HasControl) { S.TookWinLighting = true; S.Save(); WinLighting.SetControl(false); }   // take the keyboard first or Windows overwrites us
             TryLight(delegate {
                 if (S.Light == 1) Light.SetColors(Scaled(LightColors));
                 Light.SetBacklight(S.Light == 1, 100);                                              // the level byte OGH writes; brightness is in the colours
@@ -1708,6 +1828,7 @@ namespace Ohman {
         public void SetLight(int mode, int effect, bool announce) {
             S.Light = Math.Max(0, Math.Min(2, mode));
             S.LightEffect = Math.Max(0, Math.Min(3, effect));
+            if (Light is McuKeyboardLighting) S.McuLightChosen = true;
             S.Save();
             lock (applySync) ApplyLightCore();
             if (announce) Say(S.Light == 2 ? "Keyboard: Windows Dynamic Lighting" : S.Light == 0 ? "Keyboard off" : new[] { "Keyboard static", "Keyboard breathe", "Keyboard cycle", "Keyboard wave" }[S.LightEffect]);
@@ -1719,6 +1840,7 @@ namespace Ohman {
             for (int i = 0; i < LightColors.Length; i++) if (zones == null || Array.IndexOf(zones, i) >= 0) LightColors[i] = c;
             S.LightColors = JoinColors(LightColors);
             if (S.Light != 1) S.Light = 1;
+            if (Light is McuKeyboardLighting) S.McuLightChosen = true;
             S.Save();
             lock (applySync) ApplyLightCore();
             Changed();
@@ -1728,7 +1850,7 @@ namespace Ohman {
         public void SetLightLevel(int level) {
             S.LightLevel = Math.Max(0, Math.Min(100, level));
             S.Save();
-            lock (applySync) { if (S.Light == 1 && Light != null && S.LightEffect == 0) TryLight(delegate { Light.SetColors(Scaled(LightColors)); }, "Keyboard brightness"); }
+            lock (applySync) { if (S.Light == 1 && Light != null && S.LightEffect == 0 && !LightUntouched) TryLight(delegate { Light.SetColors(Scaled(LightColors)); }, "Keyboard brightness"); }
             Changed();
         }
 
@@ -1786,7 +1908,7 @@ namespace Ohman {
             try { sb.AppendLine("gpu power: " + Hw.GetGpuPower()); } catch (Exception ex) { sb.AppendLine("gpu power: " + ex.Message); }
             sb.AppendLine("settings: mode=" + ModeName + " (BIOS 0x" + ModeByte.ToString("X2") + (OnBattery ? ", DC" : ", AC") + ") fan=" + S.Fan + " " + S.Fan1 + "/" + S.Fan2 + " tdp=" + CurrentTdp + "W gpu=" + EffectiveGpu + (S.GpuAuto ? "(auto)" : "") + " key=" + KeyId + "/" + KeyData + "→" + S.Key + " ecoCool=" + S.EcoCool);
             sb.AppendLine("graphics: " + (GpuMode >= 0 && GpuMode < 4 ? GpuModeNames[GpuMode] : "unknown") + " (offered mask 0x" + Info.GpuModes.ToString("X2") + ")" + (GpuModePending >= 0 ? " -> " + GpuModeNames[GpuModePending] + " after restart" : ""));
-            sb.AppendLine("lighting: " + (Light == null ? "none" : Light.Describe + " mode=" + S.Light + " level=" + S.LightLevel + " colours=" + S.LightColors + " windowsControl=" + WinLighting.HasControl));
+            sb.AppendLine("lighting: " + (Light == null ? (S.HideLight ? "hidden in Settings" : "none") : Light.Describe + " mode=" + S.Light + " level=" + S.LightLevel + " colours=" + S.LightColors + " windowsControl=" + WinLighting.HasControl));
             sb.AppendLine("fan drive: written " + curLevel1 + "/" + curLevel2 + "  cpu " + Fmt(CpuTemp) + " (last single reading " + Fmt(CpuTempNow) + ")  gpu " + Fmt(GpuTemp) + "  ir " + Fmt(IrTemp) + "  guard=" + GuardActive + "  writeFailures=" + fanWriteFailures + "  route=" + Route);
             sb.AppendLine("driver: " + (DriverReady ? "PawnIO " + (Hw.IsDemo ? "simulated" : "" + DriverVersion) + " · cpu " + (Cpu != null ? Cpu.Describe : "none")
                 + " · ec " + (Ec == null ? "none" : (ecVerified ? Ec.Map.Name : "map rejected") + (Ec.Resting ? " (resting)" : "") + " · " + EcProof) : "none (" + DriverWhy + ")"));
@@ -1794,18 +1916,4 @@ namespace Ohman {
             return sb.ToString();
         }
     }
-
-    public static class FirmwareVerificationLogic {
-        /// <summary>Decide whether the mailbox is alive from the two passive probes. A refusal (BiosException) is the
-        /// firmware answering, so the mailbox works even when both probes are refused: board 8574 refuses 0x28 and
-        /// still switches modes. Only when neither probe got an answer of any kind is the mailbox dead.</summary>
-        public static bool EvaluateBiosProbes(Exception exFan, Exception exInfo, out string failureReason) {
-            failureReason = null;
-            if (exFan == null || exInfo == null) return true;
-            if (exFan is BiosException || exInfo is BiosException) return true;
-            failureReason = "mailbox communication failed (" + exInfo.Message + ")";
-            return false;
-        }
-    }
 }
-

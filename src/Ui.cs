@@ -123,7 +123,9 @@ namespace Ohman {
         FrameworkElement keyCmdRow, gfxRow, hzRow, lowHzRow, gpuRow;
         TextBox txtKeyCmd;
         Ellipse keyDot;
-        ToggleButton tgSuppress, tgHotkeys, tgAutostart, tgEcoBattery, tgSyncPower, tgLowHzBattery, tgTrayTemp, tgGuard, tgUpdateAuto;
+        ToggleButton tgSuppress, tgHotkeys, tgAutostart, tgEcoBattery, tgSyncPower, tgLowHzBattery, tgTrayTemp, tgGuard, tgUpdateAuto, tgLightPage;
+        Border lightPageRow;
+        TextBlock txtLightPageSub;
         // hotkeys
         Button btnHotkeys;
         TextBlock txtHotkeysSub;
@@ -399,6 +401,9 @@ namespace Ohman {
             tgLowHzBattery = F<ToggleButton>("TgLowHzBattery");
             tgSyncPower = F<ToggleButton>("TgSyncPower");
             tgTrayTemp = F<ToggleButton>("TgTrayTemp");
+            tgLightPage = F<ToggleButton>("TgLightPage");
+            lightPageRow = F<Border>("LightPageRow");
+            txtLightPageSub = F<TextBlock>("TxtLightPageSub");
             tgAutostart = F<ToggleButton>("TgAutostart");
             tgGuard = F<ToggleButton>("TgGuard");
             tgUpdateAuto = F<ToggleButton>("TgUpdateAuto");
@@ -684,6 +689,19 @@ namespace Ohman {
                 Bg(delegate { E.SetTrayTemp(on); });
                 if (!on) { try { tray.Icon = icons[E.ModeIndex]; } catch { } }
                 PollRate();
+            });
+            // Only where there is a keyboard to hide, or one already hidden to bring back.
+            if (E.Light == null && !E.S.HideLight) lightPageRow.Visibility = Visibility.Collapsed;
+            OnSwitch(tgLightPage, delegate(bool on) {
+                if (!on) {
+                    nav[2].Visibility = Visibility.Collapsed;
+                    lightRow.Visibility = Visibility.Collapsed;
+                    if (trayLight != null) trayLight.Visible = false;
+                    Bg(delegate { E.SetHideLight(true); });
+                } else {
+                    Bg(delegate { E.SetHideLight(false); });
+                    if (E.Light == null) ShowToast("The keyboard page comes back when Ohman next starts", false);
+                }
             });
             OnSwitch(tgSuppress, delegate(bool on) { Bg(delegate { E.SetOghSuppression(on); }); });
             OnSwitch(tgAutostart, delegate(bool on) { Slow(delegate { SetAutostart(on); }); });
@@ -1268,10 +1286,12 @@ namespace Ohman {
             F<Border>("KbdModeHost").Child = kbdModes;
             if (E.Light.Inert)
                 for (int i = 1; i <= 4; i++) kbdModes.SetEnabled(i, false, "This keyboard offers no lighting interface Ohman can drive; see the note below");
+            if (E.Light is McuKeyboardLighting) kbdModes.SetEnabled(5, false, "Windows Dynamic Lighting cannot drive this keyboard");
             kbdModes.Picked += delegate(int i) {
                 int m = Choice.LightMode(i), fx = Choice.LightEffect(i);
                 E.S.Light = m;
                 E.S.LightEffect = fx;
+                if (E.Light is McuKeyboardLighting) E.S.McuLightChosen = true;     // show the editor now, not after the write
                 ApplyEditorState();
                 Bg(delegate { E.SetLight(m, fx, false); });
             };
@@ -1412,6 +1432,8 @@ namespace Ohman {
             var layout = KeyboardLayouts.Build(E.Light.Numpad, E.Light.Zones);
             var perKey = E.Light as PerKeyLighting;
             if (perKey != null) KeyboardLayouts.BindLamps(layout, perKey.Device);
+            var mcu = E.Light as McuKeyboardLighting;
+            if (mcu != null) mcu.Bind(layout);
             return layout;
         }
 
@@ -1424,8 +1446,11 @@ namespace Ohman {
             // that works there. Keeping the editor on screen would just discard everything the user picked.
             bool inert = E.Light.Inert;
             if (inert) m = S.Light == 2 ? 2 : 0;
+            // A Primax keyboard nobody has asked us to light yet shows its own lighting, and no mode is ours.
+            bool untouched = E.LightUntouched;
+            if (untouched) m = -1;
             bool lit = m == 1, pick = lit && (fx == 0 || fx == 1), effect = lit && fx != 0;
-            kbdModes.Select(Choice.OfLight(m, fx), IsVisible && cur == Page.Keyboard);
+            kbdModes.Select(untouched ? -1 : Choice.OfLight(m, fx), IsVisible && cur == Page.Keyboard);
             selectRow.Visibility = pick ? Visibility.Visible : Visibility.Collapsed;
             colorEditor.Visibility = pick ? Visibility.Visible : Visibility.Collapsed;
             // Breathe is the one mode that is both a colour and an effect, so it gets both blocks. Its brightness
@@ -1437,23 +1462,25 @@ namespace Ohman {
             btnWinLighting.Visibility = m == 2 ? Visibility.Visible : Visibility.Collapsed;
             // Reaching here means both ways in failed: HP's firmware answers and lights nothing, and this keyboard
             // offers no HID lighting interface either. Say which, so it does not read as "per-key is unsupported".
-            txtKbdInfo.Text = inert && m != 2
+            txtKbdInfo.Text = untouched
+                ? "The keyboard is showing its own lighting; Ohman has not written to it. Pick a mode to light it from here."
+                : inert && m != 2
                 ? "Ohman cannot light this keyboard. HP's firmware interface answers for per-key boards but does nothing, and this keyboard offers no lighting interface of its own." + (WinLighting.KeyboardFound ? " Windows Dynamic Lighting can still light it." : "") + " Run Ohman.exe --lamps and open an issue with what it prints."
                 : m == 0 ? "The backlight is off. Pick a mode to turn it back on, or press the keyboard backlight key."
                 : (WinLighting.Present || E.Hw.IsDemo ? "Windows Dynamic Lighting has the keyboard. Its colours and effects come from Windows settings."
                                                       : "No Dynamic Lighting device for this keyboard was found; Windows cannot drive it.");
             kbdBig.Selectable = pick;
-            kbdBig.Off = m == 0;
+            kbdBig.Off = m <= 0;
             kbdBig.WindowsOwned = m == 2;
             kbdBig.Smooth = effect;
-            kbdMini.Off = m == 0;
+            kbdMini.Off = m <= 0;
             kbdMini.WindowsOwned = m == 2;
             kbdMini.Smooth = effect;
             kbdBig.Level = kbdMini.Level = S.LightLevel / 100.0;
             if (!pick) { kbdBig.Selected.Clear(); kbdBig.Hover.Clear(); }
             string fxName = new[] { "static", "breathe", "cycle", "wave" }[Math.Max(0, Math.Min(3, fx))];
             // breathe runs in the firmware too, but it breathes the colours you picked, so it is not "colour fixed"
-            txtKbdStatus.Text = inert && m != 2 ? "per-key · no interface we can drive" : m == 2 ? "windows lighting" : m == 0 ? "backlight off" : fx >= 2 ? "firmware effect · colour fixed" : E.Light.Describe + " · " + fxName;
+            txtKbdStatus.Text = untouched ? "per-key · keyboard's own lighting" : inert && m != 2 ? "per-key · no interface we can drive" : m == 2 ? "windows lighting" : m == 0 ? "backlight off" : fx >= 2 ? "firmware effect · colour fixed" : E.Light.Describe + " · " + fxName;
             UpdateSelectionText();
             miniNeedsFrame = true;
             kbdBig.Repaint();
@@ -1475,7 +1502,7 @@ namespace Ohman {
             } finally { syncing = was; }
             if (cur != Page.Keyboard) SyncPickerFromSelection();
             string fxName = new[] { "Static", "Breathe", "Cycle", "Wave" }[Math.Max(0, Math.Min(3, S.LightEffect))];
-            txtLightSub.Text = S.Light == 2 ? "Windows Dynamic Lighting" : S.Light == 0 ? "Off" : fxName + " · " + E.Light.Describe;
+            txtLightSub.Text = E.LightUntouched ? "Keyboard's own lighting" : S.Light == 2 ? "Windows Dynamic Lighting" : S.Light == 0 ? "Off" : fxName + " · " + E.Light.Describe;
         }
 
         // ---------- fans page ----------
@@ -1908,6 +1935,7 @@ namespace Ohman {
                 SelectMode(mi, true);
                 slPower.Value = S.TdpOffset;
                 txtPower.Text = "+" + S.TdpOffset + " W";
+                if (E.PowerRefused) powerRow.Visibility = Visibility.Collapsed;      // the firmware said no; see ApplyPowerCore
                 GpuLevel g = E.EffectiveGpu;
                 string gpuName = g == GpuLevel.Max ? "GPU max" : g == GpuLevel.Boost ? "GPU boost" : "GPU base";
                 // Two ways this number lies. 0 means the firmware does not implement 0x23 at all. And on a board
@@ -1929,6 +1957,8 @@ namespace Ohman {
                 if (!txtKeyCmd.IsKeyboardFocused) txtKeyCmd.Text = S.KeyCommand;
                 tgLowHzBattery.IsChecked = S.LowHzOnBattery;
                 tgTrayTemp.IsChecked = S.TrayTemp;
+                tgLightPage.IsChecked = !S.HideLight;
+                txtLightPageSub.Text = !S.HideLight && E.Light == null ? "Back when Ohman next starts" : "Turn off for a white-only backlight. Fn still switches it";
                 tgGuard.IsChecked = S.Guard;
                 tgUpdateAuto.IsChecked = S.UpdateOnLaunch;
                 int hzNow = Display.CurrentHz();
@@ -2515,8 +2545,19 @@ namespace Ohman {
                 if (on && !E.Hw.IsDemo) {
                     // tasks made by 1.1 stop the app when the laptop goes on battery; re-register those once
                     string xml = SchtasksOut("/Query /TN " + Program.AppName + " /XML");
-                    if (xml.IndexOf("<StopIfGoingOnBatteries>true", StringComparison.OrdinalIgnoreCase) >= 0 || xml.IndexOf("<DisallowStartIfOnBatteries>true", StringComparison.OrdinalIgnoreCase) >= 0) {
-                        Log.Write("logon task has battery restrictions; re-registering it");
+                    // The task names one exe by its full path, and only the first run ever wrote it. Download a new
+                    // build to another folder, or let the browser save it as "Ohman (1).exe", and the switch still
+                    // reads on while logon starts the old copy, or nothing once that copy is deleted. The copy the
+                    // owner is running now is the one they mean. Not from a development tree (Update.CanReplace),
+                    // or building Ohman would take the task away from the copy that is actually installed.
+                    // Compared with the path we registered, not the task's own XML: schtasks prints that in the console
+                    // code page, and a profile folder with letters outside it never matched, so every start re-registered.
+                    string self = SelfExe(), was = E.S.AutostartExe ?? "";
+                    bool elsewhere = self != null && Update.CanReplace
+                        && !string.Equals(FullPath(was), FullPath(self), StringComparison.OrdinalIgnoreCase);
+                    if (elsewhere) Log.Write("logon task was registered for " + (was.Length > 0 ? was : "an earlier copy") + "; pointing it at " + self);
+                    if (elsewhere || xml.IndexOf("<StopIfGoingOnBatteries>true", StringComparison.OrdinalIgnoreCase) >= 0 || xml.IndexOf("<DisallowStartIfOnBatteries>true", StringComparison.OrdinalIgnoreCase) >= 0) {
+                        if (!elsewhere) Log.Write("logon task has battery restrictions; re-registering it");
                         SetAutostart(true);
                         on = autostart;
                     }
@@ -2524,14 +2565,14 @@ namespace Ohman {
                 if (!on && E.S.FirstRun && !E.Hw.IsDemo) {              // first launch: start with Windows like every vendor app does; the switch turns it off
                     SetAutostart(true);
                     on = autostart;
-                    if (on) Dispatcher.BeginInvoke((Action)delegate { ShowToast("Starts with Windows from now on (Settings to change)", false); });
+                    if (on && !autostartTemp) Dispatcher.BeginInvoke((Action)delegate { ShowToast("Starts with Windows from now on (Settings to change)", false); });
                 }
                 Dispatcher.BeginInvoke((Action)delegate { autostart = on; syncing = true; tgAutostart.IsChecked = on; syncing = false; });
             });
         }
         void SetAutostart(bool on) {
             if (E.Hw.IsDemo) { Dispatcher.BeginInvoke((Action)delegate { ShowToast("Autostart needs the administrator build", true); }); return; }
-            string exe = Process.GetCurrentProcess().MainModule.FileName;
+            string exe = SelfExe();
             int rc;
             if (on) {
                 // registered from XML: a task made with plain "schtasks /Create" stops the app when the laptop goes on battery and refuses to start it on battery
@@ -2542,8 +2583,20 @@ namespace Ohman {
             } else rc = RunSchtasks("/Delete /TN " + Program.AppName + " /F");
             Log.Write("autostart " + on + " rc=" + rc);
             autostart = on && rc == 0;
+            if (autostart) { E.S.AutostartExe = exe; E.S.Save(); }
+            // Opened straight from the zip, Explorer runs it out of %TEMP%\Temp1_...zip and deletes that later, and
+            // the logon task goes with it. Say so once, now, rather than let the next restart find out.
+            if (autostart && FullPath(exe).StartsWith(FullPath(System.IO.Path.GetTempPath()), StringComparison.OrdinalIgnoreCase)) {
+                Log.Write("autostart: running from a temporary folder (" + exe + ")");
+                autostartTemp = true;
+                Dispatcher.BeginInvoke((Action)delegate { ShowToast("Ohman is running from a temporary folder. Move it somewhere permanent or it will not start with Windows", true); });
+                return;
+            }
             if (!E.S.FirstRun) Dispatcher.BeginInvoke((Action)delegate { ShowToast(rc == 0 ? (on ? "Starts with Windows" : "Autostart removed") : "schtasks failed (" + rc + ")", rc != 0); });
         }
+        bool autostartTemp;                        // registered from %TEMP%: that warning is the one to keep on screen
+        static string SelfExe() { try { return Process.GetCurrentProcess().MainModule.FileName; } catch { return null; } }
+        static string FullPath(string p) { try { return System.IO.Path.GetFullPath(p); } catch { return p; } }
         /// <summary>Logon task for this user: highest privileges (no UAC prompt), starts and keeps running on battery, no time limit.</summary>
         static string TaskXml(string exe) {
             string sid = System.Security.Principal.WindowsIdentity.GetCurrent().User.Value;

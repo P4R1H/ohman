@@ -171,6 +171,8 @@ Lighting contends for the same device, which is the arbitration problem we alrea
 protocol.** The likely controller is Primax `0461:4E9B` "HP OMEN 16 KBM"; no capture of OMEN Light Studio
 driving it exists publicly. That capture is the blocker, and it is what the upstream projects have asked for
 and never received.
+Superseded for the Primax keyboards by 7b: the protocol is in OGH's own assemblies, no capture needed.
+
 
 **Do not write the `0x0F / 0x42 / 0x52 / 0x50` command set with `VID 0x03F0`** that circulates in a couple of
 projects citing "OpenRGB's HPOmenKeyboard controller". That controller does not exist: OpenRGB has no per-key
@@ -183,6 +185,33 @@ true on a machine with no controllable lighting. Ohman only consults it for boar
 1–5, and still disables lighting if the colour table then fails to read, but it is a weak signal and not
 something to build on. `0x20009/0x04` must be called with a 128-byte output buffer; a smaller one returns
 `rwReturnCode 5`.
+
+### 7b. Primax per-key keyboards (OMEN 17 "Cybug" 0461:4E9A, OMEN 16 "Ralph" 0461:4E9B)
+
+Read from OGH 1101.2609.3.0 (`DraxLightingBg` -> `Starmade.NbPerKeyRgbLightingControl` -> `McuSDK2`), confirmed on an
+OMEN 17-ck2013nl, board `8BAD`, Italian keyboard, 2026-09-22 (`tools/check-perkey.ps1`, issue #20). It is the same MCU
+protocol as the Darfon in 7a; only the interface number, LED count and index map differ. OGH picks it when the BIOS
+keyboard type is 3 and the device is Cybug (board ids 88F7 88FE 8A17-8A1A 8BAD 8BB0) or Ralph (88F4-88F6 88FD 8A13-8A16).
+
+- Interface `mi_02`, usage page `FF13` usage `01`, 65/65/0-byte reports. HidP value caps: input and output report
+  id **0**. Written with `WriteFile`, answered with a 65-byte input report on the same handle. No LampArray exists
+  on these keyboards (the only one on 8BAD was a Logitech driver's), so Windows Dynamic Lighting cannot drive them.
+- Packet `[cmd][index][len lo][len hi][60 bytes]`. Reply echoes cmd and index; byte 2 is the reply length, byte 3 a
+  status (`0x80` on a SET ack, `0xD0` on a GET); a SET is acked `EC AC` at bytes 4..5. Key events arrive as `EC BD`.
+- `80 01` device info on 8BAD: firmware `00 03 21 00` (the USB bcdDevice is 0321), type 1 = keyboard, language byte
+  `0x01` although the keyboard is Italian (McuSDK2's enum says 0x0A; OGH's layout loader falls back to the global
+  map either way, so the byte is not used), then an ASCII string from byte 24. `83 00` returned 24 bytes (effect
+  `0x0F`, the rest 0), not the 36-byte `03` layout, so it is logged, not replayed.
+- `09 00 {01}` lighting on, then `05`/`06`/`07` x pages 0..2 (R, G, B; 60 LEDs a page, length 0): every packet acked,
+  the whole keyboard lit, with **no flash write**. Single LEDs: 36, 37, 38 = left Shift; 140 = the key right of `]`
+  (ù on Italian); 146, 147, 148 = Enter. The Italian board is ANSI-shaped: its `<>` key is in the bottom row where the
+  map has the right Fn (163).
+- Map: 168 slots (Cybug) / 167 (Ralph) from `PerKey.{Cybug,Ralph}KBKeysGlobalData.json`, slots OGH zeroes from
+  `SetNullBytes`. Ohman's copy, key by key in reading order, is in `src/McuKeyboard.cs`.
+- Never sent: `0x0A` (store to flash, OGH only on "save") and `0x10` (factory restore / firmware update mode).
+  `McuKeyboard.Guard` allows only `80 01`, `80 02`, `83 00`, `09 00 {0|1}` and `05..07` pages 0..2.
+- Arbitration: OGH holds the named mutex `omen_device_vid[0461]_pid[4e9a]_interface_string[mi_02]` per exchange;
+  Ohman takes the same one per map.
 
 ## 8. Generic support for other boards
 

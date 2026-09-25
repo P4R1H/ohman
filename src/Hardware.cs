@@ -78,6 +78,9 @@ namespace Ohman {
         void SetMaxFan(bool on);
         void SetFanLevels(int fan1, int fan2);
         void SetConcurrentTdp(int watts);
+        /// <summary>0x29 {PL2, PL1, FF, FF}: the payload OGH sends on AMD boards whose platform file has a PL1 (its IL
+        /// builds {pl2, pl1, FF, FF}; the order is only visible when the two differ).</summary>
+        void SetCpuPowerLimits(int pl1, int pl2);
         void SetGpuPower(bool customTgp, bool ppab, int peakTemp);
         /// <summary>Graphics mode: 0 Hybrid, 1 Discrete, 2 Optimus, 3 iGPU only. Legacy mailbox (command 1 read / 2 write, type 0x52).</summary>
         int GetGpuMode();
@@ -233,7 +236,12 @@ namespace Ohman {
         public SystemInfo GetSystemInfo() {
             var d = Call(OP_SYSTEM_DATA, Z4, 128);
             var s = new SystemInfo { Raw = d };
-            if (d.Length >= 9) {
+            // rc 0 and nothing in it is not an answer. Every OMEN and Victus report so far has something here, bytes
+            // 0-1 usually (they read as the adapter wattage: 0x78, 0x8C, 0xC8, 0x118, 0x14A), and 8748's 00 00 38 01
+            // still has bytes 2-3. A Pavilion Gaming 15 (87B1, issue #59) returns 128 zero bytes
+            // with rc 0, and read as data that is "thermal policy v0", which handed a board no source names the
+            // OMEN v0 mode bytes. With nothing to read, the board stays read-only unless a readback says otherwise.
+            if (d.Length >= 9 && Array.Exists(d, b => b != 0)) {
                 s.Valid = true;
                 s.ThermalPolicy = d[3];
                 s.SwFanControl = (d[4] & 1) != 0;
@@ -271,6 +279,12 @@ namespace Ohman {
 
         public void SetConcurrentTdp(int watts) {
             Call(OP_CPU_POWER_SET, new byte[] { 0xFF, 0xFF, 0xFF, (byte)Math.Max(0, Math.Min(255, watts)) }, 0);
+        }
+
+        public void SetCpuPowerLimits(int pl1, int pl2) {
+            // 0xFF is "leave unchanged", so a limit can never be sent as 255; 15..125 W is every value OGH has sent.
+            byte a = (byte)Math.Max(15, Math.Min(125, pl1)), b = (byte)Math.Max(a, Math.Min(125, pl2));
+            Call(OP_CPU_POWER_SET, new byte[] { b, a, 0xFF, 0xFF }, 0);
         }
 
         public void SetGpuPower(bool customTgp, bool ppab, int peakTemp) {
@@ -344,6 +358,7 @@ namespace Ohman {
         // on a real one, so a preview of a stopped fan showed it spinning at the mode's own speed.
         public void SetFanLevels(int a, int b) { m1 = a >= 0 ? a : -1; m2 = b >= 0 ? b : -1; }
         public void SetConcurrentTdp(int w) { tdp = w; }
+        public void SetCpuPowerLimits(int pl1, int pl2) { }
         public void SetGpuPower(bool c, bool p, int t) { ppab = p; }
         int gpuMode = 0;
         public int GetGpuMode() { return gpuMode; }
