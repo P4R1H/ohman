@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+﻿// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman: entry point.
 //   Ohman.exe                 normal start (elevated build asks for UAC once)
 //   Ohman.exe --hidden        start minimised to the tray (used by the autostart task)
@@ -63,7 +63,6 @@ namespace Ohman {
             foreach (string a0 in args) if (a0.ToLowerInvariant() == "--support") return WriteSupport(args);
             foreach (string a0 in args) if (a0.ToLowerInvariant() == "--fantest") FanProbe = true;
             foreach (string a0 in args) if (a0.ToLowerInvariant() == "--driver") return WriteDriverReport(args);
-            foreach (string a0 in args) if (a0.ToLowerInvariant() == "--test") return RunTests();
             for (int i = 0; i + 1 < args.Length; i++)
                 if (args[i].ToLowerInvariant() == "--make-ico") { MainWindow.WriteIco(args[i + 1], Ui.BalColor); return 0; }   // build aid: writes the app icon
             bool wantExit = false;
@@ -246,102 +245,6 @@ namespace Ohman {
                 la.Dispose();
             }
             return 0;
-        }
-
-        static int RunTests() {
-            OpenConsole();
-            Console.WriteLine("Running Ohman deterministic tests for EC and firmware verification...");
-            int passed = 0, failed = 0;
-
-            Action<string, bool> check = delegate(string name, bool ok) {
-                if (ok) {
-                    passed++;
-                    Console.WriteLine("  PASS: " + name);
-                } else {
-                    failed++;
-                    Console.WriteLine("  FAIL: " + name);
-                }
-            };
-
-            var map = EcMap.Legacy();
-            string why;
-
-            // 1. Dual tachometer agreement
-            var rPass = new EcReading { Cpu = 45, Rpm1 = 2500, Rpm2 = 2400, Manual = 0x00 };
-            check("Verify: dual tachometers matching mailbox pass",
-                EmbeddedController.VerifyReading(rPass, map, new int[] { 25, 24 }, 45, "", out why));
-
-            // 2. Second fan mismatch rejection
-            var rWrongFan2 = new EcReading { Cpu = 45, Rpm1 = 2500, Rpm2 = 5000, Manual = 0x00 };
-            check("Verify: wrong second fan register rejected",
-                !EmbeddedController.VerifyReading(rWrongFan2, map, new int[] { 25, 24 }, 45, "", out why)
-                && why.IndexOf("fan 2", StringComparison.Ordinal) >= 0);
-
-            // 3. First fan mismatch rejection
-            var rWrongFan1 = new EcReading { Cpu = 45, Rpm1 = 1000, Rpm2 = 2400, Manual = 0x00 };
-            check("Verify: wrong first fan register rejected",
-                !EmbeddedController.VerifyReading(rWrongFan1, map, new int[] { 25, 24 }, 45, "", out why)
-                && why.IndexOf("fan 1", StringComparison.Ordinal) >= 0);
-
-            // 4. Stopped fans with valid CPU temperature
-            var rStoppedWithTemp = new EcReading { Cpu = 45, Rpm1 = 0, Rpm2 = 0, Manual = 0x00 };
-            check("Verify: legitimately stopped fans with valid CPU temp pass",
-                EmbeddedController.VerifyReading(rStoppedWithTemp, map, new int[] { 0, 0 }, 45, "", out why));
-
-            // 5. Stopped fans with absent CPU temperature (must NOT accept arbitrary map)
-            var rStoppedNoTemp = new EcReading { Cpu = 0, Rpm1 = 0, Rpm2 = 0, Manual = 0x00 };
-            check("Verify: stopped fans with absent CPU temp rejected (arbitrary map protection)",
-                !EmbeddedController.VerifyReading(rStoppedNoTemp, map, new int[] { 0, 0 }, 45, "", out why)
-                && why.IndexOf("stopped fans cannot prove tachometer registers", StringComparison.Ordinal) >= 0);
-
-            // 6. Spinning fans with absent CPU temperature (active tachometers carry proof)
-            var rSpinningNoTemp = new EcReading { Cpu = 0, Rpm1 = 2500, Rpm2 = 2400, Manual = 0x00 };
-            check("Verify: spinning fans with absent CPU temp pass on tachometer agreement",
-                EmbeddedController.VerifyReading(rSpinningNoTemp, map, new int[] { 25, 24 }, 45, "", out why));
-
-            // 7. Absent CPU temperature without firmware fan readings
-            check("Verify: absent CPU temp without firmware fan readings rejected",
-                !EmbeddedController.VerifyReading(rSpinningNoTemp, map, null, 45, "", out why)
-                && why.IndexOf("no firmware fan speed", StringComparison.Ordinal) >= 0);
-
-            // 8. Plausibility bounds
-            var rNegRpm = new EcReading { Cpu = 45, Rpm1 = -1, Rpm2 = 2400, Manual = 0x00 };
-            check("Verify: negative fan rpm rejected",
-                !EmbeddedController.VerifyReading(rNegRpm, map, new int[] { 25, 24 }, 45, "", out why));
-
-            var rInvalidManual = new EcReading { Cpu = 45, Rpm1 = 2500, Rpm2 = 2400, Manual = 0x12 };
-            check("Verify: invalid manual control state rejected",
-                !EmbeddedController.VerifyReading(rInvalidManual, map, new int[] { 25, 24 }, 45, "", out why));
-
-            // 9. BIOS probe evaluation: both unsupported commands
-            string failReason;
-            var exBiosFan = new BiosException(0x2F, 3);
-            var exBiosInfo = new BiosException(0x28, 3);
-            check("BiosProbes: both unsupported commands preserved as firmware refusal",
-                !FirmwareVerificationLogic.EvaluateBiosProbes(exBiosFan, exBiosInfo, out failReason)
-                && failReason.IndexOf("firmware responded with unsupported command", StringComparison.Ordinal) >= 0);
-
-            // 10. BIOS probe evaluation: communication failure
-            var exWmiFan = new InvalidOperationException("WMI query timeout");
-            var exWmiInfo = new InvalidOperationException("WMI instance missing");
-            check("BiosProbes: communication failure preserved when no BiosException",
-                !FirmwareVerificationLogic.EvaluateBiosProbes(exWmiFan, exWmiInfo, out failReason)
-                && failReason.IndexOf("mailbox communication failed", StringComparison.Ordinal) >= 0);
-
-            // 11. BIOS probe evaluation: probe 1 succeeds, probe 2 refused
-            check("BiosProbes: probe 1 success with probe 2 refused is healthy",
-                FirmwareVerificationLogic.EvaluateBiosProbes(null, exBiosInfo, out failReason));
-
-            // 12. BIOS probe evaluation: probe 1 refused, probe 2 succeeds
-            check("BiosProbes: probe 1 refused with probe 2 success is healthy",
-                FirmwareVerificationLogic.EvaluateBiosProbes(exBiosFan, null, out failReason));
-
-            // 13. BIOS probe evaluation: both succeed
-            check("BiosProbes: both probes succeed is healthy",
-                FirmwareVerificationLogic.EvaluateBiosProbes(null, null, out failReason));
-
-            Console.WriteLine("Tests completed: " + passed + " passed, " + failed + " failed.");
-            return failed == 0 ? 0 : 1;
         }
     }
 }

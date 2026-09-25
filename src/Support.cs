@@ -594,9 +594,11 @@ namespace Ohman {
                 var arrays = LampArray.All();
                 if (arrays.Count == 0) sb.AppendLine("  no HID Lighting And Illumination collection (usage page 0x59) on this machine");
                 foreach (var a in arrays) {
-                    var mi = System.Text.RegularExpressions.Regex.Match(a.Path ?? "", @"&mi_([0-9a-f]{2})", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                    sb.AppendLine("  VID_" + a.VendorId.ToString("X4") + "&PID_" + a.ProductId.ToString("X4") + (mi.Success ? "&MI_" + mi.Groups[1].Value.ToUpperInvariant() : "")
-                        + (a.Internal ? "  internal  " : "  external  ") + Scrub(a.Describe));
+                    try {
+                        var mi = System.Text.RegularExpressions.Regex.Match(a.Path ?? "", @"&mi_([0-9a-f]{2})", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                        sb.AppendLine("  VID_" + a.VendorId.ToString("X4") + "&PID_" + a.ProductId.ToString("X4") + (mi.Success ? "&MI_" + mi.Groups[1].Value.ToUpperInvariant() : "")
+                            + (a.Internal ? "  internal  " : "  external  ") + Scrub(a.Describe));
+                    } finally { a.Dispose(); }
                 }
             } catch (Exception ex) { sb.AppendLine("  unavailable (" + Scrub(ex.Message) + ")"); }
             sb.AppendLine();

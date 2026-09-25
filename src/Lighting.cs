@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman: keyboard lighting.
 // HP laptops expose the keyboard backlight through the same BIOS mailbox as the performance controls, under a
 // second command id (0x20009). Zone colours sit in a 128-byte table, brightness/backlight in one byte whose bit 7
@@ -93,10 +93,13 @@ namespace Ohman {
         public bool Numpad { get { return KbdType == 1 || KbdType == 4; } }
         public bool Inert { get { return kind == LightKind.PerKey; } }
 
-        BiosLighting(int kbdType, LightKind k, int z) { KbdType = kbdType; kind = k; zones = z; }
+        public BiosLighting(int kbdType, LightKind k, int z) { KbdType = kbdType; kind = k; zones = z; }
+
+        public static Func<ILighting> Detector;
 
         /// <summary>Asks the firmware what keyboard this is. Read-only. Null when there is nothing to control.</summary>
-        public static BiosLighting Detect() {
+        public static ILighting Detect() {
+            if (Detector != null) return Detector();
             // There are two independent questions here and we used to ask only one of them.
             //
             // 0x20009/0x01 bit 0 is whether this keyboard has a controllable backlight at all. OmenMon's
