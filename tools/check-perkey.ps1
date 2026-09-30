@@ -167,7 +167,11 @@ try {
     W ("lighting on  09 00: " + [OhmanPk]::Send(0x09, 0, [byte[]]@(1), 1))
     W ("all red: " + (Paint $null 255 0 0))
     $a = Read-Host "Is the whole keyboard red now? (y/n)"; W "  whole keyboard red -> $a"
-    foreach ($led in 36, 37, 38, 140, 146, 147, 148) {
+    # 4E9A: 36-38, 140 and 146-148 were settled on 8BAD in #20. Next: the bottom row right of the space bar (AltGr,
+    # Menu, '<>' or right Fn, right Ctrl, as OGH draws 101, 107, 163, 164), then keys the old drawing never had.
+    $leds = 36, 37, 38, 140, 146, 147, 148
+    if ($lamp -match 'pid_4e9a') { $leds = 101, 107, 163, 164, 122, 124, 125, 137, 150, 155, 166 }
+    foreach ($led in $leds) {
         W ("  led $led only: " + (Paint @($led) 255 255 255))
         $a = Read-Host "Only one key should be lit white. Which key is it? (type it, or 'none')"; W "  led $led -> $a"
     }
