@@ -28,12 +28,36 @@ namespace Ohman {
                 string prof = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
                 if (!string.IsNullOrEmpty(prof)) s = Replace(s, prof, "<userprofile>");
                 string user = Environment.UserName;
-                if (!string.IsNullOrEmpty(user) && user.Length > 2) s = Replace(s, user, "<user>");
+                // A user named after the laptop ("Victus", "Omen") would otherwise turn the model name into "<user> by
+                // HP Gaming Laptop" everywhere in the report. Then only the name as a folder in a path is replaced.
+                if (!string.IsNullOrEmpty(user) && user.Length > 2) {
+                    if (Array.Exists(ProductWords, w => string.Equals(w, user, StringComparison.OrdinalIgnoreCase)))
+                        s = ReplaceSegment(s, user);
+                    else s = Replace(s, user, "<user>");
+                }
                 string host = Environment.MachineName;
                 if (!string.IsNullOrEmpty(host) && host.Length > 2) s = Replace(s, host, "<host>");
             } catch { }
             return s;
         }
+        /// <summary>The username only where it is a whole path segment (after \ or /, before \, /, ~, a quote,
+        /// whitespace or the end), so "HP\OMEN Gaming Hub" survives a user called Omen.</summary>
+        static string ReplaceSegment(string s, string user) {
+            var sb = new StringBuilder();
+            int i = 0;
+            while (i < s.Length) {
+                int at = s.IndexOf(user, i, StringComparison.OrdinalIgnoreCase);
+                if (at < 0) { sb.Append(s, i, s.Length - i); break; }
+                int end = at + user.Length;
+                bool before = at > 0 && (s[at - 1] == '\\' || s[at - 1] == '/');
+                bool after = end >= s.Length || "\\/~\" \t\r\n".IndexOf(s[end]) >= 0;
+                sb.Append(s, i, at - i);
+                sb.Append(before && after ? "<user>" : s.Substring(at, user.Length));
+                i = end;
+            }
+            return sb.ToString();
+        }
+        static readonly string[] ProductWords = { "HP", "OMEN", "Victus", "HyperX", "Transcend", "Pavilion", "Gaming", "Laptop", "Envy", "Spectre" };
         static string Replace(string hay, string needle, string with) {
             int i;
             int from = 0;
@@ -579,7 +603,10 @@ namespace Ohman {
                         || line.IndexOf("fan route", StringComparison.Ordinal) >= 0 || line.IndexOf("EC ", StringComparison.Ordinal) >= 0
                         || line.IndexOf("EC:", StringComparison.Ordinal) >= 0 || line.IndexOf("giving up", StringComparison.Ordinal) >= 0
                         || line.IndexOf("lighting:", StringComparison.Ordinal) >= 0 || line.IndexOf("lamparray", StringComparison.Ordinal) >= 0
-                        || line.IndexOf("max fan:", StringComparison.Ordinal) >= 0)
+                        || line.IndexOf("max fan:", StringComparison.Ordinal) >= 0 || line.IndexOf("fan ceiling", StringComparison.Ordinal) >= 0
+                        // why a per-key board ended up with nothing to drive: a Primax keyboard found and refused, or
+                        // no keyboard interface at all. Neither line says "lighting:", so both were being dropped.
+                        || line.IndexOf("mcu keyboard", StringComparison.Ordinal) >= 0 || line.IndexOf("per-key board", StringComparison.Ordinal) >= 0)
                         keep.Add(line);
                 }
                 int from = Math.Max(0, keep.Count - 60);    // a start writes about ten of these; keep several sessions
@@ -601,6 +628,20 @@ namespace Ohman {
                     } finally { a.Dispose(); }
                 }
             } catch (Exception ex) { sb.AppendLine("  unavailable (" + Scrub(ex.Message) + ")"); }
+            // A per-key keyboard with no LampArray is reached through a vendor collection (usage page FFxx) on the
+            // keyboard maker's own USB id; Primax 0461:4E9A/4E9B mi_02 is the one Ohman speaks. List those so a board
+            // like that shows which chip it has without a second script. Read from the device list only, nothing sent.
+            try {
+                int vendor = 0;
+                foreach (var h in Hid.Enumerate()) {
+                    if (h.UsagePage < 0xFF00) continue;
+                    if (h.VendorId != 0x0461 && h.VendorId != 0x0D62 && h.VendorId != 0x04F2 && h.VendorId != 0x048D) continue;
+                    var mi = System.Text.RegularExpressions.Regex.Match(h.Path ?? "", @"&mi_([0-9a-f]{2})", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    sb.AppendLine("  vendor " + h + (mi.Success ? "  MI_" + mi.Groups[1].Value.ToUpperInvariant() : ""));
+                    vendor++;
+                }
+                if (vendor == 0) sb.AppendLine("  no vendor collection from a known keyboard maker (Primax, Darfon, Chicony, ITE)");
+            } catch (Exception ex) { sb.AppendLine("  vendor collections unavailable (" + Scrub(ex.Message) + ")"); }
             sb.AppendLine();
 
             // ---- and the running state, which is what Diagnostics already said well

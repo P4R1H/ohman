@@ -109,6 +109,7 @@ namespace Ohman {
         public bool TookWinLighting = false;        // we switched Windows Dynamic Lighting off and owe it back
         public bool PerKeyReset = false;            // the one-time clear of the all-white per-key array
         public bool McuLightChosen = false;         // a Primax per-key keyboard is left alone until its owner picks a mode
+        public bool McuLayoutMigrated = false;      // 1.2.3: keys first drawn in 1.2.3 took their old neighbour's colour
         public string AutostartExe = "";            // the exe the logon task was last registered for
         public int FanBeforeMax = 0;                // FanMode that Max interrupted; survives a restart
         public bool InfoDismissed = false;          // the first-on-this-board note, closed by the user
@@ -194,6 +195,7 @@ namespace Ohman {
                         case "TookWinLighting": if (bool.TryParse(v, out b)) s.TookWinLighting = b; break;
                         case "PerKeyReset": if (bool.TryParse(v, out b)) s.PerKeyReset = b; break;
                         case "McuLightChosen": if (bool.TryParse(v, out b)) s.McuLightChosen = b; break;
+                        case "McuLayoutMigrated": if (bool.TryParse(v, out b)) s.McuLayoutMigrated = b; break;
                         case "AutostartExe": s.AutostartExe = v.Length > 400 ? "" : v; break;
                         case "FanBeforeMax": if (TryInt(v, out n)) s.FanBeforeMax = Math.Max(0, Math.Min(3, n)); break;
                         case "LatestVersion": s.LatestVersion = v.Length > 24 ? v.Substring(0, 24) : v; break;
@@ -297,6 +299,7 @@ namespace Ohman {
                 sb.AppendLine("TookWinLighting=" + TookWinLighting);
                 sb.AppendLine("PerKeyReset=" + PerKeyReset);
                 sb.AppendLine("McuLightChosen=" + McuLightChosen);
+                if (McuLayoutMigrated) sb.AppendLine("McuLayoutMigrated=True");
                 if (AutostartExe.Length > 0) sb.AppendLine("AutostartExe=" + AutostartExe);
                 sb.AppendLine("FanBeforeMax=" + FanBeforeMax);
                 sb.AppendLine("WinX=" + WinX);
@@ -881,13 +884,16 @@ namespace Ohman {
         const int FanWriteGiveUp = 8;
         bool fanLevelsRefused;
 
-        bool WriteLevels(int l1, int l2, string what) {
+        /// <param name="top">A higher cap than the curve's for this one write (Max as a level, see MaxFan). The
+        /// mailbox only: the firmware caps a level it cannot reach, the EC has not been shown to.</param>
+        bool WriteLevels(int l1, int l2, string what, int top = 0) {
             // ClampOrOff, not Clamp. Clamp floors at the profile's own Floor, which is 18 on every profile we
             // ship, so it turned every 0 back into 18 on the way out - the last step of the path, after the
             // editor, the sliders and the settings had all been taught to carry one. The whole of "let the fans
             // stop" was inert and the only place it showed was the fans not stopping.
-            l1 = P.Curve.ClampOrOff(l1);
-            l2 = P.Curve.ClampOrOff(l2);
+            bool above = top > P.Curve.Ceiling && Route == FanRoute.Mailbox && !fanLevelsRefused;
+            l1 = above ? Math.Max(P.Curve.Floor, Math.Min(top, l1)) : P.Curve.ClampOrOff(l1);
+            l2 = above ? Math.Max(P.Curve.Floor, Math.Min(top, l2)) : P.Curve.ClampOrOff(l2);
             if (Route == FanRoute.Ec) return WriteLevelsEc(l1, l2, what);
             // A refusing board whose EC route was dropped (three failures, or a rest after timeouts) gets it back
             // the moment the controller is usable again. Without this the give-up branch below is the only other
@@ -895,6 +901,9 @@ namespace Ohman {
             if (fanLevelsRefused && Ec != null && ChooseRoute() == FanRoute.Ec) return WriteLevelsEc(l1, l2, what);
             if (fanLevelsRefused) return false;
             if (Try(delegate { Hw.GetFanCount(); Hw.SetFanLevels(l1, l2); }, what)) { curLevel1 = l1; curLevel2 = l2; fanWriteFailures = 0; fanFailureShown = false; return true; }
+            // A level above the ceiling that is refused says nothing about levels the fans can reach; counting it
+            // toward giving up would switch fan levels off, and with them Max-as-a-level and the guard's level.
+            if (above) return false;
             fanWriteFailures++;
             if (fanWriteFailures >= FanWriteGiveUp) {
                 fanLevelsRefused = true;
@@ -1156,13 +1165,26 @@ namespace Ohman {
             }
             if (sent) maxFlagOn = true;
             if (Route == FanRoute.Ec) WriteLevelsEc(P.Curve.Ceiling, P.Curve.Ceiling, what + " via EC");
-            else if (S.MaxIgnored) WriteLevels(P.Curve.Ceiling, P.Curve.Ceiling, what + " as a level");
+            // Max as a level asks for the profile's own top even where a lower ceiling was learned. Written at the
+            // learned value it could never be beaten: the fans reach exactly what they are asked for, so a ceiling
+            // learned from a worn or clogged fan stayed after the fan was replaced, until a full Reset. Asked for
+            // more, the firmware caps it where it can, and NoteFanLevelsCore sees any gain and learns it upwards.
+            else if (S.MaxIgnored) {
+                int top = topRefused ? P.Curve.Ceiling : Math.Max(P.Curve.Ceiling, pristineCeiling);
+                if (!WriteLevels(top, top, what + " as a level", top) && top > P.Curve.Ceiling) {
+                    // This firmware refuses a level it cannot reach rather than capping it: Max stays at the ceiling.
+                    topRefused = true;
+                    Log.Write("max fan: a level above the learned ceiling was refused; Max writes the ceiling from now on");
+                    WriteLevels(P.Curve.Ceiling, P.Curve.Ceiling, what + " as a level");
+                }
+            }
             // Not from a stall: stopped fans that take a while to answer max are the firmware recovering, not ignoring
             // the flag. lastFanSeen -1 (asked before the first reading, e.g. Max restored at start) watches too, but
             // can only prove the flag, never condemn it.
             else if (!maxProven && maxAskedAt == DateTime.MinValue && !guardStalled && lastFanSeen != 0) { maxAskedAt = DateTime.Now; maxAskedFrom = lastFanSeen; }
         }
         bool maxFlagOn;                            // the firmware holds the max-fan flag (sent by us, or found set at start)
+        bool topRefused;                           // a level above the learned ceiling was refused this session
         /// <summary>Before a mode command that may hand the fans to the BIOS (FansByBios): a max flag still set and
         /// no longer wanted is cleared first, while its second-step level write can still land. Caller holds applySync.</summary>
         void ClearMaxFirst() { if (maxFlagOn && S.Fan != FanMode.Max && !GuardActive) MaxFan(false, "Max fan off"); }
@@ -1768,6 +1790,19 @@ namespace Ohman {
                 }
                 var fw = Light.GetColors();
                 LightColors = ParseColors(S.LightColors, Light.Zones);
+                // 1.2.2 drew a Primax keyboard without P1-P6, Menu, the Ins..PgDn block and a few more; those keys
+                // copied a drawn neighbour and their own stored colour was never set. Now that each is drawn and lit
+                // by itself, give each the colour it was showing, once, so an owner's keyboard looks the same after
+                // the update instead of those keys turning white.
+                var mk = Light as McuKeyboardLighting;
+                if (apply && mk != null && S.McuLightChosen && !S.McuLayoutMigrated && LightColors != null) {
+                    int[] from = mk.OldLeaders();
+                    for (int i = 0; i < from.Length && i < LightColors.Length; i++) if (from[i] >= 0 && from[i] < LightColors.Length) LightColors[i] = LightColors[from[i]];
+                    S.LightColors = JoinColors(LightColors);
+                    S.McuLayoutMigrated = true;
+                    S.Save();
+                    Log.Write("mcu keyboard: keys drawn for the first time take the colour they showed before");
+                }
                 if (LightColors == null) {
                     LightColors = fw;
                     // Nothing is written until the owner picks a mode, and the map cannot be read back, so a white
@@ -1821,9 +1856,19 @@ namespace Ohman {
             if (!mcu && WinLighting.HasControl) { S.TookWinLighting = true; S.Save(); WinLighting.SetControl(false); }   // take the keyboard first or Windows overwrites us
             TryLight(delegate {
                 if (S.Light == 1) Light.SetColors(Scaled(LightColors));
-                Light.SetBacklight(S.Light == 1, 100);                                              // the level byte OGH writes; brightness is in the colours
+                Light.SetBacklight(S.Light == 1, FirmwareLevel());                                  // brightness is in the colours; the level byte is the Fn key's
             }, "Keyboard lighting");
             if (S.Light == 1 && S.LightEffect != 0) StartEffect();
+        }
+        /// <summary>The level bits of the backlight byte as the firmware holds them now, so a mode change or a
+        /// re-apply does not undo the Fn backlight key. OGH only ever writes 100 (0xE4 / 0x64), but board 8EDE's Fn
+        /// key moves the byte from 0xE4 to 0xB2 (on, level 50), and writing 100 back on every ApplyAll put the
+        /// keyboard back to full whatever the owner had picked. Anything outside 1..100 (0x00 while Windows drives
+        /// the Transcend 14, an unreadable byte) is 100, which is what was written before.</summary>
+        int FirmwareLevel() {
+            if (!(Light is BiosLighting)) return 100;
+            try { int lv = Light.GetBacklight() & 0x7F; return lv >= 1 && lv <= 100 ? lv : 100; }
+            catch { return 100; }
         }
         public void SetLight(int mode, int effect, bool announce) {
             S.Light = Math.Max(0, Math.Min(2, mode));
@@ -1909,6 +1954,10 @@ namespace Ohman {
             sb.AppendLine("settings: mode=" + ModeName + " (BIOS 0x" + ModeByte.ToString("X2") + (OnBattery ? ", DC" : ", AC") + ") fan=" + S.Fan + " " + S.Fan1 + "/" + S.Fan2 + " tdp=" + CurrentTdp + "W gpu=" + EffectiveGpu + (S.GpuAuto ? "(auto)" : "") + " key=" + KeyId + "/" + KeyData + "→" + S.Key + " ecoCool=" + S.EcoCool);
             sb.AppendLine("graphics: " + (GpuMode >= 0 && GpuMode < 4 ? GpuModeNames[GpuMode] : "unknown") + " (offered mask 0x" + Info.GpuModes.ToString("X2") + ")" + (GpuModePending >= 0 ? " -> " + GpuModeNames[GpuModePending] + " after restart" : ""));
             sb.AppendLine("lighting: " + (Light == null ? (S.HideLight ? "hidden in Settings" : "none") : Light.Describe + " mode=" + S.Light + " level=" + S.LightLevel + " colours=" + S.LightColors + " windowsControl=" + WinLighting.HasControl));
+            // Which top the fan page divides by and where it came from. Two identical boards showing different
+            // ceilings cannot be told apart without this: the profile/table value, then what was measured here.
+            sb.AppendLine("fan ceiling: " + (P.Curve != null ? P.Curve.Ceiling : -1) + "  (profile/table " + pristineCeiling + ", learned " + (S.FanCeilingSeen > 0 ? "" + S.FanCeilingSeen : "none")
+                + ", max flag " + (S.MaxIgnored ? "ignored" : maxProven ? "proven" : "not tested this run") + ", fastest seen " + ceilingHighWater + ")");
             sb.AppendLine("fan drive: written " + curLevel1 + "/" + curLevel2 + "  cpu " + Fmt(CpuTemp) + " (last single reading " + Fmt(CpuTempNow) + ")  gpu " + Fmt(GpuTemp) + "  ir " + Fmt(IrTemp) + "  guard=" + GuardActive + "  writeFailures=" + fanWriteFailures + "  route=" + Route);
             sb.AppendLine("driver: " + (DriverReady ? "PawnIO " + (Hw.IsDemo ? "simulated" : "" + DriverVersion) + " · cpu " + (Cpu != null ? Cpu.Describe : "none")
                 + " · ec " + (Ec == null ? "none" : (ecVerified ? Ec.Map.Name : "map rejected") + (Ec.Resting ? " (resting)" : "") + " · " + EcProof) : "none (" + DriverWhy + ")"));

@@ -160,6 +160,8 @@ namespace Ohman {
         int[] lastFans;
         readonly List<double> tempTrail = new List<double>();
         DispatcherTimer uiTimer, fanDebounce, powerDebounce, curveDebounce, learnTimer, toastTimer;
+        int curvePending;                          // curve saves posted to the worker and not yet applied
+        bool curveEditGpu;                         // the curve the last drag edited
         HwndSource src;
         IntPtr hwnd;
         bool hotkeysRegistered;
@@ -569,8 +571,20 @@ namespace Ohman {
             curveView = new CurveView { Floor = E.P.Curve.Floor, Ceiling = E.P.Curve.Ceiling, Temps = Engine.CurveTemps, Levels = (int[])E.S.Cur.CurveLevels.Clone() };
             F<Border>("CurveHost").Child = curveView;
             curveDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
-            curveDebounce.Tick += delegate { curveDebounce.Stop(); int[] lv = (int[])curveView.Levels.Clone(); bool gpu = curveGpu; Bg(delegate { E.SetCurve(lv, gpu); }); };
-            curveView.Changed += delegate { curveDebounce.Stop(); curveDebounce.Start(); };
+            // Pending from the moment the debounce fires until the worker has saved it: a refresh in between used to
+            // repaint the curve from settings that did not have the drag in them yet, and points snapped back (#65).
+            curveDebounce.Tick += delegate {
+                curveDebounce.Stop();
+                int[] lv = (int[])curveView.Levels.Clone(); bool gpu = curveEditGpu;
+                Interlocked.Increment(ref curvePending);
+                Bg(delegate {
+                    try { E.SetCurve(lv, gpu); }
+                    finally { Interlocked.Decrement(ref curvePending); Dispatcher.BeginInvoke((Action)delegate { RefreshFans(false); }); }
+                });
+            };
+            // Which curve was edited is taken when the drag ends, not when the debounce fires: switching CPU/GPU
+            // inside those 250 ms saved the CPU drawing into the GPU curve.
+            curveView.Changed += delegate { curveEditGpu = curveGpu; curveDebounce.Stop(); curveDebounce.Start(); };
             btnFanAction.MouseLeftButtonUp += delegate {
                 if (E.S.Fan == FanMode.Auto) { Bg(delegate { E.SeedCurveFromVendor(); }); E.S.Fan = FanMode.Custom; RefreshFans(true); return; }
                 int[] v = E.VendorCurveAt(curveGpu);
@@ -1427,13 +1441,14 @@ namespace Ohman {
         /// <summary>Show only what the current mode can use: colour for the per-zone modes, speed and brightness for
         /// the effects that paint their own colours.</summary>
         /// <summary>The drawn keyboard for this machine. Four zones come from the layout itself; on a per-key board
-        /// the keyboard says which of its lamps sits under each key, so the device decides and we do not carry a table.</summary>
+        /// the keyboard says which of its lamps sits under each key, so the device decides and we do not carry a table.
+        /// A Primax keyboard is drawn from its own table instead, every key it has.</summary>
         List<KeyDef> BuildLayout() {
+            var mcu = E.Light as McuKeyboardLighting;
+            if (mcu != null) return mcu.Layout();
             var layout = KeyboardLayouts.Build(E.Light.Numpad, E.Light.Zones);
             var perKey = E.Light as PerKeyLighting;
             if (perKey != null) KeyboardLayouts.BindLamps(layout, perKey.Device);
-            var mcu = E.Light as McuKeyboardLighting;
-            if (mcu != null) mcu.Bind(layout);
             return layout;
         }
 
@@ -1541,7 +1556,7 @@ namespace Ohman {
                     txtCurveTitle.Text = "This model's curve";
                     txtCurveHint.Text = "read-only";
                 } else if (f == FanMode.Custom) {
-                    if (!curveDebounce.IsEnabled) curveView.Levels = (int[])(curveGpu ? S.Cur.GpuCurveLevels : S.Cur.CurveLevels).Clone();
+                    if (!curveDebounce.IsEnabled && !curveView.Dragging && Volatile.Read(ref curvePending) == 0) curveView.Levels = (int[])(curveGpu ? S.Cur.GpuCurveLevels : S.Cur.CurveLevels).Clone();
                     txtCurveTitle.Text = curveGpu ? "GPU curve" : "CPU curve";
                     txtCurveHint.Text = "drag a point · shift-drag moves all";
                 }

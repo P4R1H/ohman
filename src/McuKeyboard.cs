@@ -35,45 +35,48 @@ using Microsoft.Win32.SafeHandles;
 namespace Ohman {
 
     /// <summary>One Primax keyboard model: its PID, how many LED slots its map has, and every physical key in reading
-    /// order (row by row, left to right) with the slots that light it. Slots not listed are the ones OGH forces to 0
-    /// (NbPerKeyRgbLightingModel.SetNullBytes); they are sent as 0 here too.</summary>
+    /// order (row by row, left to right) with the slots that light it and where OGH draws it. Slots not listed are the
+    /// ones OGH forces to 0 (NbPerKeyRgbLightingModel.SetNullBytes); they are sent as 0 here too.</summary>
     internal sealed class McuBoard {
         public readonly string Name, Model;
         public readonly ushort Pid;
         public readonly int Slots;
         public readonly bool Tested;
-        /// <summary>Per key, in reading order: its name, HID usage (0 = none), LED slots, and the key whose colour it
-        /// copies when the drawing has no key for it (-1 = itself).</summary>
+        /// <summary>Per key, in reading order: its name, HID usage (0 = none), LED slots, and OGH's drawing of it
+        /// (left edge, row top and width, in OGH's pixels, from the same JSON as the slots).</summary>
         public readonly string[] Names;
         public readonly ushort[] Usage;
         public readonly int[][] Leds;
-        public readonly int[] Leader;
+        readonly int[] px, py, pw;
 
-        // Entry format: "name usage(hex) slots [>leader]". Slots are a comma list or a range a-b.
+        // Entry format: "name usage(hex) slots @x,y,w". Slots are a comma list or a range a-b; x, y, w are the key's
+        // rectangle in the JSON. Every key is drawn, so no key ever takes a colour from one the user did not pick.
         // Source: HP.Omen.DraxLightingModule.JSON.PerKey.CybugKBKeysGlobalData.json (LED order "as defined in spec"),
         // null slots from NbPerKeyRgbLightingModel.SetNullBytes (Cybug branch). Verified on 8BAD, Italian keyboard:
         // the whole map lights; 36, 37, 38 = left Shift; 140 = the key right of ']' (ù on Italian, '\' on US);
         // 146, 147, 148 = Enter. The Italian board is ANSI-shaped (wide left Shift, one-row Enter): its extra '<>' key
-        // sits in the bottom row between Menu and right Ctrl, where the map has "FNR" (163); not yet lit singly.
+        // sits in the bottom row between Menu and right Ctrl, where the map has "FNR" (163). 1.2.2 drew no Menu and no
+        // '<>' and let them copy right Alt and right Ctrl; #20's photo (2026-09-26) shows exactly that, AltGr + Menu in
+        // one colour and '<>' + Ctrl in the other, so 101/107 are AltGr/Menu and 163/164 '<>'/Ctrl as OGH draws them.
         static readonly string[] CybugKeys = {
-            "P1 00 0,6 >Esc", "Esc 29 1,7", "F1 3A 2,8", "F2 3B 3,9", "F3 3C 4,10", "F4 3D 5,11", "F5 3E 60,66", "F6 3F 61,67", "F7 40 62,68", "F8 41 63,69", "F9 42 64,70", "F10 43 65,71", "F11 44 120,126", "F12 45 121,127", "Power 66 122,128 >F12", "Del 4C 123,129", "Omen 00 124,130 >Del", "NumPad 00 125,131 >Del", "PrtSc 46 137,143 >Del",
-            "P2 00 12 >Tilde", "Tilde 35 13", "1 1E 14", "2 1F 15", "3 20 16", "4 21 17", "5 22 72", "6 23 73", "7 24 74", "8 25 75", "9 26 76", "0 27 77", "Hyphen 2D 132", "Equal 2E 133", "Back 2A 134-136", "Ins 49 150 >Back", "Home 4A 151 >Back", "PageUp 4B 152 >Back",
-            "P3 00 18 >Tab", "Tab 2B 19,25,31", "Q 14 20", "W 1A 21", "E 08 22", "R 15 23", "T 17 78", "Y 1C 79", "U 18 80", "I 0C 81", "O 12 82", "P 13 83", "BracketL 2F 138", "BracketR 30 139", "Backslash 31 140", "Pause 48 153 >Backslash", "End 4D 154 >Backslash", "PageDn 4E 155 >Backslash",
-            "P4 00 24 >Caps", "Caps 39 26,27", "A 04 28", "S 16 29", "D 07 35", "F 09 84", "G 0A 85", "H 0B 86", "J 0D 87", "K 0E 88", "L 0F 89", "Semicolon 33 144", "Quote 34 145", "Enter 28 146-148",
-            "P5 00 30 >ShiftL", "ShiftL E1 36-38", "Z 1D 32", "X 1B 33", "C 06 34", "V 19 90", "B 05 91", "N 11 92", "M 10 93", "Comma 36 94", "Dot 37 95", "Slash 38 156", "ShiftR E5 157-159", "Up 52 160",
-            "P6 00 42 >CtrlL", "CtrlL E0 43", "FnL 00 44", "Win E3 45", "AltL E2 46", "Space 2C 96-100", "AltR E6 101", "Menu 65 107 >AltR", "FnR 00 163 >CtrlR", "CtrlR E4 164", "Left 50 165", "Down 51 166 >Up", "Right 4F 167",
+            "P1 00 0,6 @352,125,24", "Esc 29 1,7 @386,125,24", "F1 3A 2,8 @412,125,24", "F2 3B 3,9 @438,125,24", "F3 3C 4,10 @464,125,24", "F4 3D 5,11 @490,125,24", "F5 3E 60,66 @516,125,24", "F6 3F 61,67 @542,125,24", "F7 40 62,68 @568,125,24", "F8 41 63,69 @594,125,24", "F9 42 64,70 @620,125,24", "F10 43 65,71 @646,125,24", "F11 44 120,126 @672,125,24", "F12 45 121,127 @698,125,24", "Power 66 122,128 @724,125,24", "Del 4C 123,129 @750,125,24", "Omen 00 124,130 @782,125,24", "NumPad 00 125,131 @808,125,24", "PrtSc 46 137,143 @834,125,24",
+            "P2 00 12 @352,147,24", "Tilde 35 13 @386,147,24", "1 1E 14 @412,147,25", "2 1F 15 @439,147,25", "3 20 16 @466,147,25", "4 21 17 @493,147,25", "5 22 72 @520,147,25", "6 23 73 @547,147,25", "7 24 74 @574,147,25", "8 25 75 @601,147,25", "9 26 76 @628,147,25", "0 27 77 @655,147,25", "Hyphen 2D 132 @682,147,25", "Equal 2E 133 @709,147,25", "Back 2A 134-136 @736,147,38", "Ins 49 150 @782,147,24", "Home 4A 151 @808,147,24", "PageUp 4B 152 @834,147,24",
+            "P3 00 18 @352,174,24", "Tab 2B 19,25,31 @386,174,37", "Q 14 20 @425,174,25", "W 1A 21 @452,174,25", "E 08 22 @479,174,25", "R 15 23 @506,174,25", "T 17 78 @533,174,25", "Y 1C 79 @560,174,25", "U 18 80 @587,174,25", "I 0C 81 @614,174,25", "O 12 82 @641,174,25", "P 13 83 @668,174,25", "BracketL 2F 138 @695,174,25", "BracketR 30 139 @722,174,25", "Backslash 31 140 @749,174,25", "Pause 48 153 @782,174,24", "End 4D 154 @808,174,24", "PageDn 4E 155 @834,174,24",
+            "P4 00 24 @352,201,24", "Caps 39 26,27 @386,201,44", "A 04 28 @432,201,25", "S 16 29 @459,201,25", "D 07 35 @486,201,25", "F 09 84 @513,201,25", "G 0A 85 @540,201,25", "H 0B 86 @567,201,25", "J 0D 87 @594,201,25", "K 0E 88 @621,201,25", "L 0F 89 @648,201,25", "Semicolon 33 144 @675,201,25", "Quote 34 145 @702,201,25", "Enter 28 146-148 @729,201,44",
+            "P5 00 30 @352,228,24", "ShiftL E1 36-38 @386,228,57", "Z 1D 32 @445,228,25", "X 1B 33 @472,228,25", "C 06 34 @499,228,25", "V 19 90 @526,228,25", "B 05 91 @553,228,25", "N 11 92 @580,228,25", "M 10 93 @607,228,25", "Comma 36 94 @634,228,25", "Dot 37 95 @661,228,25", "Slash 38 156 @688,228,25", "ShiftR E5 157-159 @715,228,58", "Up 52 160 @807,228,24",
+            "P6 00 42 @352,255,24", "CtrlL E0 43 @386,255,24", "FnL 00 44 @412,255,25", "Win E3 45 @439,255,25", "AltL E2 46 @466,255,25", "Space 2C 96-100 @493,255,172", "AltR E6 101 @667,255,25", "Menu 65 107 @694,255,25", "FnR 00 163 @721,255,25", "CtrlR E4 164 @748,255,25", "Left 50 165 @781,255,24", "Down 51 166 @807,255,24", "Right 4F 167 @833,255,24",
         };
         const string CybugNull = "39-41,47-59,102-106,108-119,141-142,149,161-162";
 
         // Source: RalphKBKeysGlobalData.json, null slots from StarmadeKBLightingModel.SetNullBytes (the branch OGH takes
         // for Ralph). Same commands, interface and handshake as Cybug in OGH's code. UNTESTED on hardware.
         static readonly string[] RalphKeys = {
-            "Esc 29 0,6", "F1 3A 1,7", "F2 3B 2,8", "F3 3C 3,9", "F4 3D 4,10", "F5 3E 5,11", "F6 3F 60,66", "F7 40 61,67", "F8 41 62,68", "F9 42 63,69", "F10 43 64,70", "F11 44 65,71", "F12 45 120,126", "Power 66 121,127 >F12", "Del 4C 122,128", "Omen 00 123,129 >Del", "NumPad 00 124,130 >Del", "PrtSc 46 125,131 >Del",
-            "Tilde 35 12,18", "1 1E 13", "2 1F 14", "3 20 15", "4 21 16", "5 22 17", "6 23 72", "7 24 73", "8 25 74", "9 26 75", "0 27 76", "Hyphen 2D 77", "Equal 2E 132", "Back 2A 133-135", "Ins 49 138,139 >Back", "Home 4A 140,141 >Back", "PageUp 4B 142,143 >Back",
-            "Tab 2B 24,25", "Q 14 19", "W 1A 20", "E 08 21", "R 15 22", "T 17 23", "Y 1C 78", "U 18 79", "I 0C 80", "O 12 81", "P 13 82", "BracketL 2F 83", "BracketR 30 150", "Backslash 31 136,137", "Pause 48 144,145 >Backslash", "End 4D 146,147 >Backslash", "PageDn 4E 148,149 >Backslash",
-            "Caps 39 30-32", "A 04 26", "S 16 27", "D 07 28", "F 09 29", "G 0A 84", "H 0B 85", "J 0D 86", "K 0E 87", "L 0F 88", "Semicolon 33 89", "Quote 34 151", "Enter 28 152-154",
-            "ShiftL E1 36-38", "Z 1D 33", "X 1B 34", "C 06 35", "V 19 41", "B 05 90", "N 11 91", "M 10 92", "Comma 36 93", "Dot 37 94", "Slash 38 95", "ShiftR E5 156-158", "Up 52 159",
-            "CtrlL E0 42", "FnL 00 43", "Win E3 44", "AltL E2 45", "Space 2C 96-101", "AltR E6 102", "Menu 65 103 >AltR", "FnR 00 162 >CtrlR", "CtrlR E4 163", "Left 50 164", "Down 51 165 >Up", "Right 4F 166",
+            "Esc 29 0,6 @352,125,25", "F1 3A 1,7 @380,125,25", "F2 3B 2,8 @408,125,25", "F3 3C 3,9 @436,125,25", "F4 3D 4,10 @464,125,25", "F5 3E 5,11 @492,125,25", "F6 3F 60,66 @520,125,25", "F7 40 61,67 @548,125,25", "F8 41 62,68 @576,125,25", "F9 42 63,69 @604,125,25", "F10 43 64,70 @632,125,25", "F11 44 65,71 @660,125,25", "F12 45 120,126 @688,125,25", "Power 66 121,127 @716,125,25", "Del 4C 122,128 @744,125,25", "Omen 00 123,129 @777,125,25", "NumPad 00 124,130 @805,125,25", "PrtSc 46 125,131 @833,125,25",
+            "Tilde 35 12,18 @352,149,19", "1 1E 13 @374,149,26", "2 1F 14 @403,149,26", "3 20 15 @432,149,26", "4 21 16 @461,149,26", "5 22 17 @490,149,26", "6 23 72 @519,149,26", "7 24 73 @548,149,26", "8 25 74 @577,149,26", "9 26 75 @606,149,26", "0 27 76 @635,149,26", "Hyphen 2D 77 @664,149,26", "Equal 2E 132 @693,149,26", "Back 2A 133-135 @722,149,47", "Ins 49 138,139 @777,149,25", "Home 4A 140,141 @805,149,25", "PageUp 4B 142,143 @833,149,25",
+            "Tab 2B 24,25 @352,178,34", "Q 14 19 @389,178,26", "W 1A 20 @418,178,26", "E 08 21 @447,178,26", "R 15 22 @476,178,26", "T 17 23 @505,178,26", "Y 1C 78 @534,178,26", "U 18 79 @563,178,26", "I 0C 80 @592,178,26", "O 12 81 @621,178,26", "P 13 82 @650,178,26", "BracketL 2F 83 @679,178,26", "BracketR 30 150 @708,178,26", "Backslash 31 136,137 @737,178,32", "Pause 48 144,145 @777,178,25", "End 4D 146,147 @805,178,25", "PageDn 4E 148,149 @833,178,25",
+            "Caps 39 30-32 @352,207,41", "A 04 26 @396,207,26", "S 16 27 @425,207,26", "D 07 28 @454,207,26", "F 09 29 @483,207,26", "G 0A 84 @512,207,26", "H 0B 85 @541,207,26", "J 0D 86 @570,207,26", "K 0E 87 @599,207,26", "L 0F 88 @628,207,26", "Semicolon 33 89 @657,207,26", "Quote 34 151 @686,207,26", "Enter 28 152-154 @715,207,54",
+            "ShiftL E1 36-38 @352,236,55", "Z 1D 33 @410,236,26", "X 1B 34 @439,236,26", "C 06 35 @468,236,26", "V 19 41 @497,236,26", "B 05 90 @526,236,26", "N 11 91 @555,236,26", "M 10 92 @584,236,26", "Comma 36 93 @613,236,26", "Dot 37 94 @642,236,26", "Slash 38 95 @671,236,26", "ShiftR E5 156-158 @700,236,69", "Up 52 159 @805,236,25",
+            "CtrlL E0 42 @352,265,26", "FnL 00 43 @381,265,26", "Win E3 44 @410,265,26", "AltL E2 45 @439,265,26", "Space 2C 96-101 @468,265,185", "AltR E6 102 @656,265,26", "Menu 65 103 @685,265,26", "FnR 00 162 @714,265,26", "CtrlR E4 163 @743,265,26", "Left 50 164 @777,265,25", "Down 51 165 @805,265,25", "Right 4F 166 @833,265,25",
         };
         const string RalphNull = "39-40,46-59,104-119,155,160-161";
 
@@ -91,18 +94,20 @@ namespace Ohman {
         McuBoard(string name, string model, ushort pid, int slots, bool tested, string[] keys, string nulls) {
             Name = name; Model = model; Pid = pid; Slots = slots; Tested = tested;
             int n = keys.Length;
-            Names = new string[n]; Usage = new ushort[n]; Leds = new int[n][]; Leader = new int[n];
-            var leaderName = new string[n];
+            Names = new string[n]; Usage = new ushort[n]; Leds = new int[n][]; px = new int[n]; py = new int[n]; pw = new int[n];
             var owner = new int[slots];
             for (int i = 0; i < slots; i++) owner[i] = -1;
             foreach (int s in Ranges(nulls)) owner[s] = -2;
             for (int k = 0; k < n; k++) {
                 string[] p = keys[k].Split(' ');
-                if (p.Length < 3) throw new FormatException("bad entry '" + keys[k] + "'");
+                if (p.Length != 4 || !p[3].StartsWith("@")) throw new FormatException("bad entry '" + keys[k] + "'");
                 Names[k] = p[0];
                 Usage[k] = Convert.ToUInt16(p[1], 16);
                 Leds[k] = Ranges(p[2]).ToArray();
-                leaderName[k] = p.Length > 3 && p[3].StartsWith(">") ? p[3].Substring(1) : null;
+                string[] g = p[3].Substring(1).Split(',');
+                if (g.Length != 3) throw new FormatException(p[0] + ": bad position '" + p[3] + "'");
+                px[k] = int.Parse(g[0]); py[k] = int.Parse(g[1]); pw[k] = int.Parse(g[2]);
+                if (pw[k] <= 0) throw new FormatException(p[0] + ": width " + pw[k]);
                 foreach (int s in Leds[k]) {
                     if (s < 0 || s >= slots) throw new FormatException(p[0] + ": slot " + s + " out of range");
                     if (owner[s] == -2) throw new FormatException(p[0] + ": slot " + s + " is one OGH blanks");
@@ -110,12 +115,8 @@ namespace Ohman {
                     owner[s] = k;
                 }
             }
-            for (int k = 0; k < n; k++) {
-                Leader[k] = -1;
-                if (leaderName[k] == null) continue;
-                Leader[k] = Array.IndexOf(Names, leaderName[k]);
-                if (Leader[k] < 0) throw new FormatException(Names[k] + ": no key called " + leaderName[k]);
-            }
+            int q = Array.IndexOf(Names, "Q"), w = Array.IndexOf(Names, "W");
+            if (q < 0 || w < 0 || px[w] <= px[q] || py[w] != py[q]) throw new FormatException("no Q and W to measure the key pitch by");
         }
 
         static List<int> Ranges(string s) {
@@ -129,12 +130,55 @@ namespace Ohman {
             return r;
         }
 
-        /// <summary>The key a drawn key is: by its HID usage, and by label for Fn, which has none. -1 when this board
-        /// has no such key.</summary>
-        public int KeyFor(KeyDef k) {
-            if (k.Usage != 0) { for (int i = 0; i < Usage.Length; i++) if (Usage[i] == k.Usage) return i; return -1; }
-            if (k.Label == "Fn") return Array.IndexOf(Names, "FnL");
-            return -1;
+        /// <summary>The drawing for this keyboard: every key it has, where OGH draws it, one drawn key per physical
+        /// key and Zone = the key's index here. The generic laptop drawing has no P1-P6, Power, OMEN, the numpad key,
+        /// PrtSc, Ins..PgDn, Menu or the key right of Menu, and a shared up/down key; those had to copy a drawn
+        /// neighbour, so picking right Ctrl also lit '&lt;&gt;' (#20). Rows are OGH's rows; x and width are in key
+        /// pitches (Q to W), with the gap between keys folded into the width like the other layouts.</summary>
+        public List<KeyDef> Layout() {
+            int q = Array.IndexOf(Names, "Q"), w = Array.IndexOf(Names, "W");
+            double pitch = px[w] - px[q], gap = pitch - pw[q];
+            int left = int.MaxValue;
+            var rows = new List<int>();
+            for (int k = 0; k < Names.Length; k++) { left = Math.Min(left, px[k]); if (!rows.Contains(py[k])) rows.Add(py[k]); }
+            rows.Sort();
+            var keys = new List<KeyDef>();
+            for (int k = 0; k < Names.Length; k++)
+                keys.Add(new KeyDef { Label = LabelOf(Names[k]), X = (px[k] - left) / pitch, Y = rows.IndexOf(py[k]), W = (pw[k] + gap) / pitch, H = 1, Zone = k, Index = k, Usage = Usage[k] });
+            return keys;
+        }
+
+        static string LabelOf(string name) {
+            switch (name) {
+                case "Tilde": return "`";
+                case "Hyphen": return "-";
+                case "Equal": return "=";
+                case "Back": return "⌫";
+                case "BracketL": return "[";
+                case "BracketR": return "]";
+                case "Backslash": return "\\";
+                case "Semicolon": return ";";
+                case "Quote": return "'";
+                case "Comma": return ",";
+                case "Dot": return ".";
+                case "Slash": return "/";
+                case "ShiftL": case "ShiftR": return "Shift";
+                case "CtrlL": case "CtrlR": return "Ctrl";
+                case "AltL": case "AltR": return "Alt";
+                case "FnL": return "Fn";
+                case "FnR": return "<>";              // OGH's "FNR": the ISO '<>' key on the Italian 8BAD (#20)
+                case "Space": return "";
+                case "Left": return "◀";
+                case "Right": return "▶";
+                case "Up": return "▲";
+                case "Down": return "▼";
+                case "PageUp": return "PgUp";
+                case "PageDn": return "PgDn";
+                case "NumPad": return "Num";
+                case "Power": return "Pwr";
+                case "Omen": return "◆";
+                default: return name;
+            }
         }
     }
 
@@ -318,10 +362,9 @@ namespace Ohman {
     }
 
     /// <summary>A Primax per-key keyboard as Ohman's lighting device. One zone per physical key, in reading order, so
-    /// the effects that walk the zones (wave) walk the board the way it is read rather than in LED-chain order. Keys
-    /// the drawing has no key for (P1-P6, Power, OMEN, the numpad key, PrtSc, Ins..PgDn, Menu, the right Fn or the
-    /// ISO '&lt;&gt;' in its place, the down arrow) copy a neighbour that is drawn; wide keys light all their LEDs.
-    /// There is no colour readback on this protocol: what we last wrote is all we know.</summary>
+    /// the effects that walk the zones (wave) walk the board the way it is read rather than in LED-chain order. The
+    /// page draws this keyboard's own keys (McuBoard.Layout), so every key has its own colour; wide keys light all
+    /// their LEDs. There is no colour readback on this protocol: what we last wrote is all we know.</summary>
     public sealed class McuKeyboardLighting : ILighting, IDisposable {
         const int MinFrameMs = 100;             // at most 10 maps a second: nine acked packets each
         const int LightingOnEveryMs = 2000;     // re-send 09 {01} before a map that is not part of a running effect
@@ -330,7 +373,6 @@ namespace Ohman {
         readonly McuKeyboard dev;
         readonly McuBoard board;
         readonly Rgb[] shown;
-        readonly int[] leader;                  // per key: the drawn key whose colour it copies, -1 for itself
         int backlight = 0x80 | 100;
         bool open = true, lightingOn;
         readonly Stopwatch sinceSend = new Stopwatch();
@@ -341,15 +383,6 @@ namespace Ohman {
             dev = k;
             board = k.Board;
             shown = new Rgb[board.Names.Length];          // black: nothing is claimed about a map we cannot read
-            leader = new int[board.Names.Length];
-            for (int i = 0; i < leader.Length; i++) leader[i] = -1;
-            try {
-                var keys = KeyboardLayouts.Build(Numpad, Zones);
-                var drawn = new bool[leader.Length];
-                foreach (var kd in keys) { int z = board.KeyFor(kd); if (z >= 0) drawn[z] = true; }
-                for (int i = 0; i < leader.Length; i++)
-                    if (!drawn[i] && board.Leader[i] >= 0 && drawn[board.Leader[i]]) leader[i] = board.Leader[i];
-            } catch (Exception ex) { Log.Write("mcu keyboard followers: " + ex.Message); }
         }
 
         /// <summary>The Primax keyboard if this machine has one that answers, else null. Only asks (two GETs).</summary>
@@ -368,16 +401,23 @@ namespace Ohman {
         public bool Numpad { get { return false; } }                 // neither Cybug nor Ralph has one
         public string Describe { get { return board.Names.Length + " keys"; } }
 
-        /// <summary>Point each drawn key at its key here; Zone is then this class's key index. A drawn key this board
-        /// does not have (none on the current drawing) is logged and given the first key rather than an invalid zone.</summary>
-        public void Bind(List<KeyDef> keys) {
-            var missing = new List<string>();
-            foreach (var k in keys) {
-                int z = board.KeyFor(k);
-                if (z < 0) { missing.Add(k.Label); z = 0; }
-                k.Zone = z;
+        /// <summary>This keyboard's own drawing, Zone = key index. A fresh list per call: each view owns its keys.</summary>
+        public List<KeyDef> Layout() { return board.Layout(); }
+
+        /// <summary>For each key, the key whose colour it showed in 1.2.2, where 1.2.2 did not draw it and copied a
+        /// drawn neighbour instead; -1 for the rest. Used once, to carry an owner's colours over the layout change.</summary>
+        public int[] OldLeaders() {
+            string[] pairs = { "P1>Esc", "P2>Tilde", "P3>Tab", "P4>Caps", "P5>ShiftL", "P6>CtrlL", "Power>F12", "Omen>Del", "NumPad>Del",
+                               "PrtSc>Del", "Ins>Back", "Home>Back", "PageUp>Back", "Pause>Backslash", "End>Backslash", "PageDn>Backslash",
+                               "Menu>AltR", "FnR>CtrlR", "Down>Up" };
+            var r = new int[board.Names.Length];
+            for (int i = 0; i < r.Length; i++) r[i] = -1;
+            foreach (string pr in pairs) {
+                string[] ab = pr.Split('>');
+                int f = Array.IndexOf(board.Names, ab[0]), l = Array.IndexOf(board.Names, ab[1]);
+                if (f >= 0 && l >= 0) r[f] = l;
             }
-            if (missing.Count > 0) Log.Write("mcu keyboard: drawn keys with no LED on " + board.Name + ": " + string.Join(" ", missing.ToArray()));
+            return r;
         }
 
         public Rgb[] GetColors() { lock (sync) return (Rgb[])shown.Clone(); }
@@ -479,7 +519,7 @@ namespace Ohman {
             g = new byte[board.Slots];
             b = new byte[board.Slots];
             for (int k = 0; k < shown.Length; k++) {
-                var c = shown[leader[k] >= 0 ? leader[k] : k];
+                var c = shown[k];
                 if (f < 1) c = c.Scale(f);
                 foreach (int sl in board.Leds[k]) { r[sl] = c.R; g[sl] = c.G; b[sl] = c.B; }
             }
@@ -499,7 +539,7 @@ namespace Ohman {
             } catch (IOException first) {
                 // A resume or a USB reset leaves the old handle dead. One reopen and one retry, then give up; the
                 // writer backs off and tries again with the next frame.
-                Log.Write("mcu keyboard: " + first.Message + "; reopening");
+                if (failures == 0) Log.Write("mcu keyboard: " + first.Message + "; reopening");    // once per failing streak
                 lightingOn = false;
                 lastR = null;
                 if (!dev.Reopen()) { open = false; throw new IOException("keyboard lighting: " + first.Message); }

@@ -19,6 +19,8 @@ namespace Ohman {
         public int LiveLevel = -1;
         public event Action<int[]> Changed;          // fires while dragging (the caller debounces) and on release
         int drag = -1, hover = -1;
+        /// <summary>A point is being dragged: the levels on screen are ahead of anything saved.</summary>
+        public bool Dragging { get { return drag >= 0; } }
         const double PlotH = 196, PillH = 20, LabelW = 22, LabelGap = 8, AxisGap = 10, AxisH = 14;
         static Typeface face;
         static readonly Brush GridH = Ui.Brush("#292623"), GridV = Ui.Brush("#211D1A"), Axis = Ui.Brush("#847F7B"),
@@ -142,6 +144,12 @@ namespace Ohman {
         }
         protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e) {
             if (drag >= 0) { drag = -1; ReleaseMouseCapture(); InvalidateVisual(); var h = Changed; if (h != null) h((int[])Levels.Clone()); }
+        }
+        // Alt+Tab, the Win key or a UAC prompt mid-drag take the capture away without a button-up; left alone, the
+        // drag never ended and the page stopped repainting this curve from settings.
+        protected override void OnLostMouseCapture(MouseEventArgs e) {
+            if (drag >= 0) { drag = -1; InvalidateVisual(); var h = Changed; if (h != null) h((int[])Levels.Clone()); }
+            base.OnLostMouseCapture(e);
         }
         protected override void OnMouseLeave(MouseEventArgs e) { if (hover != -1 && drag < 0) { hover = -1; InvalidateVisual(); } }
     }
