@@ -146,9 +146,10 @@ namespace Ohman {
                 ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072;
                 var req = (HttpWebRequest)WebRequest.Create(url);
                 req.UserAgent = Program.AppName + "/" + Program.Version;
-                req.Timeout = 15000;
                 req.ReadWriteTimeout = 60000;
-                using (var resp = (HttpWebResponse)req.GetResponse()) {
+                HttpWebResponse resp;
+                GetResponseWithRetry(req, out resp);
+                using (resp) {
                     // GitHub hands release assets off to its own object store, so the URL we end on is not the
                     // one we asked for. Anywhere outside those two names and we are no longer talking to GitHub.
                     Uri u = resp.ResponseUri;
@@ -170,6 +171,46 @@ namespace Ohman {
                 try { if (File.Exists(dest)) File.Delete(dest); } catch { }
                 throw;
             }
+        }
+
+        private static void GetResponseWithRetry(HttpWebRequest req, out HttpWebResponse resp) {
+            const int maxAttempts = 2;
+            for (int attempt = 0; attempt < maxAttempts; attempt++) {
+                try {
+                    req.Timeout = (attempt == 0) ? 15000 : 30000;
+                    resp = (HttpWebResponse)req.GetResponse();
+                    return;
+                } catch (WebException ex) {
+                    if (!IsTransient(ex)) throw;
+                    if (attempt == maxAttempts - 1) throw;
+                    Thread.Sleep(5000);
+                    // recreate request because HttpWebRequest cannot be reused after a failed GetResponse
+                    req = (HttpWebRequest)WebRequest.Create(req.RequestUri);
+                    req.UserAgent = Program.AppName + "/" + Program.Version;
+                    req.ReadWriteTimeout = 60000;
+                    ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072;
+                }
+            }
+            throw new InvalidOperationException("unreachable");
+        }
+
+        private static bool IsTransient(WebException ex) {
+            var hr = ex.Response as HttpWebResponse;
+            bool transientHttp = false;
+            if (hr != null) {
+                try {
+                    int code = (int)hr.StatusCode;
+                    transientHttp = code >= 500 || code == 408 || code == 429;
+                } finally {
+                    hr.Dispose();
+                }
+            }
+            if (transientHttp) return true;
+            return ex.Status == WebExceptionStatus.Timeout
+                || ex.Status == WebExceptionStatus.ConnectFailure
+                || ex.Status == WebExceptionStatus.ReceiveFailure
+                || ex.Status == WebExceptionStatus.RequestCanceled
+                || ex.Status == WebExceptionStatus.ProxyNameResolutionFailure;
         }
 
         /// <summary>Is the file on disk the build the release said it would be? The length catches a download cut
