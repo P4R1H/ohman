@@ -652,13 +652,16 @@ namespace Ohman {
         /// the firmware for about two minutes, which on a restart is most of the next boot: an owner who quit at
         /// idle got Fallback back at the login screen and read it as the fans maxing out.</param>
         public void Park(bool quiet) {
+            // Mark shutdown before stopping the timers. A delayed resume re-apply takes the same lock, so it
+            // cannot start after the handoff has begun.
+            lock (applySync) stopping = true;
             // The timers and the work queue are still alive until Dispose, and any of them could undo what follows:
             // the Max keep-alive re-sends 0x27 {1}, the guard sends max, the heartbeat re-sends the mode without the
             // BIOS byte. Stop them first so the last word to the firmware is ours.
             try { if (fanTimer != null) fanTimer.Change(Timeout.Infinite, Timeout.Infinite); } catch { }
             try { if (guard != null) guard.Change(Timeout.Infinite, Timeout.Infinite); } catch { }
             try { if (heartbeat != null) heartbeat.Change(Timeout.Infinite, Timeout.Infinite); } catch { }
-            stopping = true; try { workReady.Set(); } catch { }
+            try { workReady.Set(); } catch { }
             // Give the keyboard back before anything else. To paint it at all we switch Windows Dynamic Lighting
             // off, and we were never switching it back: quitting left the keyboard frozen on the last thing we
             // wrote, with Windows told to keep out of it. One owner uninstalled Ohman, rebooted, and still had
@@ -711,7 +714,8 @@ namespace Ohman {
         }
 
         public void Dispose() {
-            stopping = true; try { workReady.Set(); } catch { }
+            lock (applySync) stopping = true;
+            try { workReady.Set(); } catch { }
             try { if (fx != null) fx.Dispose(); } catch { }
             CloseDriver();
             try { if (fanTimer != null) fanTimer.Dispose(); } catch { }
@@ -1603,7 +1607,14 @@ namespace Ohman {
 
         public void OnResume() {
             // firmware state is lost across sleep; re-apply after the WMI provider is back
-            new Thread(delegate() { Thread.Sleep(4000); Log.Write("resume: re-applying"); ApplyAll(false); }) { IsBackground = true }.Start();
+            new Thread(delegate() {
+                Thread.Sleep(4000);
+                lock (applySync) {
+                    if (stopping) return;
+                    Log.Write("resume: re-applying");
+                    ApplyAll(false);
+                }
+            }) { IsBackground = true }.Start();
         }
 
         /// <summary>The third byte of the mode command, "fan control by BIOS". OGH sends 1 on battery, and so did
