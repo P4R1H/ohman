@@ -440,8 +440,17 @@ namespace Ohman {
             // Gated on the switch as well: it promises a background download, so turning it off has to stop one,
             // and a forced check from an owner who opted out should still only tell them.
             string have = Staged ?? Program.Version;
-            if (rel != null && S.UpdateOnLaunch && Update.Newer(rel.Tag, have) && Update.Stage(rel)) { RefreshStaged(); Changed(); }
+            // While it downloads the row says so: it used to say "available" with a Download link that opened the
+            // releases page, and pressing it in those few seconds sent the owner off to download it by hand (#58).
+            if (rel != null && S.UpdateOnLaunch && Update.Newer(rel.Tag, have)) {
+                downloading = true; Changed();
+                try { if (Update.Stage(rel)) RefreshStaged(); }
+                finally { downloading = false; Changed(); }
+            }
         }
+        volatile bool downloading;
+        /// <summary>True while the newer build is being fetched in the background, before it is staged.</summary>
+        public bool Downloading { get { return downloading; } }
         volatile string staged;
         /// <summary>The version downloaded and waiting to go in, or null. Read from the field: the UI asks on
         /// every refresh and the answer costs a file open.</summary>
@@ -874,12 +883,29 @@ namespace Ohman {
             if (!(maxAsking || Math.Max(curLevel1, curLevel2) >= P.Curve.Ceiling)) {
                 ceilingTicks = 0; ceilingHighWater = 0; return;
             }
-            if (seen > ceilingHighWater) ceilingHighWater = seen;
+            // Short of the ceiling, a reading that is still climbing is a fan spooling up, not a limit: the settle
+            // count starts again until the fastest reading stops rising. 8DCF learned 43 that way and its 0x2D read
+            // 56/57 half a minute later under the same curve. Past the ceiling the count is left alone, since that
+            // direction needs no settling.
+            if (seen > ceilingHighWater) { ceilingHighWater = seen; if (seen < P.Curve.Ceiling) ceilingTicks = 0; }
             if (++ceilingTicks < CeilingSettleTicks) return;
             ceilingTicks = 0;
             int real = ceilingHighWater;
             int gap = real - P.Curve.Ceiling;
-            if (gap < CeilingOver && gap > -CeilingShort) return;
+            if (gap < CeilingOver && gap > -CeilingShort) {
+                // The fans reach this session's ceiling. A lower one learned earlier in the same session is still
+                // only pending (it applies at the next start), and this disproves it before it is ever used. Once
+                // applied it could not be taken back here: every level is then clamped to it and the fans reach
+                // exactly that, which is what 8DCF's owner is left with.
+                if (S.FanCeilingSeen > 0 && S.FanCeilingSeen < P.Curve.Ceiling && real > S.FanCeilingSeen + CeilingOver) {
+                    int back = P.Curve.Ceiling == pristineCeiling ? 0 : P.Curve.Ceiling;
+                    Log.Write("fan ceiling: " + S.FanCeilingSeen + " learned earlier this run is withdrawn, the fans reached " + real
+                        + "; keeping " + P.Curve.Ceiling);
+                    S.FanCeilingSeen = back;
+                    S.Save();
+                }
+                return;
+            }
             if (real <= P.Curve.Floor + CeilingUsableRange || real == S.FanCeilingSeen) return;
             S.FanCeilingSeen = real;
             S.Save();
@@ -921,6 +947,20 @@ namespace Ohman {
             // caller of ChooseRoute, and it sits behind the refusal check, so a rest was permanent until restart.
             if (fanLevelsRefused && Ec != null && ChooseRoute() == FanRoute.Ec) return WriteLevelsEc(l1, l2, what);
             if (fanLevelsRefused) return false;
+            // Under a ceiling learned below the profile's, a level at the top asks for the profile's top instead. Asked
+            // for exactly the learned value the fans reach exactly that, so a ceiling learned from one bad reading
+            // (8DCF learned 43 from a fan still spooling up; it reaches 57) could never be beaten on the curve or
+            // Manual, only by Max. More cooling at a moment that already wants all of it is safe, the firmware caps
+            // what it cannot reach, and NoteFanLevelsCore learns any gain upwards for the next start. curLevel keeps
+            // the level the curve asked for, so its steps and the ceiling test see the same numbers as before.
+            if (!above && !topRefused && pristineCeiling > P.Curve.Ceiling && (l1 >= P.Curve.Ceiling || l2 >= P.Curve.Ceiling)) {
+                int a1 = l1 >= P.Curve.Ceiling ? pristineCeiling : l1, a2 = l2 >= P.Curve.Ceiling ? pristineCeiling : l2;
+                if (Try(delegate { Hw.GetFanCount(); Hw.SetFanLevels(a1, a2); }, what + " at the profile's top", false)) {
+                    curLevel1 = l1; curLevel2 = l2; fanWriteFailures = 0; fanFailureShown = false; return true;
+                }
+                topRefused = true;
+                Log.Write("fan ceiling: a level above the learned " + P.Curve.Ceiling + " was refused; the top stays there");
+            }
             if (Try(delegate { Hw.GetFanCount(); Hw.SetFanLevels(l1, l2); }, what)) { curLevel1 = l1; curLevel2 = l2; fanWriteFailures = 0; fanFailureShown = false; return true; }
             // A level above the ceiling that is refused says nothing about levels the fans can reach; counting it
             // toward giving up would switch fan levels off, and with them Max-as-a-level and the guard's level.
@@ -1254,10 +1294,14 @@ namespace Ohman {
             if ((S.Fan != FanMode.Auto && S.Fan != FanMode.Custom) || GuardActive || ReadOnly) return;
             if (ScreenOff) return;                 // the firmware's own curve has the fans until the display is back (OnDisplay)
             if (fanWriteFailures >= 3 && (DateTime.Now - lastFanWrite).TotalSeconds < 60) return;   // back off; retry once a minute
-            try { IrTemp = Hw.GetTemperature(); } catch { IrTemp = double.NaN; }
             if (immediate) { smoothCpu = CpuTemp; smoothGpu = GpuTemp; cpuGone = gpuGone = 0; }
             else { smoothCpu = Smooth(CpuTemp, smoothCpu, ref cpuGone); smoothGpu = Smooth(GpuTemp, smoothGpu, ref gpuGone); }
             FanCurve curve = S.Fan == FanMode.Custom ? CustomCurve() : P.Curve;
+            // Every BIOS call runs firmware code in the ACPI driver, and this one ran every 5 s for a number the
+            // curve throws away wherever UseChassis is off (every generic board). Ask only when the curve uses it;
+            // otherwise show the guard's last reading of the same sensor, which costs nothing (#72).
+            if (curve.UseChassis) { try { IrTemp = Hw.GetTemperature(); } catch { IrTemp = double.NaN; } }
+            else IrTemp = GuardChassis >= 0 ? GuardChassis : double.NaN;
             int[] target = curve.Target(smoothCpu, smoothGpu, IrTemp);
             int n1 = immediate ? target[0] : curve.Step(curLevel1, target[0]);
             int n2 = immediate ? target[1] : curve.Step(curLevel2, target[1]);

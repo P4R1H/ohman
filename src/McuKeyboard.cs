@@ -1,5 +1,6 @@
 ﻿// SPDX-License-Identifier: GPL-3.0-or-later
-// Ohman: per-key lighting on HP's Primax keyboards (OMEN 17 "Cybug" 0461:4E9A, OMEN 16 "Ralph" 0461:4E9B), 2021-2024.
+// Ohman: per-key lighting on HP's Primax keyboards (OMEN 17 "Cybug" 0461:4E9A, OMEN 16 "Ralph" 0461:4E9B, and the
+// later OMEN 16 / Transcend 16 on 4F03, 4F11 and 4F1E that share Ralph's map), 2021-2024.
 //
 // These keyboards have no HID LampArray, so Windows Dynamic Lighting cannot drive them and neither could we: the
 // BIOS answers the four-zone calls (keyboard type 3) and lights nothing. What does light them is HP's own MCU
@@ -81,12 +82,27 @@ namespace Ohman {
         const string RalphNull = "39-40,46-59,104-119,155,160-161";
 
         static McuBoard cybug, ralph;
+        static readonly Dictionary<ushort, McuBoard> ralphKin = new Dictionary<ushort, McuBoard>();
 
         /// <summary>The board for a Primax PID, or null. A table that fails its own checks is never used.</summary>
         public static McuBoard For(ushort pid) {
             try {
                 if (pid == 0x4E9A) { if (cybug == null) cybug = new McuBoard("Cybug", "OMEN 17", 0x4E9A, 168, true, CybugKeys, CybugNull); return cybug; }
                 if (pid == 0x4E9B) { if (ralph == null) ralph = new McuBoard("Ralph", "OMEN 16", 0x4E9B, 167, false, RalphKeys, RalphNull); return ralph; }
+                // Hendricks (2022 OMEN 16, 0461:4F03), Brunobear (2023-24 OMEN 16, 8BA8-8BAC and 8C76-8C78) and Quaker
+                // (Transcend 16, 8BB3/8BB4/8C4D/8C4E), the last two on 0461:4F11 or 4F1E. OGH drives all three through
+                // the same NbPerKeyRgbLightingControl path as Ralph, blanks the same slots (device types 43, 47 and 51
+                // fall through to StarmadeKBLightingModel.SetNullBytes) and ships each one's KBKeysGlobalData.json
+                // byte for byte identical to Ralph's. So: Ralph's table under their own PID. UNTESTED on hardware; an
+                // 8BAB owner's report (0461:4F11 on mi_02, usage FF13, 65-byte reports) is what found them.
+                if (pid == 0x4F03 || pid == 0x4F11 || pid == 0x4F1E) {
+                    McuBoard b;
+                    if (!ralphKin.TryGetValue(pid, out b)) {
+                        b = new McuBoard(pid == 0x4F03 ? "Hendricks" : "Brunobear", "OMEN 16", pid, 167, false, RalphKeys, RalphNull);
+                        ralphKin[pid] = b;
+                    }
+                    return b;
+                }
             } catch (Exception ex) { Log.Write("mcu keyboard table " + pid.ToString("X4") + ": " + ex.Message); }
             return null;
         }

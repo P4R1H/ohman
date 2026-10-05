@@ -1,4 +1,4 @@
-# Ohman per-key check, for OMEN 16/17 per-key keyboards (Primax 0461:4E9A / 4E9B). Run from Terminal (Admin):
+﻿# Ohman per-key check, for OMEN 16/17 per-key keyboards (Primax 0461:4E9A / 4E9B / 4F03 / 4F11 / 4F1E). Run from Terminal (Admin):
 #   irm https://raw.githubusercontent.com/P4R1H/ohman/main/tools/check-perkey.ps1 | iex
 # What it does to the machine: reads the keyboard's own description, asks it three questions, then lights it
 # red and a few single keys for a minute, asking you what you see. Nothing is saved to the keyboard; a restart
@@ -129,8 +129,8 @@ public static class OhmanPk {
 "@
 
 W ("Board:  " + (Get-CimInstance Win32_BaseBoard).Product + "   Model: " + (Get-CimInstance Win32_ComputerSystem).Model + "   BIOS: " + (Get-CimInstance Win32_BIOS).SMBIOSBIOSVersion)
-$paths = [OhmanPk]::Paths() | Where-Object { $_ -match 'vid_0461&pid_(4e9a|4e9b)' }
-if (-not $paths) { W "No OMEN 16/17 per-key keyboard (0461:4E9A or 4E9B) found."; Start-Process explorer.exe "/select,`"$out`""; return }
+$paths = [OhmanPk]::Paths() | Where-Object { $_ -match 'vid_0461&pid_(4e9a|4e9b|4f03|4f11|4f1e)' }
+if (-not $paths) { W "No OMEN 16/17 per-key keyboard (0461:4E9A, 4E9B, 4F03, 4F11 or 4F1E) found."; Start-Process explorer.exe "/select,`"$out`""; return }
 W ""; W "===== The keyboard's own description (nothing sent) ====="
 $lamp = $null; $rid = -1
 foreach ($p in $paths) {

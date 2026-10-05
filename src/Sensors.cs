@@ -255,7 +255,11 @@ namespace Ohman {
         /// that could be heating the GPU almost always shows on the CPU first, so a busy CPU brings the rate back at once.</summary>
         bool DueForGpu(SensorSnapshot s) {
             bool cpuBusy = !double.IsNaN(s.CpuLoad) && s.CpuLoad > 25;
-            double want = gpuQuiet >= 3 && !cpuBusy ? GpuIdleMs : Math.Max(4000, intervalMs * 2);
+            // With the window shut (the tray rates are 5 s and slower) nobody is watching the GPU numbers; only the
+            // fan curve reads them, and GpuStaleMs (45 s) still bounds how old they may be. Each nvidia-smi is a
+            // process start plus an NVML init and driver handshake, and every 10 s of that during a game was
+            // reported as a periodic hitch (#72). The thermal guard never used the GPU, so it is unaffected.
+            double want = (gpuQuiet >= 3 && !cpuBusy) || intervalMs >= 5000 ? GpuIdleMs : Math.Max(4000, intervalMs * 2);
             if ((DateTime.Now - lastNv).TotalMilliseconds < want) return false;
             // Asking nvidia-smi anything wakes the GPU to answer, and a hybrid laptop's dGPU spends most of its day
             // asleep. One owner saw it pinned awake at 60-100 W idle. Asleep is also the answer: it is cool.
@@ -352,7 +356,9 @@ namespace Ohman {
             // has left Loop, otherwise a read already in progress can use a disposed
             // PerformanceCounter.  Updated callbacks run on this worker; a callback
             // that disposes Sensors is re-entrant on sync, so avoid joining ourselves.
-            if (worker != null && worker != Thread.CurrentThread) worker.Join();
+            // Bounded: a read that hangs (a stuck WMI query, nvidia-smi taking its 4.5 s) must not hold up quitting.
+            // Past the cap the thread is a background one and goes with the process.
+            if (worker != null && worker != Thread.CurrentThread) worker.Join(3000);
             try { for (int i = 0; i < thermals.Length; i++) { try { thermals[i].Dispose(); } catch { } } if (cpuUtil != null) cpuUtil.Dispose(); if (cpuFreq != null) cpuFreq.Dispose(); if (cpuPower != null) cpuPower.Dispose(); } catch { }
         }
     }

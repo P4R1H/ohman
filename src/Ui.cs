@@ -740,6 +740,7 @@ namespace Ohman {
             // The right-hand link is whatever is left to say: the changelog once the title is doing the
             // installing, the release page while there is only news of a build, and the check itself otherwise.
             btnUpdate.MouseLeftButtonUp += delegate {
+                if (E.Staged == null && E.Downloading) return;
                 if (E.Staged != null || E.UpdateAvailable) { OpenReleases(); return; }
                 txtUpdate.Text = "checking…"; Slow(delegate { E.CheckForUpdate(true); });
             };
@@ -1767,7 +1768,7 @@ namespace Ohman {
             // Only the thing that can be clicked is accent. The version line under it went blue too, which put
             // two competing blues in one row and made a plain caption look like a second link.
             txtUpdate.Foreground = (staged == null && newer) ? (Brush)accent : Ui.Desc;
-            btnUpdate.Text = staged != null ? "Changelog" : newer ? "Download" : "Check now";
+            btnUpdate.Text = staged != null ? "Changelog" : newer && E.Downloading ? "Downloading…" : newer ? "Download" : "Check now";
             if (navUpdate != null) {
                 var want = staged != null ? Visibility.Visible : Visibility.Collapsed;
                 if (navUpdate.Visibility != want) {
