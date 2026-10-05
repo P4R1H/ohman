@@ -102,6 +102,7 @@ namespace Ohman {
         public int LightEffect = 0;                 // 0 static, 1 breathe, 2 cycle, 3 wave (software effects, ~8 frames/s)
         public int LightSpeed = 3;                  // 1..5
         public bool HideLight = false;              // the owner turned the keyboard controls off: nothing is read or written to it
+        public bool WhiteLightSeen = false;         // a white-only backlight was detected and HideLight set for it, once
         public int RefreshHz = 0;                  // chosen panel refresh rate (0 = leave Windows alone)
         public bool LowHzOnBattery = false;         // lowest refresh rate on battery, back to RefreshHz (or the highest) on AC
         public bool TrayTemp = true;                // CPU temperature drawn on the tray icon
@@ -209,6 +210,7 @@ namespace Ohman {
                         case "LightEffect": if (TryInt(v, out n)) s.LightEffect = Math.Max(0, Math.Min(3, n)); break;
                         case "LightSpeed": if (TryInt(v, out n)) s.LightSpeed = Math.Max(1, Math.Min(5, n)); break;
                         case "HideLight": if (bool.TryParse(v, out b)) s.HideLight = b; break;
+                        case "WhiteLightSeen": if (bool.TryParse(v, out b)) s.WhiteLightSeen = b; break;
                         case "RefreshHz": if (TryInt(v, out n)) s.RefreshHz = Math.Max(0, Math.Min(500, n)); break;
                         case "LowHzOnBattery": if (bool.TryParse(v, out b)) s.LowHzOnBattery = b; break;
                         case "TrayTemp": if (bool.TryParse(v, out b)) s.TrayTemp = b; break;
@@ -275,6 +277,7 @@ namespace Ohman {
                 sb.AppendLine("LightEffect=" + LightEffect);
                 sb.AppendLine("LightSpeed=" + LightSpeed);
                 if (HideLight) sb.AppendLine("HideLight=True");
+                if (WhiteLightSeen) sb.AppendLine("WhiteLightSeen=True");
                 sb.AppendLine("RefreshHz=" + RefreshHz);
                 sb.AppendLine("LowHzOnBattery=" + LowHzOnBattery);
                 sb.AppendLine("TrayTemp=" + TrayTemp);
@@ -344,6 +347,7 @@ namespace Ohman {
         public static readonly string[] ModeNames = { "Eco", "Balanced", "Performance" };
         public byte[] ModeBytes { get { return new byte[] { S.EcoCool ? P.ModeCool : P.ModeEco, P.ModeBalanced, P.ModePerformance }; } }
         public bool OnBattery;                              // mirrored into the SetMode payload like OGH does (BiosAutoFanControlInDc)
+        public volatile bool ScreenOff;                     // the console display is off (screen timeout, lid shut with no other screen, modern standby)
 
         // ---------- platform ----------
         public PlatformProfile P = new PlatformProfile { Name = "(detecting)", Boards = new string[0] };   // replaced by Init
@@ -1218,7 +1222,14 @@ namespace Ohman {
             switch (S.Fan) {
                 case FanMode.Max: MaxFan(true, "Max fan"); break;
                 case FanMode.Manual: MaxFan(false, "Max fan off"); WriteLevels(S.Fan1, S.Fan2, "Fan level"); break;
-                default: MaxFan(false, "Max fan off"); AutoTick(true); break;
+                default:
+                    MaxFan(false, "Max fan off");
+                    // Screen off: the curve is not ours to drive (see OnDisplay). Leaving max may just have written
+                    // the ceiling as its second step, so the firmware has to be handed the fans again right now
+                    // rather than at the next heartbeat.
+                    if (ScreenOff) Try(delegate { Hw.SetMode(ModeByte, true); }, "Fans to the firmware");
+                    else AutoTick(true);
+                    break;
             }
         }
 
@@ -1241,6 +1252,7 @@ namespace Ohman {
         /// <summary>Auto mode: one step of the software curve. Called every 5 s and on every mode change.</summary>
         void AutoTick(bool immediate) {
             if ((S.Fan != FanMode.Auto && S.Fan != FanMode.Custom) || GuardActive || ReadOnly) return;
+            if (ScreenOff) return;                 // the firmware's own curve has the fans until the display is back (OnDisplay)
             if (fanWriteFailures >= 3 && (DateTime.Now - lastFanWrite).TotalSeconds < 60) return;   // back off; retry once a minute
             try { IrTemp = Hw.GetTemperature(); } catch { IrTemp = double.NaN; }
             if (immediate) { smoothCpu = CpuTemp; smoothGpu = GpuTemp; cpuGone = gpuGone = 0; }
@@ -1639,7 +1651,35 @@ namespace Ohman {
         /// until 74 C, which one owner reported as "the fans only work plugged in". So the hand-off happens only
         /// in Auto, where the quiet firmware curve is a fair reading of what the owner asked for; Manual, Curve
         /// and Max are explicit choices and stay Ohman's on either power source.</summary>
-        bool FansByBios { get { return OnBattery && S.Fan == FanMode.Auto; } }
+        bool FansByBios { get { return (OnBattery && S.Fan == FanMode.Auto) || (ScreenOff && (S.Fan == FanMode.Auto || S.Fan == FanMode.Custom)); } }
+
+        /// <summary>The console display went off or came back (GUID_CONSOLE_DISPLAY_STATE, from the window).
+        ///
+        /// Closing the lid on a modern-standby laptop does not suspend this process. Auto and Curve are both
+        /// Ohman's own software curve, not the firmware's, so with the screen off the curve went on chasing the
+        /// CPU every 5 s: any background burst (maintenance, updates, indexing) stepped the fans up at once and
+        /// let them down slowly, which is the "spins up and down while it is closed" report (#68), in Auto as
+        /// much as in Curve. With the display off nobody is listening for the curve they chose, so the firmware
+        /// gets the fans back through the same "fan control by BIOS" byte exit uses, and the heartbeat keeps
+        /// sending that byte (FansByBios) until the display returns.
+        ///
+        /// Display, not lid: a lid shut on an external monitor keeps the console display on, and that is a
+        /// machine running a game, which keeps its curve. Manual and Max are explicit and are left alone. The
+        /// thermal guard is untouched: it still ticks, still sees the CPU, and still takes the fans when hot.</summary>
+        public void OnDisplay(bool on) {
+            if (ScreenOff == !on) return;
+            ScreenOff = !on;
+            if (!BiosOk || Hw.IsDemo || ReadOnly) return;
+            if (S.Fan != FanMode.Auto && S.Fan != FanMode.Custom) { Log.Write("display " + (on ? "on" : "off") + ": fans stay on " + S.Fan); return; }
+            lock (applySync) {
+                ClearMaxFirst();
+                Try(delegate { Hw.SetMode(ModeByte, FansByBios); }, "Set mode");
+                if (GuardActive) GuardFans();
+                else if (on) { curLevel1 = curLevel2 = -1; AutoTick(true); lastFanWrite = DateTime.Now; }   // -1: write even if the target matches the last pair
+            }
+            Log.Write(on ? "display on: " + S.Fan + " curve back in charge of the fans" : "display off: fans handed to the firmware's own curve until it is back");
+            Changed();
+        }
         public void OnPowerSource(bool onBattery) {
             bool changed = OnBattery != onBattery;
             OnBattery = onBattery;
@@ -1779,9 +1819,19 @@ namespace Ohman {
         void InitLight(bool apply = true) {
             try {
                 Light = Hw.IsDemo ? (ILighting)new DemoLighting() : (BiosOk ? BiosLighting.Detect() : null);   // not !ReadOnly: see TryLight
-                // The owner said there is nothing here worth a page. No firmware answer tells a white-only backlight
-                // from a four-zone RGB one (8E10 and 878A both report support byte 06, type 0, and a full colour
-                // table), so this is their call, not ours. Detect has only read; from here on nothing is written, and
+                // A keyboard the firmware describes as white-only (BiosLighting.WhiteOnly) starts hidden, once. It
+                // goes through the owner's own switch rather than around it, so Settings > Keyboard lighting
+                // controls still brings the page back and that choice then stands.
+                var bl = Light as BiosLighting;
+                if (apply && bl != null && bl.WhiteOnly && !S.WhiteLightSeen) {
+                    S.WhiteLightSeen = true;
+                    S.HideLight = true;
+                    S.Save();
+                    Log.Write("keyboard lighting: the firmware describes a white-only backlight; keyboard page hidden (Settings brings it back)");
+                }
+                // The owner said there is nothing here worth a page. The two white-only shapes above are caught for
+                // them; any other white keyboard still looks like a four-zone one from here, so this is their call.
+                // Detect has only read; from here on nothing is written, and
                 // the Fn key keeps working because the firmware handles it without us. Not on the probe-only path:
                 // the support report should still say what keyboard this is.
                 if (apply && Light != null && S.HideLight) { Log.Write("keyboard lighting: hidden in Settings (" + Light.Describe + " detected); the keyboard is left alone"); Light = null; return; }
@@ -1985,7 +2035,7 @@ namespace Ohman {
             // ceilings cannot be told apart without this: the profile/table value, then what was measured here.
             sb.AppendLine("fan ceiling: " + (P.Curve != null ? P.Curve.Ceiling : -1) + "  (profile/table " + pristineCeiling + ", learned " + (S.FanCeilingSeen > 0 ? "" + S.FanCeilingSeen : "none")
                 + ", max flag " + (S.MaxIgnored ? "ignored" : maxProven ? "proven" : "not tested this run") + ", fastest seen " + ceilingHighWater + ")");
-            sb.AppendLine("fan drive: written " + curLevel1 + "/" + curLevel2 + "  cpu " + Fmt(CpuTemp) + " (last single reading " + Fmt(CpuTempNow) + ")  gpu " + Fmt(GpuTemp) + "  ir " + Fmt(IrTemp) + "  guard=" + GuardActive + "  writeFailures=" + fanWriteFailures + "  route=" + Route);
+            sb.AppendLine("fan drive: written " + curLevel1 + "/" + curLevel2 + "  cpu " + Fmt(CpuTemp) + " (last single reading " + Fmt(CpuTempNow) + ")  gpu " + Fmt(GpuTemp) + "  ir " + Fmt(IrTemp) + "  guard=" + GuardActive + "  writeFailures=" + fanWriteFailures + "  route=" + Route + (ScreenOff ? "  screen off: firmware curve" : ""));
             sb.AppendLine("driver: " + (DriverReady ? "PawnIO " + (Hw.IsDemo ? "simulated" : "" + DriverVersion) + " · cpu " + (Cpu != null ? Cpu.Describe : "none")
                 + " · ec " + (Ec == null ? "none" : (ecVerified ? Ec.Map.Name : "map rejected") + (Ec.Resting ? " (resting)" : "") + " · " + EcProof) : "none (" + DriverWhy + ")"));
             sb.AppendLine("last heartbeat: " + (LastHeartbeat == DateTime.MinValue ? "never" : LastHeartbeat.ToString("HH:mm:ss")) + "   last key event: " + (LastEventTime == DateTime.MinValue ? "none" : LastEventId + "/" + LastEventData + " at " + LastEventTime.ToString("HH:mm:ss")));

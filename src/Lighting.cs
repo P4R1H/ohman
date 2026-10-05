@@ -89,9 +89,12 @@ namespace Ohman {
         readonly int zones;
         public LightKind Kind { get { return kind; } }
         public int Zones { get { return zones; } }
-        public string Describe { get { return kind == LightKind.PerKey ? "per-key" : zones == 1 ? "1 zone" : zones + " zones"; } }
+        public string Describe { get { return WhiteOnly ? "white backlight" : kind == LightKind.PerKey ? "per-key" : zones == 1 ? "1 zone" : zones + " zones"; } }
         public bool Numpad { get { return KbdType == 1 || KbdType == 4; } }
         public bool Inert { get { return kind == LightKind.PerKey; } }
+        /// <summary>The firmware's answers match a single-colour white backlight: there is no colour to set, and on
+        /// 88F8 the 0x20009 backlight byte did not move the light either (Fn does it in firmware). See Detect.</summary>
+        public bool WhiteOnly { get; private set; }
 
         BiosLighting(int kbdType, LightKind k, int z) { KbdType = kbdType; kind = k; zones = z; }
 
@@ -106,11 +109,17 @@ namespace Ohman {
             // the call fails. We were treating 0x2B as the capability and bailing out on type 0, so every board
             // reporting a standard layout lost its keyboard page before we ever asked whether it had a backlight.
             bool declared = false;
-            try { var d = Bios.Call(CMD, OP_PLATFORM_INFO, new byte[0], 128); if (d.Length > 0) declared = (d[0] & 1) != 0; }
+            int sup0 = -1, sup1 = -1;                      // the whole first two bytes, for WhiteOnly below
+            try {
+                var d = Bios.Call(CMD, OP_PLATFORM_INFO, new byte[0], 128);
+                if (d.Length > 0) { declared = (d[0] & 1) != 0; sup0 = d[0]; }
+                if (d.Length > 1) sup1 = d[1];
+            }
             catch (Exception ex) { Log.Write("lighting support probe: " + ex.Message); }
 
             int type = 0;                                  // what both reference implementations assume on failure
-            try { var d = Bios.Call(Bios.CMD_DEFAULT, OP_KBD_TYPE, new byte[0], 4); if (d.Length > 0) type = (sbyte)d[0]; }
+            bool typeAnswered = false;                     // 0 the firmware said, not 0 because it refused (8574)
+            try { var d = Bios.Call(Bios.CMD_DEFAULT, OP_KBD_TYPE, new byte[0], 4); if (d.Length > 0) { type = (sbyte)d[0]; typeAnswered = true; } }
             catch (Exception ex) { Log.Write("keyboard type query: " + ex.Message + "; assuming standard layout"); }
             if (type < 0) type = 0;                        // -1 arrives as 0xFF and means the same thing as 0 here
 
@@ -130,6 +139,22 @@ namespace Ohman {
             try {
                 var c = l.GetColors();
                 int b = l.GetBacklight();
+                // White-only backlights, from every report that has the support bytes, the layout byte and an
+                // owner saying what the keyboard is. OGH's own FourZoneHelper.IsSupported offers four-zone colour
+                // only for layout types 1, 2, 4..7 (type 0 is "Normal") outside a handful of older device types,
+                // and OpenRGB drives type 2 alone, so a type-0 board with colours is the exception, not the rule.
+                // But 8BA9 (support 07 3D, type 0) is a four-zone board whose owner confirmed the zones, so type 0
+                // alone is not enough: these are the two shapes no RGB board has ever answered with.
+                //   support 01 00, colour table byte 0 = 00 and black: 88F8, 8BB1, 8DCD (white, owners), 8A26
+                //   support byte 0 = 06 (bit 0 clear) with type 0:     878A (#46), 88ED, 8E10, 8E5C (white, owners)
+                // Every RGB or per-key board reports 03, 07 or 0F with a non-zero second byte and 03 at byte 0 of
+                // the colour table; the one 06 among them (8BAD) is type 3. Type must have been answered: 8574
+                // refuses all of 0x20008 and its layout is unknown, not standard.
+                bool black = true;
+                foreach (var x in c) if (x.R != 0 || x.G != 0 || x.B != 0) black = false;
+                int t0 = l.Table()[0];                     // OmenMon's ColorTable.ZoneCount; 03 on every RGB board seen
+                l.WhiteOnly = typeAnswered && type == 0
+                    && ((sup0 == 0x01 && sup1 == 0 && t0 == 0 && black) || sup0 == 0x06);
                 // Open question, deliberately not guessed at. Firmware with no lighting could in principle answer
                 // 0x20009/0x02 with rc 0 and a buffer of zeros, and since type 0 now means "standard layout"
                 // rather than "none", nothing would catch it. The obvious veto -- reject when the support bit is
@@ -138,7 +163,8 @@ namespace Ohman {
                 // the veto would re-break the machine this change was written for. The support report now records
                 // the bit for every reporter; decide it when a board that genuinely has no lighting turns up.
                 Log.Write("keyboard lighting: type " + type + " -> " + l.Describe + ", firmware "
-                    + (declared ? "declares support" : "declares no support") + ", colours " + Join(c) + ", backlight 0x" + b.ToString("X2"));
+                    + (declared ? "declares support" : "declares no support") + " (" + (sup0 < 0 ? "--" : sup0.ToString("X2") + " " + (sup1 < 0 ? "--" : sup1.ToString("X2")))
+                    + "), colours " + Join(c) + ", backlight 0x" + b.ToString("X2"));
             } catch (Exception ex) {
                 Log.Write("keyboard lighting: none (type " + type + ", support bit " + (declared ? "1" : "0") + ", colour table: " + ex.Message + ")");
                 return null;

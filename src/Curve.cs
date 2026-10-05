@@ -117,14 +117,17 @@ namespace Ohman {
             for (int i = 0; i < Temps.Length; i++) if (Math.Abs(p.X - X(Temps[i])) <= 13 && Math.Abs(p.Y - Y(Levels[i])) <= 40) return i;
             return -1;
         }
+        /// <summary>What Engine.SetCurve will keep (FanCurve.ClampOrOff): 0 is off, 1..Floor-1 is not a speed a fan
+        /// holds and is saved as Floor. Drawn that way while dragging, so the point does not jump on release.</summary>
+        int Legal(int lvl) { lvl = Math.Max(0, Math.Min(Ceiling, lvl)); return lvl == 0 ? 0 : Math.Max(Math.Min(Floor, Ceiling), lvl); }
         protected override void OnMouseMove(MouseEventArgs e) {
             var p = e.GetPosition(this);
             if (drag >= 0 && e.LeftButton == MouseButtonState.Pressed) {
-                int lvl = Math.Max(0, Math.Min(Ceiling, LevelAt(p.Y)));
+                int lvl = Legal(LevelAt(p.Y));
                 if (lvl != Levels[drag]) {
                     if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0) {                  // shift-drag moves the whole curve
                         int d = lvl - Levels[drag];
-                        for (int i = 0; i < Levels.Length; i++) Levels[i] = Math.Max(0, Math.Min(Ceiling, Levels[i] + d));
+                        for (int i = 0; i < Levels.Length; i++) Levels[i] = Legal(Levels[i] + d);
                     } else {
                         Levels[drag] = lvl;
                         for (int i = drag + 1; i < Levels.Length; i++) if (Levels[i] < lvl) Levels[i] = lvl;     // a fan curve never falls as it gets hotter

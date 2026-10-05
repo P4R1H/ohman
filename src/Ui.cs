@@ -187,6 +187,13 @@ namespace Ohman {
         [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
         [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr h, int msg, IntPtr wp, IntPtr lp);
         [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int val, int size);
+        // The console display going off is the one signal a modern-standby laptop gives a desktop app when the lid
+        // shuts: PowerModeChanged only reports a real S3 suspend. Windows sends the current state on registration.
+        const int WM_POWERBROADCAST = 0x0218, PBT_POWERSETTINGCHANGE = 0x8013;
+        static Guid GUID_CONSOLE_DISPLAY_STATE = new Guid("6FE69556-704A-47A0-8F24-C28D936FDA47");   // DWORD: 0 off, 1 on, 2 dimmed
+        [DllImport("user32.dll", SetLastError = true)] static extern IntPtr RegisterPowerSettingNotification(IntPtr h, ref Guid setting, int flags);
+        [DllImport("user32.dll")] static extern bool UnregisterPowerSettingNotification(IntPtr handle);
+        IntPtr displayNotify;
 
         public MainWindow(Engine engine, Sensors s, string screenshot, bool settingsOpen) {
             E = engine;
@@ -2160,6 +2167,8 @@ namespace Ohman {
             hwnd = new WindowInteropHelper(this).Handle;
             src = HwndSource.FromHwnd(hwnd);
             if (src != null) src.AddHook(Hook);
+            try { displayNotify = RegisterPowerSettingNotification(hwnd, ref GUID_CONSOLE_DISPLAY_STATE, 0); if (displayNotify == IntPtr.Zero) Log.Write("display state notification: error " + Marshal.GetLastWin32Error()); }
+            catch (Exception ex) { Log.Write("display state notification: " + ex.Message); }
             try { int pref = 2; DwmSetWindowAttribute(hwnd, 33, ref pref, 4); int dark = 1; DwmSetWindowAttribute(hwnd, 20, ref dark, 4); int border = 0x0025282C; DwmSetWindowAttribute(hwnd, 34, ref border, 4); } catch { }
             if (E.S.Hotkeys) RegisterHotkeys();
         }
@@ -2384,6 +2393,14 @@ namespace Ohman {
                 else if (id == (int)HotkeyAction.Cycle) CycleWithFlash();
                 handled = true;
             }
+            else if (msg == WM_POWERBROADCAST && wp.ToInt32() == PBT_POWERSETTINGCHANGE && lp != IntPtr.Zero) {
+                // POWERBROADCAST_SETTING: GUID (16 bytes), DataLength (4), then the data
+                var g = (Guid)Marshal.PtrToStructure(lp, typeof(Guid));
+                if (g == GUID_CONSOLE_DISPLAY_STATE && Marshal.ReadInt32(lp, 16) >= 4) {
+                    bool on = Marshal.ReadInt32(lp, 20) != 0;         // dimmed counts as on: somebody is still there
+                    Bg(delegate { E.OnDisplay(on); });
+                }
+            }
             return IntPtr.Zero;
         }
 
@@ -2523,6 +2540,7 @@ namespace Ohman {
             try { UnregisterHotkeys(); } catch { }
             try { uiTimer.Stop(); } catch { }
             try { Microsoft.Win32.SystemEvents.PowerModeChanged -= OnPowerMode; } catch { }
+            try { if (displayNotify != IntPtr.Zero) { UnregisterPowerSettingNotification(displayNotify); displayNotify = IntPtr.Zero; } } catch { }
             try { if (tray != null) { tray.Visible = false; tray.Dispose(); } } catch { }
             try { if (osd != null) osd.Close(); } catch { }
             try { if (trayTempIcon != null) { IntPtr h = trayTempIcon.Handle; trayTempIcon.Dispose(); DestroyIcon(h); } } catch { }
