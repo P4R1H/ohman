@@ -1,4 +1,4 @@
-﻿# Ohman per-key check, for OMEN 16/17 per-key keyboards (Primax 0461:4E9A / 4E9B / 4F03 / 4F11 / 4F1E). Run from Terminal (Admin):
+# Ohman per-key check, for OMEN 16/17 per-key keyboards (Primax 0461:4E9A / 4E9B / 4F03 / 4F11 / 4F1E). Run from Terminal (Admin):
 #   irm https://raw.githubusercontent.com/P4R1H/ohman/main/tools/check-perkey.ps1 | iex
 # What it does to the machine: reads the keyboard's own description, asks it three questions, then lights it
 # red and a few single keys for a minute, asking you what you see. Nothing is saved to the keyboard; a restart

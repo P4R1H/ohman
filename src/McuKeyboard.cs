@@ -98,7 +98,7 @@ namespace Ohman {
                 if (pid == 0x4F03 || pid == 0x4F11 || pid == 0x4F1E) {
                     McuBoard b;
                     if (!ralphKin.TryGetValue(pid, out b)) {
-                        b = new McuBoard(pid == 0x4F03 ? "Hendricks" : "Brunobear", "OMEN 16", pid, 167, false, RalphKeys, RalphNull);
+                        b = new McuBoard(pid == 0x4F03 ? "Hendricks" : "Brunobear/Quaker", pid == 0x4F03 ? "OMEN 16" : "OMEN 16 / Transcend 16", pid, 167, false, RalphKeys, RalphNull);
                         ralphKin[pid] = b;
                     }
                     return b;
@@ -413,6 +413,8 @@ namespace Ohman {
 
         public LightKind Kind { get { return LightKind.PerKey; } }
         public bool Inert { get { return false; } }
+        /// <summary>The key table has been confirmed on a real keyboard (Cybug on 8BAD); the rest are OGH's maps only.</summary>
+        public bool Tested { get { return board.Tested; } }
         public int Zones { get { return board.Names.Length; } }
         public bool Numpad { get { return false; } }                 // neither Cybug nor Ralph has one
         public string Describe { get { return board.Names.Length + " keys"; } }

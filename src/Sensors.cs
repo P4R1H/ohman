@@ -36,6 +36,7 @@ namespace Ohman {
         DateTime lastNv = DateTime.MinValue;
         public volatile bool SkipGpu;                 // set by the UI when the machine is running on the iGPU alone
         const int GpuIdleMs = 30000, GpuStaleMs = 45000;
+        const int GpuTrayMs = 15000;   // a busy GPU with the window shut: the curve still reads it, a third as often as GpuStaleMs allows
         readonly object sync = new object();
         SensorSnapshot last = new SensorSnapshot();
         Thread worker;
@@ -256,10 +257,10 @@ namespace Ohman {
         bool DueForGpu(SensorSnapshot s) {
             bool cpuBusy = !double.IsNaN(s.CpuLoad) && s.CpuLoad > 25;
             // With the window shut (the tray rates are 5 s and slower) nobody is watching the GPU numbers; only the
-            // fan curve reads them, and GpuStaleMs (45 s) still bounds how old they may be. Each nvidia-smi is a
-            // process start plus an NVML init and driver handshake, and every 10 s of that during a game was
-            // reported as a periodic hitch (#72). The thermal guard never used the GPU, so it is unaffected.
-            double want = (gpuQuiet >= 3 && !cpuBusy) || intervalMs >= 5000 ? GpuIdleMs : Math.Max(4000, intervalMs * 2);
+            // fan curve reads them, so a busy GPU is asked every 15 s rather than 10, well inside GpuStaleMs (45 s). Each
+            // nvidia-smi is a process start plus an NVML init and driver handshake, and a lag spike every 10 s while
+            // gaming was reported (#72). The thermal guard never used the GPU, so it is unaffected.
+            double want = gpuQuiet >= 3 && !cpuBusy ? GpuIdleMs : intervalMs >= 5000 ? GpuTrayMs : Math.Max(4000, intervalMs * 2);
             if ((DateTime.Now - lastNv).TotalMilliseconds < want) return false;
             // Asking nvidia-smi anything wakes the GPU to answer, and a hybrid laptop's dGPU spends most of its day
             // asleep. One owner saw it pinned awake at 60-100 W idle. Asleep is also the answer: it is cool.

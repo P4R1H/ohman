@@ -150,11 +150,14 @@ namespace Ohman {
                 // Every RGB or per-key board reports 03, 07 or 0F with a non-zero second byte and 03 at byte 0 of
                 // the colour table; the one 06 among them (8BAD) is type 3. Type must have been answered: 8574
                 // refuses all of 0x20008 and its layout is unknown, not standard.
-                bool black = true;
-                foreach (var x in c) if (x.R != 0 || x.G != 0 || x.B != 0) black = false;
-                int t0 = l.Table()[0];                     // OmenMon's ColorTable.ZoneCount; 03 on every RGB board seen
-                l.WhiteOnly = typeAnswered && type == 0
-                    && ((sup0 == 0x01 && sup1 == 0 && t0 == 0 && black) || sup0 == 0x06);
+                // Its own try: a failed extra read only means "not known to be white", never "no keyboard at all".
+                try {
+                    bool black = true;
+                    foreach (var x in c) if (x.R != 0 || x.G != 0 || x.B != 0) black = false;
+                    int t0 = l.Table()[0];                 // OmenMon's ColorTable.ZoneCount; 03 on every RGB board seen
+                    l.WhiteOnly = typeAnswered && type == 0
+                        && ((sup0 == 0x01 && sup1 == 0 && t0 == 0 && black) || sup0 == 0x06);
+                } catch (Exception ex) { Log.Write("keyboard lighting: white-only check skipped: " + ex.Message); }
                 // Open question, deliberately not guessed at. Firmware with no lighting could in principle answer
                 // 0x20009/0x02 with rc 0 and a buffer of zeros, and since type 0 now means "standard layout"
                 // rather than "none", nothing would catch it. The obvious veto -- reject when the support bit is

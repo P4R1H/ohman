@@ -320,8 +320,8 @@ namespace Ohman {
                 string tmp = File_ + ".tmp";
                 File.WriteAllText(tmp, sb.ToString());
                 try { if (File.Exists(File_)) File.Replace(tmp, File_, null); else File.Move(tmp, File_); }
-                catch (IOException) { File.WriteAllText(File_, sb.ToString()); }
-                catch (PlatformNotSupportedException) { File.WriteAllText(File_, sb.ToString()); }
+                catch (IOException) { File.WriteAllText(File_, sb.ToString()); try { File.Delete(tmp); } catch { } }
+                catch (PlatformNotSupportedException) { File.WriteAllText(File_, sb.ToString()); try { File.Delete(tmp); } catch { } }
             }
         }
     }
@@ -880,6 +880,9 @@ namespace Ohman {
             // Only while asking for everything. Any lower and a low reading says nothing about the limit. A max flag
             // not yet seen to work counts for nothing: on firmware that ignores it, these readings are the curve's.
             bool maxAsking = (GuardActive || S.Fan == FanMode.Max) && maxProven;
+            // While the firmware drives the fans (on battery in Auto, or with the screen off) curLevel is the last
+            // thing we asked for, not what they are following, so their speed says nothing about our ceiling.
+            if (FansByBios && !maxAsking) { ceilingTicks = 0; ceilingHighWater = 0; return; }
             if (!(maxAsking || Math.Max(curLevel1, curLevel2) >= P.Curve.Ceiling)) {
                 ceilingTicks = 0; ceilingHighWater = 0; return;
             }
@@ -1460,7 +1463,8 @@ namespace Ohman {
             // On battery the mode command carries who drives the fans (FansByBios), and that follows the fan
             // mode: leaving Auto has to take control back before the first level is written.
             if (leavingMax) lock (applySync) MaxFan(false, "Max fan off");
-            if (OnBattery) lock (applySync) Try(delegate { Hw.SetMode(ModeByte, FansByBios); }, "Set mode");
+            // The same with the screen off, where Auto and Curve hand the fans to the firmware (OnDisplay).
+            if (OnBattery || ScreenOff) lock (applySync) Try(delegate { Hw.SetMode(ModeByte, FansByBios); }, "Set mode");
             lock (applySync) { ApplyFanCore(); lastFanWrite = DateTime.Now; }
             if (announce) Say(mode == FanMode.Max ? "Max fan" : mode == FanMode.Manual ? "Fans " + Rpm(S.Fan1) + " / " + Rpm(S.Fan2) : mode == FanMode.Custom ? "Fans on your curve" : "Fans auto");
             Changed();
@@ -1716,6 +1720,7 @@ namespace Ohman {
             if (!BiosOk || Hw.IsDemo || ReadOnly) return;
             if (S.Fan != FanMode.Auto && S.Fan != FanMode.Custom) { Log.Write("display " + (on ? "on" : "off") + ": fans stay on " + S.Fan); return; }
             lock (applySync) {
+                if (stopping) return;          // a display event queued behind the exit hand-off must not take the fans back
                 ClearMaxFirst();
                 Try(delegate { Hw.SetMode(ModeByte, FansByBios); }, "Set mode");
                 if (GuardActive) GuardFans();
@@ -1887,12 +1892,16 @@ namespace Ohman {
                 // Detecting it only asks (two GETs), so it is safe on a probe-only start too.
                 if (!Hw.IsDemo && Light != null && Light.Inert) {
                     var mcu = McuKeyboardLighting.Detect();
-                    if (mcu != null) Light = mcu;
-                    else {
-                        var la = LampArray.FindKeyboard();
-                        if (la != null) Light = new PerKeyLighting(la);
-                        else Log.Write("per-key board with no HID lighting interface we can drive; colours left to Windows");
+                    // An untested Primax table gives way to a keyboard LampArray that is actually there: a board that
+                    // lit through Windows' per-key interface before keeps that (8C76 is verified and its keyboard may
+                    // be on one of the PIDs that share Ralph's map). The tested Cybug path is unchanged.
+                    LampArray la = mcu == null || !mcu.Tested ? LampArray.FindKeyboard() : null;
+                    if (la != null) {
+                        if (mcu != null) { Log.Write("mcu keyboard: untested table, a keyboard LampArray is present and drives it instead"); mcu.Dispose(); }
+                        Light = new PerKeyLighting(la);
                     }
+                    else if (mcu != null) Light = mcu;
+                    else Log.Write("per-key board with no HID lighting interface we can drive; colours left to Windows");
                     if (apply) WinLighting.Warm();
                 }
                 if (Light == null) return;
