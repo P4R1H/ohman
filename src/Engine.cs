@@ -408,10 +408,12 @@ namespace Ohman {
             if (!force && !otherBuild && S.UpdateChecked != 0 && (DateTime.Now - LastUpdateCheck).TotalHours < 24) return;
             Release rel = Update.Latest();
             string tag = rel == null ? null : rel.Tag;
-            S.UpdateChecked = DateTime.Now.Ticks;
             // Only a check that actually reached GitHub may claim the cache for this build. Stamping it on a
-            // failed fetch spends the new-build recheck on nothing and leaves a stale tag for another day.
-            if (tag != null) { S.LatestVersion = tag; S.CheckedFrom = Program.Version; }
+            // failed fetch spends the new-build recheck on nothing and leaves a stale tag for another day - and
+            // the day's wait with it: this runs at start, when the network is not always up yet, so a check
+            // that never answered must not push the next automatic one a day out. UpdateChecked is "ticks of
+            // the last successful update check" for the same reason.
+            if (tag != null) { S.LatestVersion = tag; S.CheckedFrom = Program.Version; S.UpdateChecked = DateTime.Now.Ticks; }
             S.Save();
             if (force) Say(tag == null ? "Update check failed" : Update.Newer(tag, Program.Version) ? "Version " + tag + " is available" : "Ohman is up to date");
             Changed();
