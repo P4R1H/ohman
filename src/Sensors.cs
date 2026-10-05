@@ -40,6 +40,7 @@ namespace Ohman {
         SensorSnapshot last = new SensorSnapshot();
         Thread worker;
         volatile bool stop;
+        bool disposed;
         volatile int intervalMs = 2000;
         // Sleeping in 100 ms steps to stay responsive to Stop() costs ten timer interrupts a second for the life of
         // the process, which is enough to keep the package out of its deeper idle states. One wait for the whole
@@ -206,8 +207,15 @@ namespace Ohman {
                 // carrying the last number forward is fine for a display; it is not fine for the fan curve, which would
                 // believe an idle GPU while a job heats it up between two backed-off reads
                 if (s.GpuRead != DateTime.MinValue && (DateTime.Now - s.GpuRead).TotalMilliseconds > GpuStaleMs) { s.GpuTemp = double.NaN; s.GpuLoad = double.NaN; s.GpuWatts = double.NaN; s.GpuMhz = double.NaN; }
-                lock (sync) last = s;
-                var h = Updated; if (h != null) { try { h(s); } catch { } }
+                // Serialize publication with shutdown.  This makes the stop flag and the
+                // callback a single lifecycle decision: Dispose cannot begin shutdown
+                // between the check and invoking a subscriber.
+                lock (sync) {
+                    if (!stop) {
+                        last = s;
+                        var h = Updated; if (h != null) { try { h(s); } catch { } }
+                    }
+                }
                 wake.WaitOne(warm > 0 ? Math.Min(1000, intervalMs) : intervalMs);
                 if (warm > 0) warm--;
             }
@@ -334,10 +342,18 @@ namespace Ohman {
         }
 
         public void Dispose() {
-            stop = true;
-            wake.Set();
+            lock (sync) {
+                if (disposed) return;
+                disposed = true;
+                stop = true;
+                wake.Set();
+            }
+            // The worker owns all sensor reads.  Do not release its counters until it
+            // has left Loop, otherwise a read already in progress can use a disposed
+            // PerformanceCounter.  Updated callbacks run on this worker; a callback
+            // that disposes Sensors is re-entrant on sync, so avoid joining ourselves.
+            if (worker != null && worker != Thread.CurrentThread) worker.Join();
             try { for (int i = 0; i < thermals.Length; i++) { try { thermals[i].Dispose(); } catch { } } if (cpuUtil != null) cpuUtil.Dispose(); if (cpuFreq != null) cpuFreq.Dispose(); if (cpuPower != null) cpuPower.Dispose(); } catch { }
         }
     }
 }
-
