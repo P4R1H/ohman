@@ -241,6 +241,9 @@ namespace Ohman {
         public void Delete() {
             NoPersist = true;
             try { if (System.IO.File.Exists(File_)) System.IO.File.Delete(File_); } catch { }
+            // A save killed between the write and the replace leaves the tmp behind, and the reset has just
+            // promised that nothing of the app is left.
+            try { if (System.IO.File.Exists(File_ + ".tmp")) System.IO.File.Delete(File_ + ".tmp"); } catch { }
         }
 
         public void Save() {
@@ -307,7 +310,15 @@ namespace Ohman {
                 sb.AppendLine("StartHidden=" + StartHidden);
                 sb.AppendLine("# Name=   (optional: a different display name for the window and tray; no rebuild needed)");
                 if (!string.IsNullOrEmpty(Name)) sb.AppendLine("Name=" + Name);
-                File.WriteAllText(File_, sb.ToString());
+                // Write beside the file and replace it in one step: a kill or a crash mid-save must not leave
+                // a truncated file for Load to take half of - a cut-off curve line is dropped and the curve
+                // quietly reseeds. The tmp exists only for the moment between the two. A filesystem without
+                // an atomic replace (a FAT drive) gets the old in-place write back.
+                string tmp = File_ + ".tmp";
+                File.WriteAllText(tmp, sb.ToString());
+                try { if (File.Exists(File_)) File.Replace(tmp, File_, null); else File.Move(tmp, File_); }
+                catch (IOException) { File.WriteAllText(File_, sb.ToString()); }
+                catch (PlatformNotSupportedException) { File.WriteAllText(File_, sb.ToString()); }
             }
         }
     }
