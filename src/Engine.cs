@@ -1084,7 +1084,10 @@ namespace Ohman {
                         S.DriverInstalledByOhman = true;
                         S.DriverRestartPending = true;
                         S.Save();
-                        InitDriver();       // the registry key is there even though the device is not; the row reads that
+                        // Under the lock, like the other callers: this closes and reopens the CPU and EC
+                        // modules, and the fan tick, the guard or the heartbeat can be inside them on another
+                        // thread. The registry key is there even though the device is not; the row reads that.
+                        lock (applySync) InitDriver();
                         DriverWhy = "installed · restart Windows to finish";
                         Say("Driver installed · restart Windows to finish");
                         break;
