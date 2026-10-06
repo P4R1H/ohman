@@ -345,7 +345,7 @@ footer p{margin:0 0 8px}
         <dt>Optional driver</dt>
         <dd>Ohman needs no driver. If you want one, a click in Settings installs <a href="https://pawnio.eu">PawnIO</a>, open source, signed, and the same driver FanControl and LibreHardwareMonitor install. With it Ohman reads the CPU's own temperature instead of whichever sensor Windows exposes, which is the fix for boards that report a flat 28&deg;, along with the power limits and the reason the chip is holding back. On boards whose firmware refuses fan levels it sets them through the embedded controller instead. Removable from the same row, any time.</dd>
         <dt>Benchmark</dt>
-        <dd>Ctrl+Alt+R in a game, or Start. Ohman waits for the game in front, warms up until the temperatures settle, then measures for 30&nbsp;s, 1 or 3 minutes: average FPS, 1% and 0.1% lows, frame times and stutter, the same definitions CapFrameX uses, with CPU and GPU temperature, power, clocks and fans beside them. Every run is kept, set against your last one in the same setup, and makes a card to share. Frames come from Intel's open-source <a href="https://github.com/GameTechDev/PresentMon">PresentMon</a>, downloaded once and checked before every run.</dd>
+        <dd>Ctrl+Alt+R in a game: it warms up, then measures average FPS, 1% and 0.1% lows and stutter, with temperatures, power and fans beside them. Every run is kept and makes a card to share. <a href="https://github.com/P4R1H/Ohman/blob/main/docs/benchmark.md">How it&rsquo;s measured</a>.</dd>
         <dt>Live</dt>
         <dd>CPU and GPU temperature, package watts, fan speeds, load, clocks, chassis sensor, battery. CPU temperature on the tray icon.</dd>
         <dt>Tray</dt>
