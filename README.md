@@ -146,9 +146,8 @@ Pushing a `v*` tag builds on a Windows runner and attaches the binaries to a rel
 
 ## Later
 
-- **A thermal guard you can set**: the speed it goes to, next to the switch that turns it on, so it can be a
-  rescue rather than always full fans.
-- **Fan curve import/export** so a verified model's curve can be shared as a file.
+- **Inbuilt stress test**
+- **FPS overlay**
 
 Ideas and issues are welcome.
 
