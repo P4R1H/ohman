@@ -39,6 +39,8 @@ namespace Ohman {
         public static bool KeyboardTest;                      // --keyboard: open the keyboard page at start (screenshot aid)
         public static string StartPage = "";                  // --page home|fans|keyboard|settings|update|driver
         public static bool FanProbe;                          // --fantest with --driver: also find which EC register drives the fans
+        public static string BenchPose;                       // --bench-state first|ready|waiting|warming|measuring|paused|result|runs (simulated build, screenshot aid)
+        public static bool BenchSelfTest;                     // --bench-selftest: simulated build only, one 30 s run with simulated frames, then exit
 
         [STAThread]
         public static int Main(string[] args) {
@@ -55,6 +57,8 @@ namespace Ohman {
                 else if (a == "--flash") FlashTest = true;
                 else if (a == "--keyboard") KeyboardTest = true;
                 else if (a == "--page" && i + 1 < args.Length) StartPage = args[++i].ToLowerInvariant();
+                else if (a == "--bench-state" && i + 1 < args.Length) BenchPose = args[++i].ToLowerInvariant();
+                else if (a == "--bench-selftest") BenchSelfTest = true;
                 else if (a == "--board" && i + 1 < args.Length) Platforms.BoardOverride = args[++i];   // pretend to be another board (with --demo: see what generic mode would build)
             }
             foreach (string a0 in args) if (a0.ToLowerInvariant() == "--lamps") return ListLamps();

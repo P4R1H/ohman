@@ -288,7 +288,9 @@ namespace Ohman {
         /// nothing is run. A tampered download fails the first; a valid signature by anyone else fails the
         /// second. Revocation is not fetched: this runs on laptops with no guarantee of a network, and a
         /// revoked certificate of this author is not the threat the check exists for.</summary>
-        public static bool Signed(string path, out string signer) {
+        public static bool Signed(string path, out string signer) { return Signed(path, Signer, out signer); }
+        /// <summary>The same check for any author: PresentMon has to be Intel's.</summary>
+        public static bool Signed(string path, string expected, out string signer) {
             signer = null;
             IntPtr pInfo = IntPtr.Zero, pData = IntPtr.Zero;
             try {
@@ -303,11 +305,11 @@ namespace Ohman {
                 pData = Marshal.AllocHGlobal((int)wd.cbStruct);
                 Marshal.StructureToPtr(wd, pData, false);
                 int hr = WinVerifyTrust(new IntPtr(-1), GenericVerifyV2, pData);
-                if (hr != 0) { Log.Write("PawnIO installer signature: WinVerifyTrust 0x" + hr.ToString("X8")); return false; }
+                if (hr != 0) { Log.Write(System.IO.Path.GetFileName(path) + " signature: WinVerifyTrust 0x" + hr.ToString("X8")); return false; }
                 var cert = new X509Certificate2(X509Certificate.CreateFromSignedFile(path));
                 signer = cert.GetNameInfo(X509NameType.SimpleName, false);
-                return signer != null && signer.Equals(Signer, StringComparison.OrdinalIgnoreCase);
-            } catch (Exception ex) { Log.Write("PawnIO installer signature: " + ex.Message); return false; }
+                return signer != null && signer.Equals(expected, StringComparison.OrdinalIgnoreCase);
+            } catch (Exception ex) { Log.Write(System.IO.Path.GetFileName(path) + " signature: " + ex.Message); return false; }
             finally { if (pData != IntPtr.Zero) Marshal.FreeHGlobal(pData); if (pInfo != IntPtr.Zero) Marshal.FreeHGlobal(pInfo); }
         }
     }

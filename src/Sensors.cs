@@ -20,6 +20,7 @@ namespace Ohman {
         public string Throttle = "";                      // "" or why the CPU is being held back (driver only)
         public DateTime GpuRead = DateTime.MinValue;      // when the GPU numbers below were actually measured
         public double GpuTemp = double.NaN, GpuLoad = double.NaN, GpuWatts = double.NaN, GpuMhz = double.NaN;
+        public ulong GpuLimits = ulong.MaxValue;          // NVML clock event reasons (what holds the GPU clock back); MaxValue = unknown
         public bool OnBattery;
         public int BatteryPercent = -1;
     }
@@ -35,6 +36,7 @@ namespace Ohman {
         int gpuQuiet;
         DateTime lastNv = DateTime.MinValue;
         public volatile bool SkipGpu;                 // set by the UI when the machine is running on the iGPU alone
+        public volatile bool Bench;                   // a benchmark is running: the GPU is read on every tick, while NVML makes that cheap
         const int GpuIdleMs = 30000, GpuStaleMs = 45000;
         const int GpuTrayMs = 15000;   // a busy GPU with the window shut: the curve still reads it, a third as often as GpuStaleMs allows
         readonly object sync = new object();
@@ -208,10 +210,10 @@ namespace Ohman {
                     if (gpuQuiet >= 3) CloseNvml();             // quiet: let it sleep, nothing of ours held open
                     if (!double.IsNaN(s.GpuTemp)) s.GpuRead = DateTime.Now;
                 }
-                else lock (sync) { s.GpuTemp = last.GpuTemp; s.GpuLoad = last.GpuLoad; s.GpuWatts = last.GpuWatts; s.GpuMhz = last.GpuMhz; s.GpuRead = last.GpuRead; }
+                else lock (sync) { s.GpuTemp = last.GpuTemp; s.GpuLoad = last.GpuLoad; s.GpuWatts = last.GpuWatts; s.GpuMhz = last.GpuMhz; s.GpuLimits = last.GpuLimits; s.GpuRead = last.GpuRead; }
                 // carrying the last number forward is fine for a display; it is not fine for the fan curve, which would
                 // believe an idle GPU while a job heats it up between two backed-off reads
-                if (s.GpuRead != DateTime.MinValue && (DateTime.Now - s.GpuRead).TotalMilliseconds > GpuStaleMs) { s.GpuTemp = double.NaN; s.GpuLoad = double.NaN; s.GpuWatts = double.NaN; s.GpuMhz = double.NaN; }
+                if (s.GpuRead != DateTime.MinValue && (DateTime.Now - s.GpuRead).TotalMilliseconds > GpuStaleMs) { s.GpuTemp = double.NaN; s.GpuLoad = double.NaN; s.GpuWatts = double.NaN; s.GpuMhz = double.NaN; s.GpuLimits = ulong.MaxValue; }
                 // Serialize publication with shutdown.  This makes the stop flag and the
                 // callback a single lifecycle decision: Dispose cannot begin shutdown
                 // between the check and invoking a subscriber.
@@ -266,12 +268,22 @@ namespace Ohman {
             // interval), well inside GpuStaleMs (45 s). A lag spike every 10 s while gaming was reported (#72); see
             // ReadNvml for what each read used to cost. The thermal guard never used the GPU, so it is unaffected.
             double want = gpuQuiet >= 3 && !cpuBusy ? GpuIdleMs : Math.Max(intervalMs >= 5000 ? GpuTrayMs : 4000, intervalMs * 2);
+            // A benchmark wants a GPU reading a second. Only through NVML in process (about 10 ms a read on a held
+            // session); nvidia-smi costs a process and an NVML init each time, which is the stutter #72 was about.
+            // Not a quiet GPU: its session is closed after every quiet read, so each read would pay NVML's start-up again.
+            // And not through nvidia-smi at all: a run on a machine without NVML keeps the tray's pace, or the run
+            // would measure its own hitches.
+            if (Bench) {
+                if (nvmlLoaded && !nvmlGone) { if (gpuQuiet < 3) want = Math.Min(want, intervalMs - 100); }
+                else want = Math.Max(want, GpuTrayMs);
+            }
             if ((DateTime.Now - lastNv).TotalMilliseconds < want) return false;
             // Asking nvidia-smi anything wakes the GPU to answer, and a hybrid laptop's dGPU spends most of its day
             // asleep. One owner saw it pinned awake at 60-100 W idle. Asleep is also the answer: it is cool.
             // It cannot heat up while it sleeps, so its last reading stays good; without this it went stale and the
             // Home page showed an unknown GPU temperature on every hybrid laptop idling on the iGPU.
-            if (GpuAsleep()) { CloseNvml(); lastNv = DateTime.Now; lock (sync) { if (last != null && last.GpuRead != DateTime.MinValue) last.GpuRead = DateTime.Now; } return false; }
+            // Its temperature stays good while it sleeps; its load, power, clock and limits do not: a GPU in D3 does nothing.
+            if (GpuAsleep()) { CloseNvml(); lastNv = DateTime.Now; lock (sync) { if (last != null && last.GpuRead != DateTime.MinValue) { last.GpuRead = DateTime.Now; last.GpuLoad = 0; last.GpuWatts = 0; last.GpuMhz = double.NaN; last.GpuLimits = ulong.MaxValue; } } return false; }
             return true;
         }
 
@@ -335,6 +347,11 @@ namespace Ohman {
         [DllImport("nvml.dll")] static extern int nvmlDeviceGetUtilizationRates(IntPtr device, out NvmlUtil util);
         [DllImport("nvml.dll")] static extern int nvmlDeviceGetPowerUsage(IntPtr device, out uint milliwatts);
         [DllImport("nvml.dll")] static extern int nvmlDeviceGetClockInfo(IntPtr device, int type, out uint mhz);
+        // What is holding the clock back. The current name exists from NVML 12.2; older drivers only have the old one.
+        [DllImport("nvml.dll", EntryPoint = "nvmlDeviceGetCurrentClocksEventReasons")] static extern int nvmlClocksEventReasons(IntPtr device, out ulong reasons);
+        [DllImport("nvml.dll", EntryPoint = "nvmlDeviceGetCurrentClocksThrottleReasons")] static extern int nvmlClocksThrottleReasons(IntPtr device, out ulong reasons);
+        int reasonsCall;                              // 0 = try the new name, 1 = the old one, 2 = neither exists
+        double lastGoodWatts = double.NaN;
         bool nvmlLoaded, nvmlGone;
         volatile bool nvmlOpen;
         int nvmlFail;
@@ -366,7 +383,20 @@ namespace Ohman {
                 if (r != 0) throw new Exception("temperature rc " + r);
                 if (t > 0 && t < 130) s.GpuTemp = t;
                 NvmlUtil u; if (nvmlDeviceGetUtilizationRates(nvmlDev, out u) == 0 && u.Gpu <= 100) s.GpuLoad = u.Gpu;
-                uint mw; if (nvmlDeviceGetPowerUsage(nvmlDev, out mw) == 0 && mw < 250000) s.GpuWatts = mw / 1000.0;
+                // The driver hands back the odd impossible figure (365.89 W, or 1.2 W under full load, about a third of
+                // fast reads on one RTX 4070 Laptop; nvidia-smi prints the same). Those keep the last good number.
+                uint mw;
+                if (nvmlDeviceGetPowerUsage(nvmlDev, out mw) == 0) {
+                    bool busy = !double.IsNaN(s.GpuLoad) && s.GpuLoad > 30;
+                    if (mw < 250000 && !(busy && mw < 3000)) { s.GpuWatts = mw / 1000.0; lastGoodWatts = s.GpuWatts; }
+                    else s.GpuWatts = lastGoodWatts;
+                }
+                if (reasonsCall < 2) {
+                    ulong why = 0; int rr = -1;
+                    try { rr = reasonsCall == 0 ? nvmlClocksEventReasons(nvmlDev, out why) : nvmlClocksThrottleReasons(nvmlDev, out why); }
+                    catch (EntryPointNotFoundException) { reasonsCall++; }
+                    if (rr == 0) s.GpuLimits = why;
+                }
                 uint mhz; if (nvmlDeviceGetClockInfo(nvmlDev, 0, out mhz) == 0 && mhz >= 100) s.GpuMhz = mhz;   // 0 = graphics clock
                 nvmlFail = 0;
                 return true;
@@ -377,6 +407,7 @@ namespace Ohman {
             }
         }
         void CloseNvml() {
+            lastGoodWatts = double.NaN;                   // a figure from before the GPU went quiet is no stand-in for one after
             if (!nvmlOpen) return;
             nvmlOpen = false;
             try { nvmlShutdown(); } catch { }

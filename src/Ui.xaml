@@ -767,6 +767,16 @@
                 <ToggleButton x:Name="TgTrayTemp" Grid.Column="1" Style="{StaticResource Switch}"/>
               </Grid>
             </Border>
+            <Border BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <TextBlock Text="Benchmark overlay" Style="{StaticResource Row}"/>
+                  <TextBlock Text="Warm-up, countdown and result over the game" Style="{StaticResource RowSub}"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgBenchPill" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
             <!-- For white-only backlights: no firmware answer tells them from RGB, so the owner decides. -->
             <Border x:Name="LightPageRow" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
               <Grid>

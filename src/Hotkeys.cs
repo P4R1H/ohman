@@ -9,7 +9,7 @@ using System.Windows.Input;
 
 namespace Ohman {
 
-    public enum HotkeyAction { Eco = 0, Balanced = 1, Performance = 2, MaxFan = 3, Cycle = 4 }
+    public enum HotkeyAction { Eco = 0, Balanced = 1, Performance = 2, MaxFan = 3, Cycle = 4, Benchmark = 5 }
 
     /// <summary>One binding: RegisterHotKey's modifier bits and a virtual key. Vk 0 is "none".</summary>
     public struct Hotkey {
@@ -113,15 +113,16 @@ namespace Ohman {
         }
     }
 
-    /// <summary>The five actions, their labels, their settings keys and their defaults, in HotkeyAction order.
+    /// <summary>The six actions, their labels, their settings keys and their defaults, in HotkeyAction order.
     /// Opening the panel is the OMEN key's job and the tray's, not a shortcut's.</summary>
     public static class HotkeyTable {
-        public const int Count = 5;
-        public static readonly string[] Names = { "Eco", "Balanced", "Performance", "Max fan", "Cycle modes" };
-        public static readonly string[] Keys = { "Eco", "Balanced", "Performance", "MaxFan", "Cycle" };
+        public const int Count = 6;
+        public static readonly string[] Names = { "Eco", "Balanced", "Performance", "Max fan", "Cycle modes", "Benchmark" };
+        public static readonly string[] Keys = { "Eco", "Balanced", "Performance", "MaxFan", "Cycle", "Benchmark" };
         public static readonly Hotkey[] Defaults = {
             CtrlAlt('E'), CtrlAlt('B'), CtrlAlt('P'), CtrlAlt('M'),
             new Hotkey(Hotkey.Shift, 0x7A),        // Shift+F11, next to the OMEN key. Not F12: Windows reserves it for the debugger
+            CtrlAlt('R'),                          // start a benchmark from inside the game, and stop one; R for run
         };
         static Hotkey CtrlAlt(char c) { return new Hotkey(Hotkey.Ctrl | Hotkey.Alt, (uint)c); }
 
@@ -147,6 +148,7 @@ namespace Ohman {
             }
             if (!b[3].IsEmpty) add(b[3].Mods, Hotkey.KeyName(b[3].Vk) + " max fan");
             if (!b[4].IsEmpty) add(b[4].Mods, Hotkey.KeyName(b[4].Vk) + " cycles");
+            if (!b[5].IsEmpty) add(b[5].Mods, Hotkey.KeyName(b[5].Vk) + " benchmark");
             if (omenKey != null) add(uint.MaxValue, omenKey);
             if (order.Count == 0) return "No shortcuts set";
             var parts = new System.Collections.Generic.List<string>();

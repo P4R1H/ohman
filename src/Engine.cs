@@ -129,6 +129,10 @@ namespace Ohman {
         public string DriverNudgeDismissed = "";    // the Ohman version whose Home-page nudge was closed
         public bool NoPersist;                      // set when --set overrides are in effect: never write them back to the file
         public int SavedModeOverride = -1;          // while battery forces Eco, the file keeps the user's own mode
+        public int BenchWarm = 0, BenchMeasure = 1; // benchmark: warm up auto / 2:00 / skip, measure 0:30 / 1:00 / 3:00
+        public int ShareLayout = 0;                 // share card: 0 Summary, 1 Graphs, 2 Square
+        public bool BenchPill = true;               // the small overlay over the game during a run
+        public readonly Dictionary<string, string> GameSettings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);   // per game (exe name, lower case): the settings line the owner typed
 
         static readonly string File_ = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Program.FileStem + ".state");
 
@@ -165,6 +169,11 @@ namespace Ohman {
             try {
                 // per-mode keys: M0.Fan=… M1.TdpOffset=… (M0 Eco, M1 Balanced, M2 Performance)
                 if (k.Length > 3 && k[0] == 'M' && char.IsDigit(k[1]) && k[2] == '.') { int mi = k[1] - '0'; if (mi >= 0 && mi < 3) Modes[mi].Apply(k.Substring(3), v); return; }
+                if (k.StartsWith("Game.", StringComparison.Ordinal)) {
+                    string g = k.Substring(5).Trim().ToLowerInvariant();
+                    if (g.Length > 0 && v.Trim().Length > 0) s.GameSettings[g] = v.Trim().Length > 80 ? v.Trim().Substring(0, 80) : v.Trim();
+                    return;
+                }
                 if (k.StartsWith("Hotkey.", StringComparison.Ordinal)) {
                     int hi = Array.IndexOf(HotkeyTable.Keys, k.Substring(7));
                     if (hi >= 0) s.HotkeyText[hi] = v.Trim();
@@ -227,6 +236,10 @@ namespace Ohman {
                         case "DriverNudgeDismissed": s.DriverNudgeDismissed = v.Length > 24 ? v.Substring(0, 24) : v; break;
                         case "FanCeilingSeen": { int fc; if (int.TryParse(v, out fc) && fc >= 0 && fc <= 255) s.FanCeilingSeen = fc; break; }
                         case "MaxIgnored": s.MaxIgnored = v == "1"; break;
+                        case "BenchWarm": if (TryInt(v, out n)) s.BenchWarm = Math.Max(0, Math.Min(2, n)); break;
+                        case "BenchMeasure": if (TryInt(v, out n)) s.BenchMeasure = Math.Max(0, Math.Min(2, n)); break;
+                        case "ShareLayout": if (TryInt(v, out n)) s.ShareLayout = Math.Max(0, Math.Min(2, n)); break;
+                        case "BenchPill": if (bool.TryParse(v, out b)) s.BenchPill = b; break;
                     }
                 }
             } catch (Exception ex) { Log.Write("settings apply " + k + ": " + ex.Message); }
@@ -248,6 +261,16 @@ namespace Ohman {
             try { if (System.IO.File.Exists(File_ + ".tmp")) System.IO.File.Delete(File_ + ".tmp"); } catch { }
         }
 
+        /// <summary>The settings line typed for a game (its exe name), or null. Through the save lock: the page writes
+        /// these on the UI thread while a save may be copying them on another.</summary>
+        public string GameLine(string exe) {
+            string v;
+            lock (saveSync) return GameSettings.TryGetValue((exe ?? "").ToLowerInvariant(), out v) ? v : null;
+        }
+        public void SetGameLine(string exe, string text) {
+            string k = (exe ?? "").ToLowerInvariant();
+            lock (saveSync) { if (string.IsNullOrEmpty(text)) GameSettings.Remove(k); else GameSettings[k] = text.Length > 80 ? text.Substring(0, 80) : text; }
+        }
         public void Save() {
             if (NoPersist) return;
             try {
@@ -311,6 +334,13 @@ namespace Ohman {
                 sb.AppendLine("WinX=" + WinX);
                 sb.AppendLine("WinY=" + WinY);
                 sb.AppendLine("StartHidden=" + StartHidden);
+                sb.AppendLine("BenchWarm=" + BenchWarm);
+                sb.AppendLine("BenchMeasure=" + BenchMeasure);
+                sb.AppendLine("ShareLayout=" + ShareLayout);
+                sb.AppendLine("BenchPill=" + BenchPill);
+                var games = new List<string>(GameSettings.Keys);
+                games.Sort(StringComparer.Ordinal);
+                foreach (string g in games) if (g.IndexOf('=') < 0) sb.AppendLine("Game." + g + "=" + GameSettings[g].Replace('\r', ' ').Replace('\n', ' '));   // a key with '=' would read back as another
                 sb.AppendLine("# Name=   (optional: a different display name for the window and tray; no rebuild needed)");
                 if (!string.IsNullOrEmpty(Name)) sb.AppendLine("Name=" + Name);
                 // Write beside the file and replace it in one step: a kill or a crash mid-save must not leave
@@ -862,8 +892,17 @@ namespace Ohman {
         /// <summary>One fan reading, from wherever Ohman happened to take it. Applied at the next start rather
         /// than now: the sliders take their range once, before anything is wired to them, because changing a
         /// Maximum coerces the Value under it and that would read as the owner moving the slider.</summary>
+        int[] recentFans;
+        DateTime recentFansAt = DateTime.MinValue;
+        /// <summary>The last fan levels anything read, if no older than maxAgeSec: the benchmark samples these rather than
+        /// making firmware calls of its own inside the time it measures.</summary>
+        public int[] RecentFanLevels(double maxAgeSec) {
+            lock (ceilingSync) return recentFans != null && (DateTime.Now - recentFansAt).TotalSeconds <= maxAgeSec ? (int[])recentFans.Clone() : null;
+        }
         public void NoteFanLevels(int[] f) {
-            if (f == null || f.Length < 2 || P == null || P.Curve == null) return;
+            if (f == null || f.Length < 2) return;
+            lock (ceilingSync) { recentFans = new[] { f[0], f[1] }; recentFansAt = DateTime.Now; }
+            if (P == null || P.Curve == null) return;
             // The UI sensor poll and the guard timer both land here, and the counters below are a sequence, not
             // one value: interleaved they lose increments and reset each other mid-test.
             lock (ceilingSync) NoteFanLevelsCore(f);
@@ -1514,9 +1553,16 @@ namespace Ohman {
         // ---------- which keys ----------
         public Hotkey GetHotkey(HotkeyAction a) {
             string t = S.HotkeyText[(int)a];
-            if (t == null) return HotkeyTable.Defaults[(int)a];
             Hotkey h;
-            return Hotkey.TryParse(t, out h) ? h : HotkeyTable.Defaults[(int)a];
+            if (t != null) return Hotkey.TryParse(t, out h) ? h : HotkeyTable.Defaults[(int)a];
+            // A default the owner already gave to another action stays with that action: a new action's default
+            // (Benchmark, in 1.3) must not take a key somebody bound by hand before it existed.
+            h = HotkeyTable.Defaults[(int)a];
+            for (int i = 0; i < HotkeyTable.Count; i++) {
+                Hotkey o;
+                if (i != (int)a && S.HotkeyText[i] != null && Hotkey.TryParse(S.HotkeyText[i], out o) && o.Same(h)) return Hotkey.None;
+            }
+            return h;
         }
         public Hotkey[] GetHotkeys() { var r = new Hotkey[HotkeyTable.Count]; for (int i = 0; i < r.Length; i++) r[i] = GetHotkey((HotkeyAction)i); return r; }
         public bool HotkeysCustomised { get { foreach (string t in S.HotkeyText) if (t != null) return true; return false; } }
@@ -1538,6 +1584,7 @@ namespace Ohman {
         public void SetSyncWinPower(bool on) { S.SyncWinPower = on; S.Save(); if (on) SetWinPowerOverlay(ModeIndex); Changed(); }
         public void SetLowHzOnBattery(bool on) { S.LowHzOnBattery = on; S.Save(); Changed(); }
         public void SetTrayTemp(bool on) { S.TrayTemp = on; S.Save(); Changed(); }
+        public void SetBenchPill(bool on) { S.BenchPill = on; S.Save(); Changed(); }
         /// <summary>Hiding takes effect now: the effect timer stops, Windows gets back a keyboard we took from it,
         /// and Light goes null so nothing reaches the keyboard again. Showing it again needs a restart, because
         /// the window builds the keyboard page once, from the keyboard it found at start.</summary>

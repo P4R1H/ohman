@@ -19,6 +19,6 @@ using System.Reflection;
 namespace Ohman {
     /// <summary>The one place the version lives. Program.Version reads from here.</summary>
     public static class Meta {
-        public const string Version = "1.2.4";
+        public const string Version = "1.3.0";
     }
 }

@@ -8,10 +8,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>Ohman - OMEN Gaming Hub alternative for HP OMEN and Victus laptops</title>
-<meta name="description" content="Modes, fan curves, power, graphics switching and keyboard lighting in one 1.3 MB executable. A replacement for OMEN Gaming Hub and OMEN Light Studio that speaks the same firmware interface, without any ads, services, or accounts.">
+<meta name="description" content="Modes, fan curves, power, graphics switching, keyboard lighting and a game benchmark in one 1.6 MB executable. A replacement for OMEN Gaming Hub and OMEN Light Studio that speaks the same firmware interface, without any ads, services, or accounts.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Cdefs%3E%3ClinearGradient id='g' gradientUnits='userSpaceOnUse' x1='4' y1='4' x2='24' y2='24'%3E%3Cstop offset='0' stop-color='%238FBCFF'/%3E%3Cstop offset='1' stop-color='%232454A6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='7.4' y='7.4' width='13.2' height='13.2' rx='2.2' fill='url(%23g)' transform='rotate(45 14 14)'/%3E%3C/svg%3E">
 <meta property="og:title" content="Ohman">
-<meta property="og:description" content="Ditch the Hub, keep the control. Modes, fan curves, power, graphics switching and keyboard lighting in one 1.3 MB executable, without ads, services or accounts.">
+<meta property="og:description" content="Ditch the Hub, keep the control. Modes, fan curves, power, graphics switching, keyboard lighting and a game benchmark in one 1.6 MB executable, without ads, services or accounts.">
 <link rel="canonical" href="https://ohmanapp.github.io/">
 <meta property="og:url" content="https://ohmanapp.github.io/">
 <meta property="og:image" content="https://ohmanapp.github.io/hero.png">
@@ -305,7 +305,7 @@ footer p{margin:0 0 8px}
     <!-- 2. hero -->
     <div class="hero">
       <h1>Ditch the hub.<br>Keep the control.</h1>
-      <p class="lede">Modes, fan curves, power, graphics switching and keyboard lighting in one 1.3&nbsp;MB executable. A replacement for OMEN Gaming Hub &amp; OMEN Light Studio that speaks the same firmware interface, without any ads, services, or accounts.</p>
+      <p class="lede">Modes, fan curves, power, graphics switching, keyboard lighting and a game benchmark in one 1.6&nbsp;MB executable. A replacement for OMEN Gaming Hub &amp; OMEN Light Studio that speaks the same firmware interface, without any ads, services, or accounts.</p>
 
       <!-- 3. actions -->
       <div class="cta">
@@ -315,7 +315,7 @@ footer p{margin:0 0 8px}
           Star on GitHub <span class="n" id="stars" hidden></span>
         </a>
       </div>
-      <p class="meta"><span id="ver">v1.0</span> &middot; <span id="size">1.3 MB</span> &middot; Windows 10/11</p>
+      <p class="meta"><span id="ver">v1.0</span> &middot; <span id="size">1.6 MB</span> &middot; Windows 10/11</p>
     </div>
 
     <!-- 4. the app -->
@@ -344,6 +344,8 @@ footer p{margin:0 0 8px}
         <dd>Refresh rate, and the lowest rate on battery if you want it.</dd>
         <dt>Optional driver</dt>
         <dd>Ohman needs no driver. If you want one, a click in Settings installs <a href="https://pawnio.eu">PawnIO</a>, open source, signed, and the same driver FanControl and LibreHardwareMonitor install. With it Ohman reads the CPU's own temperature instead of whichever sensor Windows exposes, which is the fix for boards that report a flat 28&deg;, along with the power limits and the reason the chip is holding back. On boards whose firmware refuses fan levels it sets them through the embedded controller instead. Removable from the same row, any time.</dd>
+        <dt>Benchmark</dt>
+        <dd>Ctrl+Alt+R in a game, or Start. Ohman waits for the game in front, warms up until the temperatures settle, then measures for 30&nbsp;s, 1 or 3 minutes: average FPS, 1% and 0.1% lows, frame times and stutter, the same definitions CapFrameX uses, with CPU and GPU temperature, power, clocks and fans beside them. Every run is kept, set against your last one in the same setup, and makes a card to share. Frames come from Intel's open-source <a href="https://github.com/GameTechDev/PresentMon">PresentMon</a>, downloaded once and checked before every run.</dd>
         <dt>Live</dt>
         <dd>CPU and GPU temperature, package watts, fan speeds, load, clocks, chassis sensor, battery. CPU temperature on the tray icon.</dd>
         <dt>Tray</dt>
@@ -359,19 +361,22 @@ footer p{margin:0 0 8px}
     </section>
 
     <!-- every screen, at one height so each keeps its own shape; three copies so the loop never shows a seam -->
-    <div class="strip" aria-label="The four pages of the Ohman window">
+    <div class="strip" aria-label="The five pages of the Ohman window">
       <div class="strip-track">
         <img src="home.png" width="920" height="1082" alt="The Home page: modes, live temperatures and fan speeds, power gain and a lighting preview.">
         <img src="fans.png" width="920" height="1208" alt="The Fans page: Auto, Max, Curve and Manual, with a draggable seven-point curve.">
         <img src="keyboard.png" width="1400" height="1038" alt="The Keyboard page: the board in its real zone colours, with hue and shade strips.">
+        <img src="bench.png" width="920" height="1298" alt="The Benchmark page: a finished run with its FPS graph, frame times, temperatures, power and fans.">
         <img src="settings.png" width="920" height="1280" alt="The Settings page: the OMEN key, power, display and app sections.">
         <img src="home.png" width="920" height="1082" alt="" aria-hidden="true">
         <img src="fans.png" width="920" height="1208" alt="" aria-hidden="true">
         <img src="keyboard.png" width="1400" height="1038" alt="" aria-hidden="true">
+        <img src="bench.png" width="920" height="1298" alt="" aria-hidden="true">
         <img src="settings.png" width="920" height="1280" alt="" aria-hidden="true">
         <img src="home.png" width="920" height="1082" alt="" aria-hidden="true">
         <img src="fans.png" width="920" height="1208" alt="" aria-hidden="true">
         <img src="keyboard.png" width="1400" height="1038" alt="" aria-hidden="true">
+        <img src="bench.png" width="920" height="1298" alt="" aria-hidden="true">
         <img src="settings.png" width="920" height="1280" alt="" aria-hidden="true">
       </div>
     </div>
@@ -389,7 +394,7 @@ footer p{margin:0 0 8px}
         <li><b>0x52</b> graphics mode</li>
         <li><b>0x20009</b> lighting</li>
       </ul>
-      <p class="note">One executable, with a settings file and a log beside it. To remove it, turn off Start with Windows and Take over the OMEN key first, then delete the folder: those two are the only things Ohman writes outside it.</p>
+      <p class="note">One executable, with a settings file and a log beside it. To remove it, turn off Start with Windows and Take over the OMEN key first, then delete the folder: those two are the only things Ohman writes outside it, besides the share cards and CSVs you save yourself (Pictures\Ohman, Documents\Ohman).</p>
     </section>
 
     <!-- 7b. laptops -->

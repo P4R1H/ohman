@@ -1,0 +1,531 @@
+# Game display names by exe name (lower case, no .exe), one per line, tab separated.
+# From CapFrameX source/CapFrameX.Data/ProcessList/Processes.json at commit 9f488ea6 (MIT, see LICENSE here):
+# entries with a DisplayName, blacklisted entries left out, case duplicates folded.
+3dmarktimespy	3DMarkTimeSpy Extreme
+ac2-win64-shipping	Assetto Corsa Competizione
+ac3sp	Assassin's Creed III
+aces	War Thunder
+aciii	Assassin's Creed III
+acmirage	Assassin's Creed Mirage
+acodyssey	Assassin's Creed Odyssey
+acorigins	Assassin's Creed Origins
+acshadows	Assassin's Creed Shadows
+acvalhalla	Assassin's Creed Valhalla
+afop	Avatar: Frontiers of Pandora
+age3y	Age of Empires III
+alan_wakes_american_nightmare	Alan Wake's American Nightmare
+alanwake	Alan Wake
+alanwake2	Alan Wake 2
+allegiance	Allegiance
+aloneinthedark-win64-shipping	Alone In The Dark
+altitude	Alltitude
+amnesia	Amnesia: The Dark Descent
+ams2avx	Automobilista 2 (AVX)
+anno117	Anno 117: Pax Romana
+anno1404	Anno 1404 History Edition
+anno1800	Anno 1800
+anno5	Anno 2070
+aok hd	Age of Empires II
+aomrt_s	Age of Mythology Retold
+aperion-win64-shipping	Godfall
+aplaguetaleinnocence_x64	A Plague Tale: Innocence
+aplaguetalerequiem_x64	A Plague Tale: Requiem
+application-x64	Banished
+apt2_winstore.x64.submission	A Plague Tale: Requiem
+arma2	Arma 2
+arma2oa	ArmA 2: Operation Arrowhead
+arma3	ArmA 3
+arma3_x64	Arma 3
+armoredwarfare	Armored Warfare
+asc-win64-shipping	Jusant
+ashes_dx11	Ashes of the Singularity
+ashes_dx12	Ashes of the Singularity
+assettocorsa	Assetto Corsa
+astronautsgame-win64-shipping	The Vanishing of Ethan Carter
+atilla	Total War: Attila
+atomfall_dx12	Atomfall
+atomicheart-win64-shipping	Atomic Heart
+audiosurf	Audiosurf
+audiosurf2	Audiosurf 2
+avowed-win64-shipping	Avowed
+awesomenauts	Awesomenauts
+b1-win64-shipping	Black Myth: Wukong
+banishers-win64-shipping	Banishers: Ghosts of New Eden
+bastion	Bastion
+bates-win64-shipping	Until Dawn Remake
+batmanak	Batman Arkham Knight
+battlefront	Star Wars: Battlefront (2004)
+battlefrontii	Star Wars: Battlefront II (2005)
+beamng.drive.x64	BeamNG.drive
+besiege	Besiege
+bf1	Battlefield 1
+bf2	Battlefield 2
+bf2042	Battlefield 2042
+bf3	Battlefield 3
+bf4	Battlefield 4
+bf6	Battlefield 6
+bfbc2game	Battlefield: Bad Company 2
+bfh	Battlefield Hardline
+bfv	Battlefield V
+bg3	Baldur's Gate 3
+bg3_dx11	Baldur's Gate 3
+binding_of_isaac	The Binding of Isaac
+biomutant-win64-shipping	Biomutant
+bioshock	Bioshock
+bioshock2	BioShock II
+bioshockinfinite	BioShock Infinite
+blackdesert64	Black Desert Online
+blackops3	Call of Duty: Black Ops 3
+blackops4	Call of Duty: Black Ops 4
+blackopscoldwar	Call of Duty: Black Ops Cold War
+blackopsmp	Call of Duty: Black Ops
+bnsr	Blade & Soul
+borderlands	Borderlands
+borderlands2	Borderlands 2
+borderlands3	Borderlands 3
+borderlands4	Borderlands 4
+brightmemory_ep1-win64-shipping	Bright Memory
+brightmemoryinfinite-win64-shipping	Bright Memory: Infinite
+brothers	Brothers: A Tale of Two Sons
+brothers-win64-shipping	Brothers: A Tale of Two Sons Remake
+builder's journey	Lego Builder's Journey
+cabal2main	Cabal 2
+cabalmain	Cabal Online
+chernobylgame-win64-shipping	Chernobylite
+chronos-win64-shipping	Life is Strange: Double Exposure
+cities	Cities: Skylines
+cities2	Cities Skylines 2
+citysample	UE City Sample
+civilizationbe_mantle	Civilization Beyond Earth
+civilizationv_dx11	Civilization V
+ck3	Crusader Kings III
+clientg	Command & Conquer Remastered
+cod	Call of Duty: Modern Warfare 2
+cod23-cod	COD Warzone
+codwaw	Call of Duty: World at War
+commandos-win64-shipping	Commandos Origins
+control_dx11	Control (DX11)
+control_dx12	Control (DX12)
+cossacks	Cossacks 3
+cronos-win64-shipping	Cronos: The New Dawn
+crysis	Crysis
+crysis2	Crysis 2
+crysis3	Crysis 3
+crysis3remastered	Crysis 3 Remastered
+crysis64	Crysis
+crysisremastered	Crysis Remastered
+cs2	Counter Strike 2
+csgo	Counter Strike: Global Offensive
+cyberpunk2077	Cyberpunk 2077
+d2r	Diablo II Resurrected
+d4x	Dune: Spice Wars
+daorigins	Dragon Age: Origins
+darksiders2	Darksiders 2
+darksiderspc	Darksiders
+darksoulsii	Dark Souls II
+data	Dark Souls
+daysgone	Days Gone
+dayz_x64	DayZ
+dd2	Dragon's Dogma 2
+deadisland-win64-shipping	Dead Island 2
+deadislandgame	Dead Island
+deadislandgame_x86_rwdi	Dead Island Riptide
+deadspace2	Dead Space 2
+deltaforceclient-win64-shipping	Delta Force: Hawk Ops
+destiny2	Destiny 2
+devimaycry4	Devil May Cry 4
+dh-win64-shipping	Destroy All Humans!
+diablo	Diablo
+dirt2_game	DiRT 2
+dirt3_game	Dirt 3
+dirt5	Dirt 5
+discovery	The Finals
+dmc-devilmaycry	DmC Devil May Cry
+doometernalx64vk	Doom Eternal
+doomthedarkages	Doom: The Dark Ages
+doomx64	Doom (OGL)
+doomx64vk	Doom (Vulkan)
+dota2	DOTA 2
+dragon age the veilguard	Dragon Age: The Veilguard
+dragonage2	Dragon Age II
+dragonageinquisition	Dragon Age: Inquisition
+drt	Dirt Rally
+ds	Death Stranding
+dukeforever	Duke Nukem Forever
+dunesandbox-win64-shipping	Dune: Awakening
+dungeons3bin	Dungeons 3
+dungeonsouls	Dungeon Souls
+dxhr	Deus Ex: Human Revolution
+dxhrdc	Deus Ex: Human Revolution - Director's Cut
+dxmd	Deus Ex: Mankind Divided
+dyinglightgame_thebeast_x64_rwdi	Dying Light The Beast
+dyinglightgame_x64_rwdi	Dying Light 2
+ed6_win	The Legend of Heroes: Trails in the Sky
+ed8_3_pc	The Legend of Heroes: Trails of Cold Steel III
+edgeofeternity	Edge of Eternity
+eldenring	Elden Ring
+elex	ELEX
+elitedangerous32	Elite Dangerous
+empire	Empire: Total War
+empire-win64-shipping	Empire of the Ants
+endeavor-win64-shipping	Aliens: Fireteam Elite
+engine	F.E.A.R.
+enshrouded	Enshrouded
+eocapp	Divinity - Original Sin
+eqgame	EverQuest
+es2-win64-shipping	Everspace 2
+escapefromtarkov	Escape from Tarkov
+eso64	The Elder Scrolls Online
+ethancarter-win64-shipping	The Vanishing of Ethan Carter Redux
+exefile	Eve Online
+f1_2019	F1 2019
+f1_2019_dx12	F1 2019 (DX12)
+f1_2020_dx12	F1 2020
+f1_2021_dx12	F1 2021
+f1_22	F1 2022
+f1_23	F1 23
+f1_24	F1 24
+f1_25	F1 25
+fable	Fable: The Lost Chapters
+factorygamesteam-win64-shipping	Satisfactory
+fallout3	Fallout 3
+fallout4	Fallout 4
+falloutnv	Fallout New Vegas
+farcry2	Far Cry 2
+farcry3	Far Cry 3
+farcry5	Far Cry 5
+farcry6	Far Cry 6
+farcrynewdawn	Far Cry New Dawn
+farmingsimulator2022game	Farming Simulator 22
+fbcfirebreak	FBC: Firebreak
+fear2	F.E.A.R. 2: Project Origin
+ff9	Final Fantasy IX
+ffxii_tza	Final Fantasy XII The Zodiac Age
+ffxiiiimg	Final Fantasy XIII
+ffxiv	Final Fantasy XIV
+ffxiv_dx11	Final Fantasy XIV
+ffxv	Final Fantasy XV
+ffxv_s	Final Fantasy XV
+ffxvi	Final Fantasy XVI
+flagac4bfsp	Assassin's Creed IV: Black Flag
+flightsimulator	Microsoft Flight Simulator
+forspoken	Forspoken
+fortniteclient-win64-shipping	Fortnite
+forza_gaming.desktop.x64_release_final	Forza Motorsport
+forzahorizon5	Forza Horizon 5
+fragpunk	FragPunk
+frontiers-win64-shipping	Torchlight III
+frostpunk	Frostpunk
+frostpunk2-win64-shipping	Frostpunk 2
+ftlgame	FTL: Faster Than Light
+game_f_x64_eos	Alan Wake Remastered
+gamelauncher	Neon Noir
+geargame	Gears of War 4
+gears5	Gears 5
+genshinimpact	Genshin Impact
+ghostoftsushima	Ghost of Tsushima
+ghostrunner-win64-shipping	Ghostrunner
+ghostrunner2-win64-shipping	Ghostrunner 2
+gotg	Marvel's Guardians of the Galaxy
+gothamknights	Gotham Knights
+gothamknights-win64-shipping	Gotham Knights
+gow	God of War
+gowr	God of War Ragnarök
+grb	Ghost Recon Breakpoint
+grb_vulkan	Ghost Recon Breakpoint (Vulkan)
+grid_dx12	Grid 2019 (DX12)
+gridlegends	Grid Legends
+grw	Ghost Recon Wildlands
+gta5	Grand Theft Auto 5
+gtaiv	Grand Theft Auto 4
+gw	Guild Wars
+gw2-64	Guild Wars 2
+gwt	Ghostwire: Tokyo (DX12)
+haloinfinite	Halo Infinite
+hearthstone	Hearthstone
+hellblade2-win64-shipping	Senuas Saga Hellblade 2
+helldivers2	Helldivers 2
+heroesofthestorm	Heroes of the Storm
+heroesofthestorm_x64	Heroes of the Storm
+hitman	Hitman
+hitman2	Hitman 2
+hitman3	Hitman 3
+hl2	Team Fortress 2
+hl2p	Portal
+hl2tf	Team Fortress 2
+hll-win64-shipping	Hell Let Loose
+hma	Hitman Absolution
+hogwartslegacy	Hogwarts Legacy
+homeworld3	Homeworld 3
+hon	Heroes of Newerth
+horizonforbiddenwest	Horizon Forbidden West
+horizonzerodawn	Horizon Zero Dawn
+huntgame	Hunt Showdown
+hyperscape	Hyper Scape
+icarus-win64-shipping	Icarus
+immortalsofaveum-win64-shipping	Immortals of Aveum
+indianaepicgamestore-win64-shipping	The Outer Worlds
+insurgency	Insurgency
+iracingsim64dx11	iRacing
+ironharvest	Iron Harvest
+isaac-ng	The Binding of Isaac Rebirth
+iw3mp	Call of Duty 4: Modern Warfare
+iw3sp	Call of Duty 4: Modern Warfare
+iw4mp	Call of Duty: Modern Warfare 2
+iw5mp	Call of Duty: Modern Warfare 3
+iw6mp64_ship	Call of Duty: Ghosts
+iw7_ship	Call of Duty: Infinite Warfare
+ja3	Jagged Alliance 3
+javaw	Minecraft
+jedisurvivor	Star Wars Jedi: Survivor
+justcause	Just Cause
+justcause2	Just Cause 2
+jwe2	Jurassic World Evolution 2
+kena-win64-shipping	Kena: Bridge of Spirits
+kfgame	Killing Floor 2
+killingfloor	Killing Floor
+kingdomcome	Kingdom Come: Deliverance 2
+ksp	Kerbal Space Program
+lanoire	L.A. Noire
+layersoffear-win64-shipping	Layers of Fear
+left4dead	Left 4 Dead
+left4dead2	Left 4 Dead 2
+legohorizonadventures-win64-shipping	Lego: Horizon Adventures
+legostarwarsskywalkersaga_dx11	Lego Star Wars Skywalker Saga
+lifeisstrange	Life Is Strange
+likeadragon8	Like a Dragon: Infinite Wealth
+limbo	Limbo
+lolclient	League of Legends
+lostark	Lost Ark
+lotf2-win64-shipping	Lords of the Fallen
+m1-win64-shipping	The First Descendant
+madmax	Mad Max
+mafiadefinitiveedition	Mafia: Definitive Edition
+mafiatheoldcountry	Mafia: The Old Country
+magicka	Magicka
+maneater-win64-shipping	Maneater
+manorlords-win64-shipping	Manor Lords
+marvel-win64-shipping	Marvel Rivals
+masseffect	Mass Effect
+masseffect2	Mass Effect 2
+masseffect3	Mass Effect 3
+mechwarrior-win64-shipping	MechWarrior 5: Mercenaries
+medieval_dynasty-win64-shipping	Medieval Dynasty
+medieval_dynasty-wingdk-shipping	Medieval Dynasty
+medium-win64-shipping	The Medium
+metro2033	Metro 2033
+metroexodus	Metro Exodus
+metroll	Metro: Last Light
+mgs2_sse	Metal Gear Solid 2: Substance
+mgsdelta-win64-shipping	Metal Gear Solid Delta: Snake Eater
+mgsgroundzeroes	Metal Gear Solid V: Ground Zeroes
+mgsi	Metal Gear Solid
+mgsvtpp	Metal Gear Solid V: The Phantom Pain
+milesmorales	Marvel's Spider-Man: Miles Morales
+minecraft	Minecraft
+minecraft.windows	Minecraft
+mirrorsedge	Mirror's Edge
+mirrorsedgecatalyst	Mirror's Edge Catalyst
+mk10	Mortal Kombat X
+modernwarfare	Call of Duty: Modern Warfare
+monsterhunterwilds	Monster Hunter Wilds
+monsterhunterworld	Monster Hunter: World
+moonman-win64-shipping	Deliver Us The Moon
+morrowind	The Elder Scrolls III: Morrowind
+mwoclient	MechWarrior Online
+myst-win64-shipping	Myst (2021)
+napoleon	Napoleon: Total War
+necromunda-win64-shipping	Necromunda: Hired Gun
+needforspeedheat	Need for Speed Heat
+newworld	New World
+nidhogg	Nidhogg
+nierautomata	NieR Automata
+ninjagaiden4-steam	NINJA GAIDEN 4
+nino2	Ni No Kuni 2: Revenant Kingdom
+nms	No Man's Sky
+norestforthewicked	No Rest For The Wicked
+o2-win64-shipping	Outcast - A New Beginning
+oblivion	The Elder Scrolls IV: Oblivion
+oblivionremastered-win64-shipping	Oblivion Remaster
+olgame	Outlast
+osbuddy	RuneScape
+outlaws	Star Wars Outlaws
+outriders-win64-shipping	Outriders
+overwatch	Overwatch
+palworld-win64-shipping	Palworld
+pathofexile_x64steam	Path of Exile
+pathofexilesteam	Path of Exile
+payday2_win32_release	Payday 2
+payday_win32_release	Payday
+pcars	Project Cars
+pcars3	Project Cars 3
+pcbs	PC Building Simulator
+pillarsofeternity	Pillars of Eternity
+pioneergame	ARC Raiders
+plagueincevolved	PlagueInc Evolved
+planetside2_x64	PlanetSide 2
+planetside2_x86	PlanetSide 2
+planetzoo	Planet Zoo
+pol	FINAL FANTASY XI
+portal2	Portal 2
+portia	My Time At Portia
+prboom-plus	Doom 1 RT Mod
+project_plague-win64-shipping	Wuchang: Fallen Feathers
+projectlsasteam-win64-shipping	Lost Soul Aside
+projectn-win64-shipping	Ni no Kuni: Cross Worlds
+proven_ground_client	Conqueror's Blade
+psychonauts2-win64-shipping	Psychonauts 2
+psychonauts2-wingdk-shipping	Psychonauts 2
+q2rtx	Quake II RTX
+quake1	Quake I
+quake2	Quake II
+quake3	Quake III
+quantumbreak	Quantum Break
+r5apex	Apex Legends
+r5apex_dx12	Apex Legends
+rage	RAGE
+rage2	RAGE 2
+rainbowsix	Rainbow Six Siege
+rainbowsix_vulkan	Rainbow Six Siege (Vulkan)
+rdr	Red Dead Redemption
+rdr2	Red Dead Redemption 2
+re3	Resident Evil 3
+re4	Resident Evil 4
+re4demo	Resident Evil 4 Chainsaw Demo
+re8	Resident Evil Village
+readyornot-win64-shipping	Ready Or Not
+realm	Realm Royale
+redalert	Red Alert (OpenRA)
+reliccardinal	Age of Empires IV
+reliccoh	Company of Heroes
+reliccoh2	Company of Heroes 2
+reliccoh3	Company of Heroes 3
+remnant2-win64-shipping	Remnant 2
+rfactor2	rFactor 2
+rift	Rift
+riftapart	Ratchet & Clank: Rift Apart
+riftbreaker_win_release	The Riftbreaker
+robocop-win64-shipping	RoboCop Rogue City
+robocopunfinishedbusiness-win64-shipping	RoboCop: Unfinished Business
+rocketleague	Rocket League
+rome2	Total War: Rome II
+rottr	Rise of the Tomb Raider
+rtx_showcase-win64-shipping	Nvidia RTX Showcase Demo
+rustclient	Rust
+s1_mp64_ship	Call of Duty: Advanced Warfare
+saintsrow_dx12	Saints Row
+saintsrowiv	Saints Row IV
+saintsrowthethird_dx11	Saints Row 3
+sam4	Serious Sam 4
+sandfall-win64-shipping	Clair Obscur: Expedition 33
+sb-win64-shipping	Stellar Blade
+sc2_x64	Starcraft II
+sekiro	Sekiro: Shadows Die Twice
+sf3clientfinal	SpellForce 3
+shadowgambit_tcc	Shadow Gambit
+shadowofmordor	Middle-earth: Shadow of Mordor
+shf-win64-shipping	Silent Hill f
+shipping-thiefgame	Thief
+shogun2	Total War: Shogun II
+shproto-win64-shipping	Silent Hill 2 Remake
+siren-win64-shipping	Life is Strange: True Colors
+skullandbones	Skull and Bones
+sniper5_dx12	Sniper Elite 5
+sonsoftheforest	Sons of The Forest
+sotgame	Sea of Thieves
+sottr	Shadow of the Tomb Raider
+soulcaliburvi	SoulCalibur VI
+sp22-cod	Call of Duty: Modern Warfare 2
+sp23-cod	Call of Duty: Modern Warfare III
+sp24-cod	Call of Duty: Black Ops 6
+spider-man	Marvel's Spider-Man Remastered
+squadgame	Squad
+stalker2-win64-shipping	S.T.A.L.K.E.R. 2: Heart of Chornobyl
+starcitizen	Star Citizen
+starcraft	Starcraft
+starwarsbattlefront	Star Wars: Battlefront
+starwarsbattlefrontii	Star Wars Battlefront II
+starwarsjedifallenorder	Star Wars: Jedi Fallen Order
+starwarssquadrons	Star Wars: Squadrons
+stellaris	Stellaris
+stormworks64	Stormworks: Build And Rescue
+stranded_deep	Stranded Deep
+strangebrigade_dx12	Strange Brigade (DX12)
+strangebrigade_vulkan	Strange Brigade (Vulkan)
+stray-win64-shipping	Stray
+subnautica	Subnautica
+supermeatboy	Super Meat Boy
+sw3	Shadow Warrior 3
+swtor	Star Wars: The Old Republic
+t6sp	Call of Duty: Black Ops
+talos2-win64-shipping	The Talos Principle 2
+teardown	Teardown
+tempest-win64-shipping	Tempest Rising
+temtem	Temtem
+tera	TERA
+terminator-win64-shipping	Terminator Resistance
+terraria	Terraria
+tesv	The Elder Scrolls V: Skyrim
+thealters-win64-shipping	The Alters
+theascent-win64-shipping	The Ascent
+thecallistoprotocol-win64-shipping	The Callisto Protocol
+thecrew	The Crew
+thedivision2	The Division 2
+thegreatcircle	Indiana Jones and the Great Circle
+thelastcaseofjmorley-win64-shipping	The Last Case of John Morley
+theped_win_64	The Pedestrian
+thewolfamongus	The Wolf Among Us
+three_kingdoms	Total War: Three Kingdoms
+tiberiandawn	TiberianDawn.exe
+titanfall	Titanfall
+titanfall2	Titanfall 2
+tkom	Take On Mars
+tld	The Long Dark
+tll	Uncharted: The Lost Legacy
+tlou-i	The Last Of Us Part 1
+tlou-ii	The Last of Us Part II
+tlr.ex	The Last Remnant
+tmunitedforever	Trackmania United Forever
+tombraider	Tomb Raider
+torchlight	Torchlight
+torchlight2	Torchlight 2
+trackmania	Trackmania
+trine	Trine
+trine2_32bit	Trine 2
+troy	Total War Saga: Troy
+tslgame	Player Unknown's BattleGrounds
+u4	Uncharted 4: A Thief's End
+uebs	Ultimate Epic Battle Simulator
+valheim	Valheim
+valorant-win64-shipping	Valorant
+vanguard	Call of Duty: Vanguard
+warcraft iii	Warcraft III
+warframe	Warframe
+warframe.x64	Warframe
+warhammer	Total War: Warhammer
+warhammer 40000 space marine 2 - retail	Warhammer 40,000: Space Marine 2
+warhammer3	Total War: Warhammer III (DX11)
+watch_dogs	Watch Dogs
+watchdogslegion	Watch Dogs: Legion
+witcher3	The Witcher 3
+wizardwarslauncher	Magicka Wizard Wars
+wolcen	Wolcen: Lords of Mayhem
+wolfoldblood_x64	Wolfenstein: The Old Blood
+wonderlands	Tiny Tina's Wonderlands
+worldofgoo	World of Goo
+worldoftanks	World of Tanks
+worldoftanksencore	World Of Tanks EnCore
+worldofwarships64	World of Warships
+wow	World of Warcraft
+wow-64	World of Warcraft
+wowslauncher	World of Warships
+wwzretailegs	World War Z
+x3ap_n	X3: Albion Prelude
+x3tc	X3: Terran Conflict
+x4	X4: Foundations
+xcomgame	XCOM: Enemy Unknown
+xrebirth	X Rebirth
+youngblood_x64vk	Wolfenstein: Youngblood (Vulkan)
+za4_dx12	Zomby Army 4: Dead War (DX12)
+za4_vulkan	Zomby Army 4: Dead War (Vulkan)
+zinganggame-win64-shipping	F.I.S.T. Forged In Shadow Torch

@@ -329,9 +329,9 @@ namespace Ohman {
             Content = box;
             hide = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1400) };
             hide.Tick += delegate { hide.Stop(); var a = new DoubleAnimation(0, TimeSpan.FromMilliseconds(260)); a.Completed += delegate { if (Opacity < 0.05) Hide(); }; BeginAnimation(OpacityProperty, a); };
-            SourceInitialized += delegate {   // never steal focus (games), never appear in Alt-Tab
+            SourceInitialized += delegate {   // never steal focus (games), never appear in Alt-Tab, never take a click meant for the game
                 var h = new WindowInteropHelper(this).Handle;
-                SetWindowLong(h, -20, GetWindowLong(h, -20) | 0x08000000 | 0x00000080);
+                SetWindowLong(h, -20, GetWindowLong(h, -20) | 0x08000000 | 0x00000080 | 0x00000020);
             };
         }
         public void Flash(string title, string detail, Color c, string pathData) {

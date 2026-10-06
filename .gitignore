@@ -35,3 +35,6 @@ app.ico
 # driver check output
 tools/drivertest.txt
 driver-check.txt
+
+# benchmark: PresentMon and the runs, written next to the executable
+bench/

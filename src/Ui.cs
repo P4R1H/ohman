@@ -1,6 +1,6 @@
 ﻿// SPDX-License-Identifier: GPL-3.0-or-later
-// Ohman: WPF main window (layout in the embedded Ui.xaml): a rail on the left with Home, Fans, Keyboard and
-// Settings, one page visible at a time; the window morphs to each page's size. Also the tray icon, hotkeys and the
+// Ohman: WPF main window (layout in the embedded Ui.xaml): a rail on the left with Home, Fans, Keyboard, Benchmark
+// (built in code, BenchUi.cs) and Settings, one page visible at a time; the window morphs to each page's size. Also the tray icon, hotkeys and the
 // live readouts. Every size and colour here comes from the panel design.
 using System;
 using System.Collections.Generic;
@@ -29,7 +29,7 @@ namespace Ohman {
 
 
     public sealed class MainWindow : Window {
-        enum Page { Home = 0, Fans = 1, Keyboard = 2, Settings = 3 }
+        enum Page { Home = 0, Fans = 1, Keyboard = 2, Settings = 3, Bench = 4 }
         const double RailW = 62, PageW = 398, KbdPageW = 638, SettingsH = 640;
 
         Osd osd;
@@ -46,6 +46,7 @@ namespace Ohman {
         const string ICO_HOME_DOT = "M12 8.6 A3.4 3.4 0 1 0 12 15.4 A3.4 3.4 0 1 0 12 8.6 Z";
         const string ICO_UPDATE = "M12 4 V14.2 M7.6 10.2 L12 14.8 L16.4 10.2 M4.6 19 H19.4";
         const string ICO_FANS = "M3 8.5 C5.5 5.5 8.5 11.5 12 8.5 C15.5 5.5 18.5 11.5 21 8.5 M3 15.5 C5.5 12.5 8.5 18.5 12 15.5 C15.5 12.5 18.5 18.5 21 15.5";
+        const string ICO_BENCH = "M4.2 17.5 A8.5 8.5 0 1 1 19.8 17.5 M12 13.5 L16.2 9.3", ICO_BENCH_DOT = "M12 12 A1.5 1.5 0 1 0 12 15 A1.5 1.5 0 1 0 12 12 Z";
         const string ICO_KBD = "M2.5 7.5 A2 2 0 0 1 4.5 5.5 H19.5 A2 2 0 0 1 21.5 7.5 V16.5 A2 2 0 0 1 19.5 18.5 H4.5 A2 2 0 0 1 2.5 16.5 Z M6 9.5 H6.4 M9.8 9.5 H10.2 M13.6 9.5 H14 M17.4 9.5 H17.8 M6 12.5 H6.4 M9.8 12.5 H10.2 M13.6 12.5 H14 M17.4 12.5 H17.8 M7.5 15.5 H16.5";
 
         readonly Engine E;
@@ -55,10 +56,14 @@ namespace Ohman {
         FrameworkElement root;
         Grid pageHost;
         ScrollViewer scroll;
-        readonly FrameworkElement[] pages = new FrameworkElement[4];
+        readonly FrameworkElement[] pages = new FrameworkElement[5];
         Page cur = Page.Home;
         bool pageShown;
-        readonly NavBtn[] nav = new NavBtn[4];
+        readonly NavBtn[] nav = new NavBtn[5];
+        // benchmark
+        Bench bench;
+        BenchPage benchPage;
+        BenchPill pill;
         Border railPill;
         TranslateTransform railPillT;
         Canvas railCanvas;
@@ -123,7 +128,7 @@ namespace Ohman {
         FrameworkElement keyCmdRow, gfxRow, hzRow, lowHzRow, gpuRow;
         TextBox txtKeyCmd;
         Ellipse keyDot;
-        ToggleButton tgSuppress, tgHotkeys, tgAutostart, tgEcoBattery, tgSyncPower, tgLowHzBattery, tgTrayTemp, tgGuard, tgUpdateAuto, tgLightPage;
+        ToggleButton tgSuppress, tgHotkeys, tgAutostart, tgEcoBattery, tgSyncPower, tgLowHzBattery, tgTrayTemp, tgGuard, tgUpdateAuto, tgLightPage, tgBenchPill;
         Border lightPageRow;
         TextBlock txtLightPageSub;
         // hotkeys
@@ -227,6 +232,7 @@ namespace Ohman {
             BuildFans();
             BuildKeyboard();
             BuildSettings();
+            BuildBench();
             BuildIcons();
             BuildTray();
             Wire();
@@ -256,7 +262,11 @@ namespace Ohman {
             StateChanged += delegate { if (WindowState == WindowState.Minimized) { WindowState = WindowState.Normal; HideToTray(); } };
             IsVisibleChanged += delegate { PollRate(); if (IsVisible) ReadHardwareAsync(); };
             LocationChanged += delegate { if (IsVisible && WindowState == WindowState.Normal && Left > -30000 && !morphing) { E.S.WinX = (int)Left; E.S.WinY = (int)Top; } };
-            KeyDown += delegate(object o, KeyEventArgs ke) { if (ke.Key == Key.Escape && !(Keyboard.FocusedElement is TextBox)) HideToTray(); };
+            KeyDown += delegate(object o, KeyEventArgs ke) {
+                if (Keyboard.FocusedElement is TextBox) return;
+                if (ke.Key == Key.Escape) HideToTray();
+                else if ((ke.Key == Key.Left || ke.Key == Key.Right) && cur == Page.Bench) { benchPage.Flip(ke.Key == Key.Left ? -1 : 1); ke.Handled = true; }
+            };
             MouseEnter += delegate { Ui.Fade(btnClose, 1, 140); };
             MouseLeave += delegate { Ui.Fade(btnClose, 0, 200); };
 
@@ -410,6 +420,7 @@ namespace Ohman {
             tgLowHzBattery = F<ToggleButton>("TgLowHzBattery");
             tgSyncPower = F<ToggleButton>("TgSyncPower");
             tgTrayTemp = F<ToggleButton>("TgTrayTemp");
+            tgBenchPill = F<ToggleButton>("TgBenchPill");
             tgLightPage = F<ToggleButton>("TgLightPage");
             lightPageRow = F<Border>("LightPageRow");
             txtLightPageSub = F<TextBlock>("TxtLightPageSub");
@@ -483,10 +494,12 @@ namespace Ohman {
             nav[1] = new NavBtn(1, "Fans", new[] { ICO_FANS }, new string[0]);
             nav[2] = new NavBtn(2, "Keyboard", new[] { ICO_KBD }, new string[0]);
             nav[3] = new NavBtn(3, "Settings", new string[0], new[] { GearPath(12, 12, 10, 7.6, 8, 3.4) });
-            for (int i = 0; i < 4; i++) { nav[i].HorizontalAlignment = HorizontalAlignment.Center; nav[i].Clicked += delegate(int idx) { Navigate((Page)idx, true); }; }
+            nav[4] = new NavBtn(4, "Benchmark", new[] { ICO_BENCH }, new[] { ICO_BENCH_DOT });
+            for (int i = 0; i < nav.Length; i++) { nav[i].HorizontalAlignment = HorizontalAlignment.Center; nav[i].Clicked += delegate(int idx) { Navigate((Page)idx, true); }; }
             host.Children.Add(nav[0]);
             host.Children.Add(nav[1]);
             host.Children.Add(nav[2]);
+            host.Children.Add(nav[4]);
             // Above Settings, and only while there is something to install. It is a signpost rather than a page:
             // it goes where the update lives instead of doing anything itself, so nothing is one stray click from
             // restarting the app. It stays out of nav[] deliberately -- the rail pill tracks the current page, and
@@ -706,6 +719,10 @@ namespace Ohman {
             OnSwitch(tgEcoBattery, delegate(bool on) { Bg(delegate { E.SetEcoOnBattery(on); }); });
             OnSwitch(tgSyncPower, delegate(bool on) { Bg(delegate { E.SetSyncWinPower(on); }); });
             OnSwitch(tgLowHzBattery, delegate(bool on) { Bg(delegate { E.SetLowHzOnBattery(on); }); });
+            OnSwitch(tgBenchPill, delegate(bool on) {
+                Bg(delegate { E.SetBenchPill(on); });
+                if (!on && pill != null) pill.Off();
+            });
             OnSwitch(tgTrayTemp, delegate(bool on) {
                 Bg(delegate { E.SetTrayTemp(on); });
                 if (!on) { try { tray.Icon = icons[E.ModeIndex]; } catch { } }
@@ -1056,6 +1073,7 @@ namespace Ohman {
             menu.Opening += delegate { RefreshTray(); };
             tray = new WF.NotifyIcon { Icon = icons[1], Text = Program.DisplayName, Visible = true, ContextMenuStrip = menu };
             tray.MouseClick += delegate(object o, WF.MouseEventArgs me) { if (me.Button == WF.MouseButtons.Left) TogglePanel(); };
+            tray.BalloonTipClicked += delegate { ShowPanel(); Navigate(Page.Bench, true); };          // the only balloon is the benchmark's
         }
         /// <summary>Tick what is currently true. Called when the menu opens and after every state change.</summary>
         void RefreshTray() {
@@ -1082,9 +1100,123 @@ namespace Ohman {
             Refresh();
         }
 
+        // ---------- benchmark ----------
+        void BuildBench() {
+            bench = new Bench(E, E.Hw.IsDemo);
+            benchPage = new BenchPage(E, bench);
+            pageHost.Children.Add(benchPage);
+            pages[(int)Page.Bench] = benchPage;
+            benchPage.StartClicked += StartBench;
+            benchPage.Toast += delegate(string m, bool err) { ShowToast(m, err); };
+            benchPage.Resized += delegate { Remeasure(Page.Bench); };
+            benchPage.StopKey = BenchKey;
+            bench.Changed += delegate { Dispatcher.BeginInvoke((Action)OnBenchChanged); };
+            bench.Finished += delegate(BenchRun r) { Dispatcher.BeginInvoke((Action)delegate { OnBenchFinished(r); }); };
+            bench.EndedEarly += delegate(string why) { Dispatcher.BeginInvoke((Action)delegate { OnBenchEnded(why); }); };
+        }
+        /// <summary>Start a run: the page's Start, Run again, or the hotkey. Ohman steps out of the way and says once
+        /// what to do; the pill takes over when the game is found.</summary>
+        void StartBench() {
+            if (!bench.ToolReady || !bench.Start()) {
+                if (!IsVisible) ShowPanel();
+                Navigate(Page.Bench, true);
+                benchPage.Render();
+                return;
+            }
+            PollRate();
+            if (pill != null) pill.Off();                 // the last run's result pill, if it is still up
+            benchPage.RunStarted();
+            Hotkey hk = BenchKey();
+            if (osd == null) osd = new Osd();
+            osd.Flash("Benchmark", "Switch to your game" + (!hk.IsEmpty ? " · " + hk + " stops it" : ""), Ui.Accent.Color, ICO_BENCH);
+            if (IsVisible) HideToTray();
+        }
+        /// <summary>The key that stops a run from inside the game, or none: shortcuts off, unset, or refused by Windows
+        /// because another program has it. A hint must not name a key that does nothing.</summary>
+        Hotkey BenchKey() {
+            int i = (int)HotkeyAction.Benchmark;
+            Hotkey hk = E.GetHotkey(HotkeyAction.Benchmark);
+            return E.S.Hotkeys && !hk.IsEmpty && !hotkeyBusy[i] ? hk : Hotkey.None;
+        }
+        void ToggleBench() { if (bench.Running) bench.Stop(); else StartBench(); }
+        /// <summary>--bench-selftest, simulated build only: the whole state machine once, on simulated frames, and out.</summary>
+        void BenchSelfTest() {
+            int w = bench.WarmChoice, m = bench.MeasureChoice;
+            bench.SetChoices(2, 0, false);   // this run only: the owner's choices stay as they are
+            bench.Finished += delegate(BenchRun r) { Log.Write("selftest: finished " + r.Id + " frames=" + r.Frames + " avg=" + r.AvgFps.ToString("0.0") + " low1=" + r.Low1.ToString("0.0") + " stutter=" + r.StutterPct.ToString("0.00") + " samples=" + r.Samples.Count); Dispatcher.BeginInvoke((Action)delegate { bench.SetChoices(w, m, false); ExitApp(); }); };
+            bench.EndedEarly += delegate(string why) { Log.Write("selftest: ended early: " + why); Dispatcher.BeginInvoke((Action)delegate { bench.SetChoices(w, m, false); ExitApp(); }); };
+            Log.Write("selftest: starting");
+            StartBench();
+        }
+
+        BenchPhase lastPhase = BenchPhase.Idle;
+        void OnBenchChanged() {
+            var v = bench.Snapshot();
+            if (v.Phase != lastPhase) { lastPhase = v.Phase; PollRate(); }
+            if (cur == Page.Bench && IsVisible) benchPage.Render();
+            UpdatePill(v);
+            TrayTip();
+        }
+        /// <summary>The pill follows the run while the game is in front, and is gone two seconds before measuring
+        /// starts so the game is back on its own when the frames count.</summary>
+        void UpdatePill(BenchView v) {
+            if (!E.S.BenchPill) { if (pill != null) pill.Off(); return; }   // switched off in Settings
+            if (pill == null) pill = new BenchPill();
+            Color acc = Ui.Accent.Color;
+            if (v.Phase == BenchPhase.Warming && !v.Paused) {
+                double cap = v.WarmChoice == 1 ? 120 : 300;
+                pill.Display(v.Window, acc, "warm", Ui.Col("#A8A3A0"), Ink.Clock(v.WarmSec), v.WarmChoice == 1 ? "of 2:00" : "settling", v.WarmSec / cap, Ink.Ref, 0);
+            } else if (v.Phase == BenchPhase.Countdown && !v.Paused && v.CountLeft > 2) {
+                pill.Display(v.Window, acc, "measuring in", Ui.Col("#A8A3A0"), Math.Ceiling(v.CountLeft).ToString("0", CultureInfo.InvariantCulture), "", -1, acc, 0);
+            } else if (!pill.Timed) pill.Off();
+        }
+        void OnBenchFinished(BenchRun r) {
+            benchPage.Finished(r);
+            if (pill == null) pill = new BenchPill();
+            var v = bench.Snapshot();
+            if (E.S.BenchPill) pill.Display(v.Window, Ui.ModeColor(r.ModeIndex), Ink.F0(r.AvgFps), Ui.Col("#EDEAE8"), "", "avg · " + (double.IsNaN(r.Low1) ? "—" : Ink.F0(r.Low1)) + " low", -1, Ink.Ref, 8);
+            string line = r.Game + " · " + Ink.F0(r.AvgFps) + " fps avg" + (double.IsNaN(r.Low1) ? "" : " · " + Ink.F0(r.Low1) + " 1% low");
+            if (r.SaveError.Length > 0) {
+                // the result is on screen, but nowhere else: say so now rather than let it vanish at the next start
+                string why = "Benchmark done, but it could not be saved: " + r.SaveError;
+                if (IsVisible) ShowToast(why, true);
+                else try { tray.ShowBalloonTip(8000, "Benchmark not saved", line + "\n" + r.SaveError, WF.ToolTipIcon.Warning); } catch { }
+            }
+            else if (IsVisible) { if (cur != Page.Bench) ShowToast("Benchmark done: " + line, false); }
+            else try { tray.ShowBalloonTip(5000, "Benchmark done", line + "\nClick for the full result and the card.", WF.ToolTipIcon.None); } catch { }
+            PollRate();
+            TrayTip();
+        }
+        void OnBenchEnded(string why) {
+            benchPage.EndedEarly(why);
+            if (pill == null) pill = new BenchPill();
+            var v = bench.Snapshot();
+            bool asked = why == "stopped";
+            if (asked) { pill.Off(); if (IsVisible) ShowToast("Benchmark stopped", false); }
+            else {
+                if (E.S.BenchPill) pill.Display(v.Window, Ink.Warn, "ended", Ink.WarnText, "", why, -1, Ink.Warn, 6);
+                if (IsVisible) ShowToast("Benchmark ended: " + why, true);
+                else try { tray.ShowBalloonTip(5000, "Benchmark ended", why, WF.ToolTipIcon.None); } catch { }
+            }
+            PollRate();
+            TrayTip();
+        }
+        void TrayTip() {
+            if (tray == null) return;
+            string tip;
+            var v = bench == null ? null : bench.Snapshot();
+            if (v != null && v.Phase != BenchPhase.Idle && v.Phase != BenchPhase.Fetching)
+                tip = Program.DisplayName + " · benchmark · " + (v.Phase == BenchPhase.Waiting ? "waiting for a game" : v.Paused ? "paused" : v.Phase == BenchPhase.Warming ? "warming up " + Ink.Clock(v.WarmSec)
+                    : v.Phase == BenchPhase.Countdown ? "starting" : "measuring " + Ink.Clock(v.MeasuredSec) + " of " + Ink.Clock(v.MeasureTarget));
+            else tip = Program.DisplayName + " · " + E.ModeName + " · " + E.CurrentTdp + " W" + (E.S.Fan == FanMode.Max ? " · max fan" : "");
+            tray.Text = tip.Length > 63 ? tip.Substring(0, 63) : tip;
+        }
+
         void Wire() {
             foreach (string n in new[] { "HeadHome", "HeadFans", "HeadKbd", "HeadSettings", "DragStrip" })
                 F<FrameworkElement>(n).MouseLeftButtonDown += delegate(object o, MouseButtonEventArgs me) { if (me.LeftButton == MouseButtonState.Pressed) Drag(); };
+            foreach (var h in new[] { benchPage.Head, benchPage.RunsHead, benchPage.ShareHead })
+                h.MouseLeftButtonDown += delegate(object o, MouseButtonEventArgs me) { if (me.LeftButton == MouseButtonState.Pressed) Drag(); };
             btnClose.Click += delegate { HideToTray(); };
             powerDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
             powerDebounce.Tick += delegate { powerDebounce.Stop(); int off = (int)slPower.Value; Bg(delegate { E.SetTdpOffset(off, false); }); };
@@ -1104,9 +1236,9 @@ namespace Ohman {
             pageShown = true;
             var page = pages[(int)p];
             bool live = animate && screenshotPath == null && IsVisible && old != null && old != page;
-            for (int i = 0; i < 4; i++) if (pages[i] != page && !(live && pages[i] == old)) ShowPage(pages[i], false);
+            for (int i = 0; i < pages.Length; i++) if (pages[i] != page && !(live && pages[i] == old)) ShowPage(pages[i], false);
             pageHost.Width = p == Page.Keyboard ? KbdPageW : PageW;
-            for (int i = 0; i < 4; i++) nav[i].SetSelected(i == (int)p);
+            for (int i = 0; i < nav.Length; i++) nav[i].SetSelected(i == (int)p);
             if (p == Page.Keyboard) ApplyEditorState();
             else if (wasKbd) RefreshLighting();
             if (p == Page.Settings) {
@@ -1232,6 +1364,7 @@ namespace Ohman {
         /// current page counts: the outgoing one is still in the host while it fades.</summary>
         double NaturalHeight() {
             if (cur == Page.Settings) return SettingsH;
+            if (cur == Page.Bench) return benchPage.Fit(SystemParameters.WorkArea.Height - 24);
             var page = pages[(int)cur];
             if (page == null || pageHost.Width <= 0) return 0;
             page.Measure(new Size(pageHost.Width, double.PositiveInfinity));
@@ -1980,6 +2113,7 @@ namespace Ohman {
                 if (!txtKeyCmd.IsKeyboardFocused) txtKeyCmd.Text = S.KeyCommand;
                 tgLowHzBattery.IsChecked = S.LowHzOnBattery;
                 tgTrayTemp.IsChecked = S.TrayTemp;
+                tgBenchPill.IsChecked = S.BenchPill;
                 tgLightPage.IsChecked = !S.HideLight;
                 txtLightPageSub.Text = !S.HideLight && E.Light == null ? "Back when Ohman next starts" : "Turn off for a white-only backlight. Fn still switches it";
                 tgGuard.IsChecked = S.Guard;
@@ -2010,8 +2144,7 @@ namespace Ohman {
                 infoBanner.Visibility = firstHere ? Visibility.Visible : Visibility.Collapsed;
                 if (firstHere) txtInfo.Text = "You're the first to try this on your laptop. If it works, tell us on Discord or Reddit and we'll mark it verified.";
                 RefreshTray();
-                string tip = Program.DisplayName + " · " + E.ModeName + " · " + E.CurrentTdp + " W" + (S.Fan == FanMode.Max ? " · max fan" : "");
-                tray.Text = tip.Length > 63 ? tip.Substring(0, 63) : tip;
+                TrayTip();
                 UpdateFooter();
             } finally { syncing = wasSyncing; }
         }
@@ -2038,6 +2171,8 @@ namespace Ohman {
             onBattery = s.OnBattery;
             UpdateTrayTemp(s.CpuTemp);
             if (!double.IsNaN(s.CpuTemp)) { tempTrail.Add(s.CpuTemp); if (tempTrail.Count > 8) tempTrail.RemoveAt(0); sensorsSeen = true; }
+            bench.Feed(s);
+            benchPage.OnSensors(s);
             if (!IsVisible) return;          // the rest of this writes text nobody is looking at
             if (cur == Page.Fans) { UpdateCurveLive(); UpdateMaxBlock(); UpdateFanFooter(); }
             bigCpu.Text = double.IsNaN(s.CpuTemp) ? "--" : s.CpuTemp.ToString("0", CultureInfo.InvariantCulture);
@@ -2083,6 +2218,7 @@ namespace Ohman {
                 Dispatcher.BeginInvoke((Action)delegate {
                     if (f != null) {
                         lastFans = f;
+                        benchPage.OnFans(f);
                         if (t >= 0) { lastChassis = t; if (t != chassisTipFor) { chassisTipFor = t; chipChassis.ToolTip = "Chassis is " + t + "\u00b0 right now"; } }
                         bigFan1.Text = Level(f[0]);
                         bigFan2.Text = Level(f[1]);
@@ -2153,8 +2289,12 @@ namespace Ohman {
             // looking at, so we stop entirely: the curve reads max(CPU, GPU) and falls back to the CPU alone when
             // the GPU is unknown, and the thermal guard never used the GPU. On AC, or with the window open, or on
             // a machine where the GPU is the only thing there is, it polls as before.
-            sensors.SkipGpu = E.GpuMode == 3 || (onBattery && !IsVisible);
-            int ms = IsVisible ? E.S.PollMs
+            // From warm-up on: waiting for a game (up to ten minutes in a launcher) reads nothing, so it costs nothing
+            bool benchOn = bench != null && bench.Sampling;
+            sensors.Bench = benchOn;
+            sensors.SkipGpu = E.GpuMode == 3 || (onBattery && !IsVisible && !benchOn);
+            int ms = benchOn ? 1000                                         // a benchmark keeps a sample a second
+                   : IsVisible ? E.S.PollMs
                    : curveDrivesFans ? 5000
                    : E.S.TrayTemp ? (onBattery ? 10000 : 5000)
                    : (onBattery ? 30000 : 15000);
@@ -2392,6 +2532,7 @@ namespace Ohman {
                 if (id >= 0 && id <= 2) { Flash(Engine.ModeNames[id] + " mode", ModeSubs[id], id); ApplyModeAsync(id); }
                 else if (id == (int)HotkeyAction.MaxFan) ToggleMaxWithFlash();
                 else if (id == (int)HotkeyAction.Cycle) CycleWithFlash();
+                else if (id == (int)HotkeyAction.Benchmark) ToggleBench();
                 handled = true;
             }
             else if (msg == WM_POWERBROADCAST && wp.ToInt32() == PBT_POWERSETTINGCHANGE && lp != IntPtr.Zero) {
@@ -2441,7 +2582,9 @@ namespace Ohman {
             else if (page == "hotkeys") { Navigate(Page.Settings, false); ToggleHotkeyPanel(); }   // settings, hotkey panel open (screenshot aid)
             else if (page == "guard") { Navigate(Page.Settings, false); btnGuard.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); }
             else if (page == "guardrow") Navigate(Page.Settings, false);      // the row closed, for screenshots
+            else if (page == "bench") { if (Program.BenchPose != null) bench.Pose(Program.BenchPose); Navigate(Page.Bench, false); if (Program.BenchPose != null) benchPage.Pose(Program.BenchPose); }
             Morph(false);
+            if (Program.BenchSelfTest && E.Hw.IsDemo) BenchSelfTest();
             if (Program.JustUpdated) ShowToast("Updated to " + Program.Version, false);
             if (Program.FlashTest) Flash("Performance mode", ModeSubs[2], 2);
             if (screenshotPath == null) return;
@@ -2546,6 +2689,11 @@ namespace Ohman {
             try { if (osd != null) osd.Close(); } catch { }
             try { if (trayTempIcon != null) { IntPtr h = trayTempIcon.Handle; trayTempIcon.Dispose(); DestroyIcon(h); } } catch { }
             try { E.Park(quietExit); } catch { }   // before Dispose: the timers must still be alive to write
+            // After the fans are handed back: stopping a capture can take a few seconds, and at logoff Windows may not wait.
+            try { bench.Dispose(); } catch { }
+            try { if (pill != null) pill.Close(); } catch { }
+            // Reset promises nothing is left beside the exe: PresentMon and the runs go too
+            if (resetting) { try { if (System.IO.Directory.Exists(PresentMon.Dir)) System.IO.Directory.Delete(PresentMon.Dir, true); } catch (Exception ex) { Log.Write("reset: bench folder: " + ex.Message); } }
             // Sensors first. Its thread reads the CPU's registers through a handle the engine owns, so disposing
             // the engine first left a tick in flight holding a closed handle and wrote a driver failure into the
             // log of every clean exit.
