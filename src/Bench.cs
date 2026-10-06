@@ -320,7 +320,7 @@ namespace Ohman {
         void Run() {
             var rnd = new Random(7);
             while (!stop) {
-                double ms = 11.5 + (rnd.NextDouble() - 0.5) * 3 + (rnd.NextDouble() < 0.004 ? 30 : 0);
+                double ms = 11.5 + (rnd.NextDouble() + rnd.NextDouble() + rnd.NextDouble() - 1.5) * 1.6 + (rnd.NextDouble() < 0.004 ? 30 : 0);   // a peak, like a game
                 Thread.Sleep((int)ms);
                 var h = Row;
                 if (h != null) h(new FrameRow { Pid = pid, Qpc = Stopwatch.GetTimestamp(), Ms = ms, Displayed = true, DisplayMs = ms, Swap = 1, Mode = 2 });
@@ -1001,7 +1001,7 @@ namespace Ohman {
                     var b = new BenchSample { T = i, Fps = 87 + (rnd.NextDouble() - 0.5) * 11 - (rnd.NextDouble() < 0.04 ? 20 : 0), CpuT = 84 + (rnd.NextDouble() - 0.5) * 5, GpuT = 76 + rnd.NextDouble() * 2,
                         CpuW = 38 + (rnd.NextDouble() - 0.5) * 6, GpuW = 105 + (rnd.NextDouble() - 0.5) * 6, CpuMhz = 4200 + (rnd.NextDouble() - 0.5) * 200, GpuLoad = 96 + (rnd.NextDouble() - 0.5) * 6, GpuMhz = 2100, Fan1 = 49, Fan2 = 51 };
                     Live.Add(b);
-                    for (int k = 0; k < 87; k++) frames.Add(new FrameRow { Pid = OwnPid, Qpc = q, Ms = 11.5 + (rnd.NextDouble() - 0.5) * 3 + (rnd.NextDouble() < 0.004 ? 30 : 0), DisplayMs = 11.5, Displayed = true, Swap = 1, Mode = 2 });
+                    for (int k = 0; k < 87; k++) frames.Add(new FrameRow { Pid = OwnPid, Qpc = q, Ms = 11.5 + (rnd.NextDouble() + rnd.NextDouble() + rnd.NextDouble() - 1.5) * 1.6 + (rnd.NextDouble() < 0.004 ? 30 : 0), DisplayMs = 11.5, Displayed = true, Swap = 1, Mode = 2 });
                 }
                 MeasuredSec = 72;
             }

@@ -110,7 +110,7 @@ namespace Ohman {
 
     /// <summary>The frame-time histogram, or a line saying why there is none yet.</summary>
     sealed class FrameHist : FrameworkElement {
-        public double[] Bins;                     // 0..1 each, already on a square-root scale; null = show Hint
+        public double[] Bins;                     // 0..1 each, in proportion to the tallest; null = show Hint
         public int Slow = -1;                     // first bin past the stutter line: drawn in the accent
         public string Hint = "";
         static Typeface face;
@@ -133,9 +133,10 @@ namespace Ohman {
             var acc = Ui.Accent;
             dc.DrawLine(new Pen(Ink.LineB, 1), new Point(0, H - 0.5), new Point(W, H - 0.5));
             for (int i = 0; i < n; i++) {
-                double h = Math.Max(2, Bins[i] * (H - 1));
                 if (Bins[i] <= 0) continue;
-                dc.DrawRoundedRectangle(Slow >= 0 && i >= Slow ? (Brush)acc : bin, null, new Rect(i * pitch, H - h, bw, h), 1.5, 1.5);
+                bool late = Slow >= 0 && i >= Slow;
+                double h = Math.Max(late ? 4 : 2, Bins[i] * (H - 1));             // a slow frame is never too small to see
+                dc.DrawRoundedRectangle(late ? (Brush)acc : bin, null, new Rect(i * pitch, H - h, bw, h), 1.5, 1.5);
             }
             if (Slow > 0) {
                 double x = Math.Round(Slow * pitch - 1.25) + 0.5;
@@ -143,49 +144,59 @@ namespace Ohman {
             }
         }
 
-        /// <summary>34 bins from half the median frame time to three times it, the first and last taking everything
-        /// beyond, on a square-root scale so the slow tail (the point of the chart) is visible beside the peak. The
-        /// line sits at 2.5 times the median, where the stutter rule starts to count.</summary>
+        /// <summary>The bars fill the width: the body spans where the frames actually are (the fastest half percent to
+        /// the 99th percentile, on 0.1 ms steps, the resolution a stored run keeps), and anything slower than 2.5 times
+        /// the median, where the stutter rule starts to count, sits apart on the right in the accent behind a line.
+        /// Heights in proportion; the slow frames are never drawn too small to see.</summary>
         public void From(List<double> ft) {
             if (ft == null || ft.Count < 30) { Bins = null; return; }
             var x = ft.ToArray(); Array.Sort(x);
-            double med = x[x.Length / 2];
-            Fill(med, delegate(Action<double, int> add) { foreach (double v in ft) add(v, 1); });
+            Build(x, null, x[x.Length / 2]);
         }
         public void From(int[] hist, double median) {
             if (hist == null || hist.Length == 0 || !(median > 0)) { Bins = null; return; }
-            const int N = 34;
-            double lo = median * 0.5, top = median * 3, w = (top - lo) / N;
-            var c = new double[N];
+            var v = new List<double>(); var w = new List<double>();
             for (int i = 0; i < hist.Length; i++) {
                 if (hist[i] <= 0) continue;
-                double a = i / 10.0, b = a + 0.1;
-                if (i == hist.Length - 1 && i >= 1000) b = Math.Max(b, top);            // the 100 ms+ bin
-                if (b <= lo) { c[0] += hist[i]; continue; }
-                if (a >= top) { c[N - 1] += hist[i]; continue; }
-                double span = b - a;
-                if (a < lo) { c[0] += hist[i] * (lo - a) / span; a = lo; }
-                if (b > top) { c[N - 1] += hist[i] * (b - top) / span; b = top; }
-                for (int k = (int)((a - lo) / w); k < N && lo + k * w < b; k++) {
-                    double x0 = Math.Max(a, lo + k * w), x1 = Math.Min(b, lo + (k + 1) * w);
-                    if (x1 > x0) c[k] += hist[i] * (x1 - x0) / span;
-                }
+                v.Add(i >= 1000 ? Math.Max(100, median * 4) : i / 10.0 + 0.05);           // the last bin is everything from 100 ms
+                w.Add(hist[i]);
             }
-            Scale(c);
+            if (v.Count == 0) { Bins = null; return; }
+            Build(v.ToArray(), w.ToArray(), median);
         }
-        void Fill(double med, Action<Action<double, int>> each) {
-            const int N = 34;
-            double lo = med * 0.5, top = med * 3;
-            var c = new double[N];
-            each(delegate(double v, int k) { int b = (int)((v - lo) / (top - lo) * N); c[Math.Max(0, Math.Min(N - 1, b))] += k; });
+        /// <summary>v ascending; wt null means one frame each.</summary>
+        void Build(double[] v, double[] wt, double med) {
+            double total = 0;
+            for (int i = 0; i < v.Length; i++) total += wt == null ? 1 : wt[i];
+            Func<double, double> q = delegate(double pr) {
+                double want = pr * total, acc = 0;
+                for (int i = 0; i < v.Length; i++) { acc += wt == null ? 1 : wt[i]; if (acc >= want) return v[i]; }
+                return v[v.Length - 1];
+            };
+            double thr = med * 2.5, lo = q(0.005), hi = Math.Min(q(0.99), thr);
+            double pad = Math.Max(hi - lo, med * 0.1) * 0.1;
+            lo = Math.Max(0, Math.Floor((lo - pad) * 10) / 10);
+            hi = Math.Min(thr, hi + pad);
+            if (hi - lo < 0.8) hi = Math.Min(thr, lo + 0.8);                               // at least eight steps
+            int k = Math.Max(1, (int)Math.Ceiling((hi - lo) / 0.1 / 40));                     // 0.1 ms steps, at most 40 bars
+            double bw = k * 0.1;
+            int n = Math.Max(1, (int)Math.Ceiling((hi - lo) / bw - 1e-9));
+            bool slow = v[v.Length - 1] >= thr;
+            const int SlowBins = 6;                                                            // 2.5x to 4x the median, the last taking the rest
+            var c = new double[n + (slow ? 1 + SlowBins : 0)];
+            for (int i = 0; i < v.Length; i++) {
+                double x = v[i], cnt = wt == null ? 1 : wt[i];
+                if (x >= thr) c[n + 1 + Math.Min(SlowBins - 1, (int)((x - thr) / (med * 0.25)))] += cnt;
+                else c[Math.Max(0, Math.Min(n - 1, (int)((x - lo) / bw)))] += cnt;
+            }
+            Slow = slow ? n + 1 : -1;
             Scale(c);
         }
         void Scale(double[] c) {
             int N = c.Length;
             double max = 0; foreach (double v in c) max = Math.Max(max, v);
             Bins = new double[N];
-            for (int i = 0; i < N; i++) Bins[i] = max > 0 && c[i] > 0 ? Math.Sqrt(c[i] / max) : 0;
-            Slow = (int)Math.Ceiling((2.5 - 0.5) / (3 - 0.5) * N);
+            for (int i = 0; i < N; i++) Bins[i] = max > 0 && c[i] > 0 ? c[i] / max : 0;   // in proportion: the peak is the shape worth seeing
             Repaint();
         }
     }
