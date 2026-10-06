@@ -45,6 +45,12 @@ whether the GPU was held back by its power limit (NVIDIA only).
 
 PresentMon reads presents from Windows' own event tracing (ETW). Nothing is injected into the game.
 
+It works on **any GPU: NVIDIA, AMD and Intel**, and with DirectX 9 to 12, Vulkan and OpenGL games, because it
+reads what Windows itself records about each frame rather than asking the graphics driver. The frame numbers
+(average FPS, lows, frame times, stutter) are the same on all of them. GPU temperature, power, clock and load
+come from NVIDIA's driver, so on an AMD Radeon those columns stay empty; CPU, fans and every frame number still
+work.
+
 It is not shipped inside Ohman. The first Start downloads `PresentMon-2.6.0-x64.exe` from Intel's GitHub
 release into `bench\` beside Ohman, and before every run Ohman checks its size, its SHA-256 and that it is
 signed by Intel Corporation. A file that fails any of these is deleted, and the next Start downloads it again.
