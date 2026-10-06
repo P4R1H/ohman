@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/hero.png" alt="The Ohman window: modes, live temperatures and fan speeds, a fan curve and the keyboard lighting editor"></p>
+<p align="center"><img src="docs/hero.png" alt="The Ohman window: modes, live temperatures and fan speeds, a fan curve, the keyboard lighting editor and a benchmark result"></p>
 
 <p align="center">
 <a href="https://github.com/P4R1H/Ohman/releases/latest/download/Ohman.exe"><img alt="Download Ohman.exe" src="https://img.shields.io/badge/Download%20Ohman.exe-3F8CFF?style=for-the-badge&logo=windows&logoColor=white"></a>
@@ -25,7 +25,7 @@ firmware interface, without any ads, services, or accounts.
 | **Graphics** | Hybrid, Discrete (the MUX) or iGPU only, whichever the firmware offers, with the restart it needs. |
 | **Lighting** | The keyboard drawn as it actually lights. Select a key, a row, a zone or the whole board, then pick a hue and a shade; or Breathe, Cycle, Wave, or hand it to Windows Dynamic Lighting. One zone, four zones or per key, whichever your keyboard has. |
 | **Display** | Refresh rate, and the lowest rate on battery if you want it. |
-| **Benchmark** | Ctrl+Alt+R in a game, or Start. Ohman waits for the game in front, warms up until the temperatures settle, then measures for 30 s, 1 or 3 minutes: average FPS, 1% and 0.1% lows, frame times and stutter, the same definitions CapFrameX uses, with CPU and GPU temperature, power, clocks and fans beside them. Every run is kept, set against your last run of the same game in the same mode, and makes a share card. Frames come from Intel's [PresentMon](https://github.com/GameTechDev/PresentMon), downloaded once on first use and checked before every run. |
+| **Benchmark** | Ctrl+Alt+R in a game, or Start. Ohman waits for the game in front, warms up until the temperatures settle, then measures for 30 s, 1 or 3 minutes: average FPS, 1% and 0.1% lows, frame times and stutter, the same definitions CapFrameX uses, with CPU and GPU temperature, power, clocks and fans beside them. Every run is kept, set against your last run of the same game in the same mode, and makes a share card. Frames come from Intel's [PresentMon](https://github.com/GameTechDev/PresentMon), downloaded once on first use and checked before every run. [How each number is worked out](docs/benchmark.md). |
 | **Live** | CPU and GPU temperature, CPU package watts, fan speeds, load, clocks, chassis sensor, battery. CPU temperature on the tray icon. |
 | **Tray** | Modes, fan mode, the backlight, refresh rate and graphics, without opening the window. |
 | **OMEN key** | Opens the panel, cycles modes, toggles max fan, or runs a command of your choice. OGH's key handler is stopped, reversibly. Shift+F11 cycles modes; Ctrl+Alt+E/B/P/M/O for the rest. |
@@ -39,16 +39,6 @@ Settings live in `ohman.state`, everything the app does goes to `ohman.log`, ben
 To remove it: **Uninstall** in Settings. That undoes everything Ohman changed on the laptop, hands the fans
 and the keyboard back, re-enables OMEN Gaming Hub's tasks, deletes its own settings and log, and quits. Delete
 the folder afterwards and nothing of it is left.
-
-## Benchmark
-
-<p align="center"><img src="docs/benchmark.png" alt="A benchmark in Ohman: the measuring page, the runs history and a share card"></p>
-
-Press **Ctrl+Alt+R** in a game. Ohman waits until the temperatures settle, measures for 30 s, 1 or 3 minutes and
-keeps the run beside your earlier ones. Frames come from Intel's [PresentMon](https://github.com/GameTechDev/PresentMon),
-which reads them from Windows' own event tracing: nothing is injected into the game. It is downloaded the first
-time you press Start and checked against its SHA-256 and Intel's signature before every run. Share cards you
-save go to `Pictures\Ohman`, CSV exports to `Documents\Ohman`. How each number is worked out: [docs/benchmark.md](docs/benchmark.md).
 
 ## Install
 
