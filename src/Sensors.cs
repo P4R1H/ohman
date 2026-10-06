@@ -203,7 +203,11 @@ namespace Ohman {
                     s.BatteryPercent = (int)Math.Round(ps.BatteryLifePercent * 100);
                 } catch { }
                 // nvidia-smi wakes the discrete GPU; ask it every other tick and keep the previous numbers in between
-                if (nvsmi != null && nvFail < 5 && !SkipGpu && DueForGpu(s)) { lastNv = DateTime.Now; ReadNvidia(s); NoteGpuActivity(s); if (!double.IsNaN(s.GpuTemp)) s.GpuRead = DateTime.Now; }
+                if (nvsmi != null && nvFail < 5 && !SkipGpu && DueForGpu(s)) {
+                    lastNv = DateTime.Now; ReadGpu(s); NoteGpuActivity(s);
+                    if (gpuQuiet >= 3) CloseNvml();             // quiet: let it sleep, nothing of ours held open
+                    if (!double.IsNaN(s.GpuTemp)) s.GpuRead = DateTime.Now;
+                }
                 else lock (sync) { s.GpuTemp = last.GpuTemp; s.GpuLoad = last.GpuLoad; s.GpuWatts = last.GpuWatts; s.GpuMhz = last.GpuMhz; s.GpuRead = last.GpuRead; }
                 // carrying the last number forward is fine for a display; it is not fine for the fan curve, which would
                 // believe an idle GPU while a job heats it up between two backed-off reads
@@ -217,6 +221,7 @@ namespace Ohman {
                         var h = Updated; if (h != null) { try { h(s); } catch { } }
                     }
                 }
+                if (stop) break;               // Dispose may have set wake before the Reset above; do not sleep through it
                 wake.WaitOne(warm > 0 ? Math.Min(1000, intervalMs) : intervalMs);
                 if (warm > 0) warm--;
             }
@@ -257,16 +262,16 @@ namespace Ohman {
         bool DueForGpu(SensorSnapshot s) {
             bool cpuBusy = !double.IsNaN(s.CpuLoad) && s.CpuLoad > 25;
             // With the window shut (the tray rates are 5 s and slower) nobody is watching the GPU numbers; only the
-            // fan curve reads them, so a busy GPU is asked every 15 s rather than 10, well inside GpuStaleMs (45 s). Each
-            // nvidia-smi is a process start plus an NVML init and driver handshake, and a lag spike every 10 s while
-            // gaming was reported (#72). The thermal guard never used the GPU, so it is unaffected.
-            double want = gpuQuiet >= 3 && !cpuBusy ? GpuIdleMs : intervalMs >= 5000 ? GpuTrayMs : Math.Max(4000, intervalMs * 2);
+            // fan curve reads them, so a busy GPU is asked every 15 s at the most often (slower tray rates keep twice their
+            // interval), well inside GpuStaleMs (45 s). A lag spike every 10 s while gaming was reported (#72); see
+            // ReadNvml for what each read used to cost. The thermal guard never used the GPU, so it is unaffected.
+            double want = gpuQuiet >= 3 && !cpuBusy ? GpuIdleMs : Math.Max(intervalMs >= 5000 ? GpuTrayMs : 4000, intervalMs * 2);
             if ((DateTime.Now - lastNv).TotalMilliseconds < want) return false;
             // Asking nvidia-smi anything wakes the GPU to answer, and a hybrid laptop's dGPU spends most of its day
             // asleep. One owner saw it pinned awake at 60-100 W idle. Asleep is also the answer: it is cool.
             // It cannot heat up while it sleeps, so its last reading stays good; without this it went stale and the
             // Home page showed an unknown GPU temperature on every hybrid laptop idling on the iGPU.
-            if (GpuAsleep()) { lastNv = DateTime.Now; lock (sync) { if (last != null && last.GpuRead != DateTime.MinValue) last.GpuRead = DateTime.Now; } return false; }
+            if (GpuAsleep()) { CloseNvml(); lastNv = DateTime.Now; lock (sync) { if (last != null && last.GpuRead != DateTime.MinValue) last.GpuRead = DateTime.Now; } return false; }
             return true;
         }
 
@@ -314,6 +319,69 @@ namespace Ohman {
             wattsAvg = Math.Max(Math.Min(x, y), Math.Min(Math.Max(x, y), z));
             return wattsAvg;
         }
+        // ---- NVML in process: the numbers nvidia-smi prints, without starting a process and an NVML init for each.
+        // Measured on 8C58 (RTX, driver 58x): nvidia-smi takes ~650 ms a call, nearly all of it the NVML init it runs
+        // every time, and a held NVML session answers the same four questions in ~10 ms. While a game runs that init
+        // was happening every 10 s (#72). The session is held only while the GPU is busy, when it is awake anyway, and
+        // shut as soon as it goes quiet or to sleep, so it never keeps an idle dGPU out of D3. nvml.dll is loaded by
+        // full path first, so the DllImports below bind to that module: by name alone they would also take an
+        // nvml.dll dropped beside Ohman.exe, in a process running as administrator. nvidia-smi stays the fallback.
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr LoadLibraryW(string path);
+        [DllImport("nvml.dll")] static extern int nvmlInit_v2();
+        [DllImport("nvml.dll")] static extern int nvmlShutdown();
+        [DllImport("nvml.dll")] static extern int nvmlDeviceGetHandleByIndex_v2(uint index, out IntPtr device);
+        [DllImport("nvml.dll")] static extern int nvmlDeviceGetTemperature(IntPtr device, int sensor, out uint temp);
+        [StructLayout(LayoutKind.Sequential)] struct NvmlUtil { public uint Gpu, Memory; }
+        [DllImport("nvml.dll")] static extern int nvmlDeviceGetUtilizationRates(IntPtr device, out NvmlUtil util);
+        [DllImport("nvml.dll")] static extern int nvmlDeviceGetPowerUsage(IntPtr device, out uint milliwatts);
+        [DllImport("nvml.dll")] static extern int nvmlDeviceGetClockInfo(IntPtr device, int type, out uint mhz);
+        bool nvmlLoaded, nvmlGone;
+        volatile bool nvmlOpen;
+        int nvmlFail;
+        IntPtr nvmlDev;
+
+        void ReadGpu(SensorSnapshot s) {
+            if (!nvmlGone && ReadNvml(s)) return;
+            ReadNvidia(s);
+        }
+        bool ReadNvml(SensorSnapshot s) {
+            try {
+                if (!nvmlLoaded) {
+                    string dll = null;
+                    foreach (string p in new string[] { Path.Combine(Environment.SystemDirectory, "nvml.dll"), @"C:\Program Files\NVIDIA Corporation\NVSMI\nvml.dll" })
+                        if (File.Exists(p)) { dll = p; break; }
+                    if (dll == null || LoadLibraryW(dll) == IntPtr.Zero) { nvmlGone = true; Log.Write("nvml not found; GPU stats through nvidia-smi"); return false; }
+                    nvmlLoaded = true;
+                    Log.Write("gpu stats: NVML in process (" + dll + ")");
+                }
+                if (!nvmlOpen) {
+                    int rc = nvmlInit_v2();
+                    if (rc != 0) throw new Exception("init rc " + rc);
+                    nvmlOpen = true;
+                    rc = nvmlDeviceGetHandleByIndex_v2(0, out nvmlDev);
+                    if (rc != 0) throw new Exception("device rc " + rc);
+                }
+                uint t;
+                int r = nvmlDeviceGetTemperature(nvmlDev, 0, out t);          // 0 = NVML_TEMPERATURE_GPU
+                if (r != 0) throw new Exception("temperature rc " + r);
+                if (t > 0 && t < 130) s.GpuTemp = t;
+                NvmlUtil u; if (nvmlDeviceGetUtilizationRates(nvmlDev, out u) == 0 && u.Gpu <= 100) s.GpuLoad = u.Gpu;
+                uint mw; if (nvmlDeviceGetPowerUsage(nvmlDev, out mw) == 0 && mw < 250000) s.GpuWatts = mw / 1000.0;
+                uint mhz; if (nvmlDeviceGetClockInfo(nvmlDev, 0, out mhz) == 0 && mhz >= 100) s.GpuMhz = mhz;   // 0 = graphics clock
+                nvmlFail = 0;
+                return true;
+            } catch (Exception ex) {
+                CloseNvml();
+                if (++nvmlFail >= 3) { nvmlGone = true; Log.Write("nvml off after " + nvmlFail + " failures (" + ex.Message + "); GPU stats through nvidia-smi"); }
+                return false;
+            }
+        }
+        void CloseNvml() {
+            if (!nvmlOpen) return;
+            nvmlOpen = false;
+            try { nvmlShutdown(); } catch { }
+        }
+
         void ReadNvidia(SensorSnapshot s) {
             try {
                 var psi = new ProcessStartInfo(nvsmi, "--query-gpu=temperature.gpu,utilization.gpu,power.draw,clocks.gr --format=csv,noheader,nounits") {
@@ -360,6 +428,7 @@ namespace Ohman {
             // Bounded: a read that hangs (a stuck WMI query, nvidia-smi taking its 4.5 s) must not hold up quitting.
             // Past the cap the thread is a background one and goes with the process.
             if (worker != null && worker != Thread.CurrentThread) worker.Join(3000);
+            CloseNvml();
             try { for (int i = 0; i < thermals.Length; i++) { try { thermals[i].Dispose(); } catch { } } if (cpuUtil != null) cpuUtil.Dispose(); if (cpuFreq != null) cpuFreq.Dispose(); if (cpuPower != null) cpuPower.Dispose(); } catch { }
         }
     }

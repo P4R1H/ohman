@@ -319,9 +319,11 @@ namespace Ohman {
                 // an atomic replace (a FAT drive) gets the old in-place write back.
                 string tmp = File_ + ".tmp";
                 File.WriteAllText(tmp, sb.ToString());
-                try { if (File.Exists(File_)) File.Replace(tmp, File_, null); else File.Move(tmp, File_); }
-                catch (IOException) { File.WriteAllText(File_, sb.ToString()); try { File.Delete(tmp); } catch { } }
-                catch (PlatformNotSupportedException) { File.WriteAllText(File_, sb.ToString()); try { File.Delete(tmp); } catch { } }
+                bool swapped = false;
+                try { if (File.Exists(File_)) File.Replace(tmp, File_, null); else File.Move(tmp, File_); swapped = true; }
+                catch (IOException) { File.WriteAllText(File_, sb.ToString()); }
+                catch (PlatformNotSupportedException) { File.WriteAllText(File_, sb.ToString()); }
+                finally { if (!swapped) { try { File.Delete(tmp); } catch { } } }   // whatever went wrong, no tmp stays beside the exe
             }
         }
     }
@@ -680,7 +682,7 @@ namespace Ohman {
         public void Park(bool quiet) {
             // Mark shutdown before stopping the timers. A delayed resume re-apply takes the same lock, so it
             // cannot start after the handoff has begun.
-            lock (applySync) stopping = true;
+            MarkStopping();
             // The timers and the work queue are still alive until Dispose, and any of them could undo what follows:
             // the Max keep-alive re-sends 0x27 {1}, the guard sends max, the heartbeat re-sends the mode without the
             // BIOS byte. Stop them first so the last word to the firmware is ours.
@@ -739,8 +741,16 @@ namespace Ohman {
             } catch (Exception ex) { Log.Write("park fans: " + ex.Message); }
         }
 
+        /// <summary>Set stopping under applySync so a re-apply waiting on the lock sees it, but never wait on the lock
+        /// for long: a firmware call that hangs in a fan tick must not hang quitting with it.</summary>
+        void MarkStopping() {
+            bool held = false;
+            try { held = Monitor.TryEnter(applySync, 2000); stopping = true; }
+            finally { if (held) Monitor.Exit(applySync); }
+        }
+
         public void Dispose() {
-            lock (applySync) stopping = true;
+            MarkStopping();
             try { workReady.Set(); } catch { }
             try { if (fx != null) fx.Dispose(); } catch { }
             CloseDriver();
@@ -786,7 +796,7 @@ namespace Ohman {
                 if (!BiosOk && !Hw.IsDemo) return;
                 ClearMaxFirst();
                 Try(delegate { Hw.SetMode(ModeByte, FansByBios); }, "Set mode");
-                ApplyFanCore();
+                ApplyFanCore(true);
                 ApplyPowerCore();
                 ApplyGpuCore();
                 if (S.SyncWinPower) SetWinPowerOverlay(ModeIndex);
@@ -886,11 +896,11 @@ namespace Ohman {
             if (!(maxAsking || Math.Max(curLevel1, curLevel2) >= P.Curve.Ceiling)) {
                 ceilingTicks = 0; ceilingHighWater = 0; return;
             }
-            // Short of the ceiling, a reading that is still climbing is a fan spooling up, not a limit: the settle
-            // count starts again until the fastest reading stops rising. 8DCF learned 43 that way and its 0x2D read
-            // 56/57 half a minute later under the same curve. Past the ceiling the count is left alone, since that
-            // direction needs no settling.
-            if (seen > ceilingHighWater) { ceilingHighWater = seen; if (seen < P.Curve.Ceiling) ceilingTicks = 0; }
+            // A reading that is still climbing is a fan spooling up, not a limit: the settle count starts again
+            // until the fastest reading stops rising. 8DCF learned 43 that way and its 0x2D read 56/57 half a minute
+            // later under the same curve. The same holds above the ceiling, where the top probe in WriteLevels asks
+            // for more than the learned value and the fans take a while to get there.
+            if (seen > ceilingHighWater) { ceilingHighWater = seen; ceilingTicks = 0; }
             if (++ceilingTicks < CeilingSettleTicks) return;
             ceilingTicks = 0;
             int real = ceilingHighWater;
@@ -1260,20 +1270,28 @@ namespace Ohman {
         bool maxProven;                            // the flag has been seen raising the fans this run
         int maxIgnoredVerdicts;                    // watches that saw nothing move; two, on separate asks, before it is believed
 
-        void ApplyFanCore() {
+        /// <param name="modeSent">The caller has just sent the mode with FansByBios (ApplyAll, SetFan), so with the
+        /// screen off the hand-off only needs repeating if leaving max wrote a level after it.</param>
+        void ApplyFanCore(bool modeSent = false) {
             if (GuardActive) { GuardFans(); return; }      // the guard owns the fans until it releases
             switch (S.Fan) {
                 case FanMode.Max: MaxFan(true, "Max fan"); break;
                 case FanMode.Manual: MaxFan(false, "Max fan off"); WriteLevels(S.Fan1, S.Fan2, "Fan level"); break;
                 default:
+                    bool hadMax = maxFlagOn;
                     MaxFan(false, "Max fan off");
-                    // Screen off: the curve is not ours to drive (see OnDisplay). Leaving max may just have written
-                    // the ceiling as its second step, so the firmware has to be handed the fans again right now
-                    // rather than at the next heartbeat.
-                    if (ScreenOff) Try(delegate { Hw.SetMode(ModeByte, true); }, "Fans to the firmware");
+                    if (ScreenOff) ScreenOffHandoff(!modeSent || hadMax);
                     else AutoTick(true);
                     break;
             }
+        }
+        /// <summary>Screen off in Auto or Curve: the curve is not ours to drive (see OnDisplay). Leaving max may just
+        /// have written the ceiling as its second step, so the mode goes out again with the BIOS byte unless the
+        /// caller has just sent it. The EC route holds the fans in its own manual register, which the mode byte does
+        /// not touch, so a held pair is released outright. Caller holds applySync.</summary>
+        void ScreenOffHandoff(bool sendMode) {
+            if (Route == FanRoute.Ec && Ec != null && (curLevel1 >= 0 || curLevel2 >= 0)) ReleaseEcFans("screen off");
+            if (sendMode) Try(delegate { Hw.SetMode(ModeByte, true); }, "Fans to the firmware");
         }
 
         // A CPU temperature at idle swings several degrees every few seconds. Feeding that straight into the curve
@@ -1464,8 +1482,9 @@ namespace Ohman {
             // mode: leaving Auto has to take control back before the first level is written.
             if (leavingMax) lock (applySync) MaxFan(false, "Max fan off");
             // The same with the screen off, where Auto and Curve hand the fans to the firmware (OnDisplay).
-            if (OnBattery || ScreenOff) lock (applySync) Try(delegate { Hw.SetMode(ModeByte, FansByBios); }, "Set mode");
-            lock (applySync) { ApplyFanCore(); lastFanWrite = DateTime.Now; }
+            bool sent = OnBattery || ScreenOff;
+            if (sent) lock (applySync) Try(delegate { Hw.SetMode(ModeByte, FansByBios); }, "Set mode");
+            lock (applySync) { ApplyFanCore(sent); lastFanWrite = DateTime.Now; }
             if (announce) Say(mode == FanMode.Max ? "Max fan" : mode == FanMode.Manual ? "Fans " + Rpm(S.Fan1) + " / " + Rpm(S.Fan2) : mode == FanMode.Custom ? "Fans on your curve" : "Fans auto");
             Changed();
         }
@@ -1725,6 +1744,7 @@ namespace Ohman {
                 Try(delegate { Hw.SetMode(ModeByte, FansByBios); }, "Set mode");
                 if (GuardActive) GuardFans();
                 else if (on) { curLevel1 = curLevel2 = -1; AutoTick(true); lastFanWrite = DateTime.Now; }   // -1: write even if the target matches the last pair
+                else ScreenOffHandoff(false);  // the mode just went out; an EC-held pair still has to be let go
             }
             Log.Write(on ? "display on: " + S.Fan + " curve back in charge of the fans" : "display off: fans handed to the firmware's own curve until it is back");
             Changed();

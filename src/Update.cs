@@ -140,16 +140,30 @@ namespace Ohman {
 
         /// <summary>Fetch one GitHub release asset to a file. Only GitHub's own hosts may answer, the length must
         /// be the one the release declared, and a failure leaves nothing behind. Used for our own builds and for
-        /// the driver installer alike.</summary>
+        /// the driver installer alike.
+        ///
+        /// A network hiccup gets one more try, the whole fetch over again (#70): the first attempt timed out after
+        /// 15 s at boot, and a stall halfway through the body is the same kind of failure. A wrong host or a
+        /// wrong length is not a hiccup and is never retried.</summary>
         public static void Download(string url, string dest, long expectedSize) {
+            for (int attempt = 1; ; attempt++) {
+                try { DownloadOnce(url, dest, expectedSize, attempt == 1 ? 15000 : 30000); return; }
+                catch (Exception ex) {
+                    if (attempt >= 2 || !Transient(ex)) throw;
+                    Log.Write("download: " + ex.Message + "; trying once more in 5 s");
+                    Thread.Sleep(5000);
+                }
+            }
+        }
+
+        static void DownloadOnce(string url, string dest, long expectedSize, int timeoutMs) {
             try {
                 ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072;
                 var req = (HttpWebRequest)WebRequest.Create(url);
                 req.UserAgent = Program.AppName + "/" + Program.Version;
+                req.Timeout = timeoutMs;
                 req.ReadWriteTimeout = 60000;
-                HttpWebResponse resp;
-                GetResponseWithRetry(req, out resp);
-                using (resp) {
+                using (var resp = (HttpWebResponse)req.GetResponse()) {
                     // GitHub hands release assets off to its own object store, so the URL we end on is not the
                     // one we asked for. Anywhere outside those two names and we are no longer talking to GitHub.
                     Uri u = resp.ResponseUri;
@@ -173,44 +187,20 @@ namespace Ohman {
             }
         }
 
-        private static void GetResponseWithRetry(HttpWebRequest req, out HttpWebResponse resp) {
-            const int maxAttempts = 2;
-            for (int attempt = 0; attempt < maxAttempts; attempt++) {
-                try {
-                    req.Timeout = (attempt == 0) ? 15000 : 30000;
-                    resp = (HttpWebResponse)req.GetResponse();
-                    return;
-                } catch (WebException ex) {
-                    if (!IsTransient(ex)) throw;
-                    if (attempt == maxAttempts - 1) throw;
-                    Thread.Sleep(5000);
-                    // recreate request because HttpWebRequest cannot be reused after a failed GetResponse
-                    req = (HttpWebRequest)WebRequest.Create(req.RequestUri);
-                    req.UserAgent = Program.AppName + "/" + Program.Version;
-                    req.ReadWriteTimeout = 60000;
-                    ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072;
-                }
-            }
-            throw new InvalidOperationException("unreachable");
-        }
-
-        private static bool IsTransient(WebException ex) {
-            var hr = ex.Response as HttpWebResponse;
-            bool transientHttp = false;
+        /// <summary>Worth one more try: a timeout, a dropped or refused connection, a name that did not resolve, a
+        /// read that stalled mid-body (an IOException around the socket), or a server-side 5xx / 408 / 429.</summary>
+        static bool Transient(Exception ex) {
+            var we = ex as WebException ?? ex.InnerException as WebException;
+            if (we == null) return ex is IOException;
+            var hr = we.Response as HttpWebResponse;
             if (hr != null) {
-                try {
-                    int code = (int)hr.StatusCode;
-                    transientHttp = code >= 500 || code == 408 || code == 429;
-                } finally {
-                    hr.Dispose();
-                }
+                int code = (int)hr.StatusCode;
+                return code >= 500 || code == 408 || code == 429;
             }
-            if (transientHttp) return true;
-            return ex.Status == WebExceptionStatus.Timeout
-                || ex.Status == WebExceptionStatus.ConnectFailure
-                || ex.Status == WebExceptionStatus.ReceiveFailure
-                || ex.Status == WebExceptionStatus.RequestCanceled
-                || ex.Status == WebExceptionStatus.ProxyNameResolutionFailure;
+            return we.Status == WebExceptionStatus.Timeout || we.Status == WebExceptionStatus.ConnectFailure
+                || we.Status == WebExceptionStatus.ReceiveFailure || we.Status == WebExceptionStatus.RequestCanceled
+                || we.Status == WebExceptionStatus.NameResolutionFailure || we.Status == WebExceptionStatus.ProxyNameResolutionFailure
+                || we.Status == WebExceptionStatus.ConnectionClosed || we.Status == WebExceptionStatus.KeepAliveFailure;
         }
 
         /// <summary>Is the file on disk the build the release said it would be? The length catches a download cut
