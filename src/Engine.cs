@@ -1979,7 +1979,7 @@ namespace Ohman {
                 // One-time repair. Before this build a per-key keyboard was initialised to white for every lamp,
                 // and InitLight then saved that array as the owner's own colours. It is the right length, so it
                 // parses cleanly and would be painted straight back. Drop it once and let the new default stand.
-                if (apply && Light.Kind == LightKind.PerKey && !S.PerKeyReset) {
+                if (apply && Light is PerKeyLighting && !S.PerKeyReset) {
                     S.LightColors = "";
                     S.PerKeyReset = true;
                     S.Save();
