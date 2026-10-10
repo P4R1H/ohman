@@ -2139,6 +2139,7 @@ namespace Ohman {
                 bool err = (!E.BiosOk || E.ReadOnly) && !E.Hw.IsDemo;
                 errBanner.Visibility = err ? Visibility.Visible : Visibility.Collapsed;
                 if (err) txtErr.Text = !E.BiosOk ? "BIOS interface unavailable: " + E.LastError
+                    : E.Desktop ? "Desktops aren't supported (board " + E.Board + "). Read-only: nothing is written to the firmware and OMEN Gaming Hub stays in charge."
                     : "Unsupported laptop (board " + E.Board + "). Read-only: nothing is written to the firmware. Run tools\\support-info.cmd and open a GitHub issue to add it.";
                 bool firstHere = E.Generic && !E.Hw.IsDemo && !S.InfoDismissed && !Platforms.Reported(E.Board);
                 infoBanner.Visibility = firstHere ? Visibility.Visible : Visibility.Collapsed;

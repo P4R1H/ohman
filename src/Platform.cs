@@ -205,6 +205,10 @@ namespace Ohman {
         }
 
         public static PlatformProfile Generic(string board, SystemInfo info) {
+            // Desktops answer the same mailbox but are not laptops: their fans hang off the motherboard, and the curve,
+            // floor and guard thresholds below are a laptop's. Victus 15L 89B5 (#83) answers 0x28 with zeros and refuses
+            // every fan and sensor query. Nobody has measured a 15L/25L/30L/40L/45L, so none is driven.
+            if (IsDesktop()) return null;
             bool haveInfo = info != null && info.Valid;
             int policy = PolicyVersion(board, info);
             if (policy < 0) return null;                                 // no source for the mode bytes: stay read-only
@@ -313,6 +317,24 @@ namespace Ohman {
                     foreach (ManagementObject mo in s.Get()) return (mo["Product"] as string ?? "").Trim();
             } catch { }
             return "";
+        }
+
+        static readonly int[] DesktopChassis = { 3, 4, 5, 6, 7, 13, 15, 16, 24, 35, 36 };   // SMBIOS chassis types: desktop, tower, mini PC, all in one...
+        static int desktop = -1;
+        /// <summary>SMBIOS says desktop, tower, mini PC or all-in-one, or HP's own model name says "Desktop"
+        /// ("Victus by HP 15L Gaming Desktop TG02-0xxx"). HP laptops report 9 or 10.</summary>
+        public static bool IsDesktop() {
+            if (desktop >= 0) return desktop == 1;
+            bool d = ReadModel().IndexOf("Desktop", StringComparison.OrdinalIgnoreCase) >= 0;
+            try {
+                using (var s = new ManagementObjectSearcher("SELECT ChassisTypes FROM Win32_SystemEnclosure"))
+                    foreach (ManagementObject mo in s.Get()) {
+                        var t = mo["ChassisTypes"] as ushort[];
+                        if (t != null) foreach (ushort c in t) if (Array.IndexOf(DesktopChassis, (int)c) >= 0) d = true;
+                    }
+            } catch { }
+            desktop = d ? 1 : 0;
+            return d;
         }
 
         public static string ReadModel() {

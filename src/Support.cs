@@ -140,13 +140,13 @@ namespace Ohman {
             var sb = new StringBuilder();
             sb.AppendLine("(filled in by Ohman " + Program.Version + " - the full report is on your clipboard, paste it in the box below)");
             sb.AppendLine();
-            sb.AppendLine("Board " + e.Board + ", " + (e.Supported ? (e.Generic ? "driven from the firmware's own answers" : "verified profile") : "NOT DRIVEN - read-only"));
-            if (e.P != null)
+            sb.AppendLine("Board " + e.Board + ", " + (e.Supported ? (e.Generic ? "driven from the firmware's own answers" : "verified profile") : "NOT DRIVEN - read-only") + (e.Desktop ? " (desktop)" : ""));
+            if (e.P != null && e.Supported)      // an unsupported board's profile is a placeholder; its bytes are never sent
                 sb.AppendLine("Mode bytes: eco 0x" + e.P.ModeEco.ToString("X2") + " balanced 0x" + e.P.ModeBalanced.ToString("X2")
                     + " performance 0x" + e.P.ModePerformance.ToString("X2") + " (v" + e.P.ThermalPolicy + ")"
                     + (e.P.ModeEco == e.P.ModeBalanced ? "  [eco and balanced are the same byte on this firmware]" : ""));
-            sb.AppendLine("Fans: " + e.FanCount + "   Lighting: " + (e.Light == null ? "none detected" : e.Light.Describe));
-            sb.AppendLine("Power gain: " + (e.P != null && e.P.HasPowerGain ? "yes" : "no") + "   GPU power: " + (e.P != null && e.P.HasGpuPower ? "yes" : "no"));
+            sb.AppendLine("Fans: " + (e.FanCount > 0 ? "" + e.FanCount : "not reported") + "   Lighting: " + (e.Light == null ? "none detected" : e.Light.Describe));
+            sb.AppendLine("Power gain: " + (e.Supported && e.P != null && e.P.HasPowerGain ? "yes" : "no") + "   GPU power: " + (e.Supported && e.P != null && e.P.HasGpuPower ? "yes" : "no"));
             if (e.LastError.Length > 0) sb.AppendLine("Last BIOS error: " + Scrub(e.LastError));
             sb.AppendLine();
             sb.AppendLine("What went wrong:");
@@ -379,7 +379,7 @@ namespace Ohman {
             sb.AppendLine("  profile:  " + (e.Supported ? e.P.Name + (e.Generic ? "  [generic, built from the firmware]" : "  [verified entry]") : "UNSUPPORTED - read-only, nothing is written"));
             sb.AppendLine("  notes:    " + (e.P != null && e.P.Notes != null ? e.P.Notes : ""));
             sb.AppendLine("  bios ok:  " + e.BiosOk + (e.LastError.Length > 0 ? "   last error: " + Scrub(e.LastError) : ""));
-            if (e.P != null)
+            if (e.P != null && e.Supported)
                 sb.AppendLine("  modes:    eco 0x" + e.P.ModeEco.ToString("X2") + " balanced 0x" + e.P.ModeBalanced.ToString("X2")
                     + " performance 0x" + e.P.ModePerformance.ToString("X2") + " cool 0x" + e.P.ModeCool.ToString("X2")
                     + "   (v" + e.P.ThermalPolicy + ")"
@@ -422,7 +422,9 @@ namespace Ohman {
 
             // ---- the same bytes, read out loud
             sb.AppendLine("Decoded");
-            if (sys != null && sys.Length >= 9) {
+            if (sys != null && sys.Length >= 9 && !Array.Exists(sys, delegate(byte b) { return b != 0; })) {
+                sb.AppendLine("  all zeros: not an answer, so the thermal-policy version is unknown (not v0)");
+            } else if (sys != null && sys.Length >= 9) {
                 sb.AppendLine("  thermal policy:   v" + sys[3] + "   <- picks the mode bytes (v0 = 00/01/02, v1 = 30/31/50)");
                 sb.AppendLine("  software fan:     " + (((sys[4] & 1) != 0) ? "yes" : "no"));
                 sb.AppendLine("  PL4 default:      " + sys[5] + " W");
@@ -589,6 +591,14 @@ namespace Ohman {
             } catch { sb.AppendLine("  (nvidia-smi not present; AMD or iGPU only)"); }
             sb.AppendLine();
 
+            // ---- the panel's refresh rates, for a report that a rate will not stick (#81)
+            sb.AppendLine("Display");
+            try {
+                sb.AppendLine("  now:      " + Display.CurrentHz() + " Hz   offered: " + string.Join(", ", Display.Rates()) + "   buttons: " + string.Join(", ", Display.Choices()));
+                sb.AppendLine("  settings: RefreshHz=" + e.S.RefreshHz + "  LowHzOnBattery=" + e.S.LowHzOnBattery + "  on battery: " + e.OnBattery);
+            } catch (Exception ex) { sb.AppendLine("  unavailable (" + Scrub(ex.Message) + ")"); }
+            sb.AppendLine();
+
             // ---- and what Ohman itself logged getting here
             sb.AppendLine("Ohman log (the decisions, not the whole file)");
             try {
@@ -603,7 +613,7 @@ namespace Ohman {
                         || line.IndexOf("fan route", StringComparison.Ordinal) >= 0 || line.IndexOf("EC ", StringComparison.Ordinal) >= 0
                         || line.IndexOf("EC:", StringComparison.Ordinal) >= 0 || line.IndexOf("giving up", StringComparison.Ordinal) >= 0
                         || line.IndexOf("lighting:", StringComparison.Ordinal) >= 0 || line.IndexOf("lamparray", StringComparison.Ordinal) >= 0
-                        || line.IndexOf("max fan:", StringComparison.Ordinal) >= 0 || line.IndexOf("fan ceiling", StringComparison.Ordinal) >= 0
+                        || line.IndexOf("max fan:", StringComparison.Ordinal) >= 0 || line.IndexOf("fan ceiling", StringComparison.Ordinal) >= 0 || line.IndexOf("refresh rate", StringComparison.Ordinal) >= 0
                         // why a per-key board ended up with nothing to drive: a Primax keyboard found and refused, or
                         // no keyboard interface at all. Neither line says "lighting:", so both were being dropped.
                         || line.IndexOf("mcu keyboard", StringComparison.Ordinal) >= 0 || line.IndexOf("per-key board", StringComparison.Ordinal) >= 0)

@@ -140,10 +140,14 @@ namespace Ohman {
                 var d = Fresh();
                 if (!EnumDisplaySettings(p, ENUM_CURRENT_SETTINGS, ref d)) return false;
                 if (d.dmDisplayFrequency == hz) return true;
+                int was = d.dmDisplayFrequency;
                 d.dmDisplayFrequency = hz;
                 d.dmFields = DM_DISPLAYFREQUENCY;
                 int rc = ChangeDisplaySettingsEx(p, ref d, IntPtr.Zero, CDS_UPDATEREGISTRY, IntPtr.Zero);
-                Log.Write("refresh rate " + hz + " Hz -> rc " + rc);
+                // read it back: "it says it switched but it did not" (#81) is invisible without this
+                var after = Fresh();
+                int now = EnumDisplaySettings(p, ENUM_CURRENT_SETTINGS, ref after) ? after.dmDisplayFrequency : 0;
+                Log.Write("refresh rate " + was + " -> " + hz + " Hz: rc " + rc + ", reads back " + now + " Hz");
                 return rc == DISP_CHANGE_SUCCESSFUL;
             } catch (Exception ex) { Log.Write("refresh rate: " + ex.Message); return false; }
         }

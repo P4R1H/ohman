@@ -384,6 +384,7 @@ namespace Ohman {
         // ---------- platform ----------
         public PlatformProfile P = new PlatformProfile { Name = "(detecting)", Boards = new string[0] };   // replaced by Init
         public string Board = "", Model = "";
+        public bool Desktop;                                // a desktop: never driven, keyboard lighting left alone (#83)
         public bool Supported;                              // false = unknown board: read-only, no BIOS writes
         public bool Generic;                                // true = profile built at run time from the firmware (unverified model)
         public int GpuMode = -1;                            // graphics mode the firmware reports (0 Hybrid, 1 Discrete, 2 Optimus, 3 iGPU only), -1 unknown
@@ -501,6 +502,8 @@ namespace Ohman {
             try { OnBattery = System.Windows.Forms.SystemInformation.PowerStatus.PowerLineStatus == System.Windows.Forms.PowerLineStatus.Offline; } catch { }
             Board = Platforms.ReadBoard();
             Model = Platforms.ReadModel();
+            Desktop = !Hw.IsDemo && Platforms.IsDesktop();
+            if (Desktop) Log.Write("desktop chassis: read-only, lighting left alone");
             var prof = Platforms.Find(Board);
             Supported = prof != null || Hw.IsDemo;
             if (prof != null) P = prof;
@@ -535,7 +538,7 @@ namespace Ohman {
                         Supported = true;
                         Generic = true;
                         Log.Write("generic profile: " + g.Notes + " · modes " + g.ModeEco.ToString("X2") + "/" + g.ModeBalanced.ToString("X2") + "/" + g.ModePerformance.ToString("X2") + " · powerGain=" + g.HasPowerGain + " (base " + g.TdpBase + " W) · gpuPower=" + g.HasGpuPower + " · fan ceiling " + g.Curve.Ceiling);
-                    } else Log.Write("generic profile not possible (thermal policy v" + Info.ThermalPolicy + "); read-only");
+                    } else Log.Write("generic profile not possible (" + (Desktop ? "desktop" : Info != null && Info.Valid ? "thermal policy v" + Info.ThermalPolicy : "thermal policy unknown") + "); read-only");
                 }
                 ApplyMeasuredCeiling();
                 // Byte 7 advertises which graphics modes exist, but 8BC2 advertises them and then refuses 0x52
@@ -600,10 +603,13 @@ namespace Ohman {
         }
         void FanTick() {
             if (!BiosOk && !Hw.IsDemo) return;
+            if (ReadOnly) return;   // nothing to keep alive; a Max that never started must not toast its end (#83)
             bool leaveMax = false;
             try {
                 lock (applySync) {
-                    if (GuardActive) return;
+                    // A tick queued behind the exit hand-off must not take the fans back from the firmware (Park
+                    // sets stopping under this lock before its own writes).
+                    if (stopping || GuardActive) return;
                     switch (S.Fan) {
                         case FanMode.Auto: case FanMode.Custom: AutoTick(false); break;
                         case FanMode.Manual: if ((DateTime.Now - lastFanWrite).TotalSeconds >= 30) { WriteLevels(S.Fan1, S.Fan2, "Fan level"); lastFanWrite = DateTime.Now; } break;
@@ -911,6 +917,7 @@ namespace Ohman {
             int seen = Math.Max(f[0], f[1]);
             if (seen < 0 || seen > 255) return;
             lastFanSeen = seen;
+            NoteFirmwareHold(f);
             if (maxAskedAt != DateTime.MinValue && (DateTime.Now - maxAskedAt).TotalSeconds >= 15) {
                 maxAskedAt = DateTime.MinValue;
                 // Near the top counts as working too: that is where max puts the fans, and it is the only verdict
@@ -966,6 +973,30 @@ namespace Ohman {
         }
         public int AutoLevel1 { get { return curLevel1; } }
         public int AutoLevel2 { get { return curLevel2; } }
+
+        /// <summary>The firmware running the fans at its own speed while every level written is accepted and
+        /// ignored. #84 (8BCD): written 26/26, 0x2D reading 55/57 with the max flag clear, through a restart of
+        /// Ohman and every heartbeat, while the curve dot showed the written level and looked fine. Ohman cannot
+        /// undo it from here and sends nothing because of it; it only stops the window saying all is well.</summary>
+        public bool FirmwareHolding;
+        DateTime holdSince = DateTime.MinValue;
+        const int HoldOver = 10, HoldSeconds = 60;     // about 1000 rpm over what was asked, for longer than any spin-down
+        void NoteFirmwareHold(int[] f) {
+            bool ours = Route == FanRoute.Mailbox && CanSetFanLevels && !maxFlagOn && !GuardActive && !FansByBios && !ScreenOff
+                && S.Fan != FanMode.Max && curLevel1 > 0 && curLevel2 > 0;
+            bool over = ours && f[0] >= curLevel1 + HoldOver && f[1] >= curLevel2 + HoldOver;
+            if (!over) {
+                holdSince = DateTime.MinValue;
+                if (FirmwareHolding) { FirmwareHolding = false; Log.Write("fans back with the curve: reading " + f[0] + "/" + f[1] + ", written " + curLevel1 + "/" + curLevel2); }
+                return;
+            }
+            if (holdSince == DateTime.MinValue) { holdSince = DateTime.Now; return; }
+            if (FirmwareHolding || (DateTime.Now - holdSince).TotalSeconds < HoldSeconds) return;
+            FirmwareHolding = true;
+            Log.Write("fans held by the firmware: written " + curLevel1 + "/" + curLevel2 + ", reading " + f[0] + "/" + f[1]
+                + " for " + HoldSeconds + " s with max fan off; level writes are accepted and ignored");
+            Fire(Toast, "The firmware is holding the fans at " + Rpm(Math.Max(f[0], f[1])) + " and ignoring the curve. Switching modes usually frees them.", true);
+        }
         public double GpuTemp = double.NaN, IrTemp = double.NaN;   // GpuTemp fed by the UI sensor loop; IrTemp read here
         int fanWriteFailures;
 
@@ -1611,6 +1642,7 @@ namespace Ohman {
             try {
                 if (!BiosOk && !Hw.IsDemo) return;
                 lock (applySync) {
+                    if (stopping) return;               // after the exit hand-off: a mode without the BIOS byte would undo it
                     if (GuardActive) GuardFans();
                     Try(delegate { Hw.SetMode(ModeByte, FansByBios); }, "Set mode");   // fans are handled by FanTick; this only pins mode and power
                     ApplyPowerCore();
@@ -1674,9 +1706,9 @@ namespace Ohman {
             Changed();
         }
         void GuardTick() {
-            if (!BiosOk || Hw.IsDemo || ReadOnly) return;      // read-only boards: nothing to force, the firmware's own limits apply
+            if (!BiosOk || Hw.IsDemo || ReadOnly || stopping) return;      // read-only boards: nothing to force, the firmware's own limits apply
             if (!S.Guard) {
-                if (GuardActive) { GuardActive = false; guardSafeSince = DateTime.MinValue; guardStalled = false; guardIgnoredTicks = guardHotTicks = guardWarmTicks = 0; curLevel1 = curLevel2 = -1; lock (applySync) { ApplyFanCore(); lastFanWrite = DateTime.Now; } Changed(); }
+                if (GuardActive) { GuardActive = false; guardSafeSince = DateTime.MinValue; guardStalled = false; guardIgnoredTicks = guardHotTicks = guardWarmTicks = 0; curLevel1 = curLevel2 = -1; lock (applySync) { if (!stopping) { ApplyFanCore(); lastFanWrite = DateTime.Now; } } Changed(); }
                 // Still read the fans. This is the only tick that runs with the window closed, and somebody
                 // running Ohman in the tray with the guard switched off has to be able to learn a ceiling too.
                 try { int[] idle; lock (applySync) idle = Hw.GetFanLevels(); NoteFanLevels(idle); } catch { }
@@ -1709,7 +1741,7 @@ namespace Ohman {
                     // "ambient", matching the Home page. Same 0x23 index 1 either way; HP's own device library calls it
                     // Ambient and Ohman called it chassis for a year, so the two lines disagreed on screen.
                     Fire(Toast, "Thermal guard: fans to max (CPU " + (cpuKnown ? t.ToString("0") + "°" : "?") + ", ambient " + c + "°)", true);
-                    lock (applySync) GuardFans();
+                    lock (applySync) { if (!stopping) GuardFans(); }
                     Changed();
                 } else if (GuardActive) {
                     // Max fan has been commanded on every tick since this engaged, so the firmware's own level
@@ -1723,15 +1755,15 @@ namespace Ohman {
                         Fire(Toast, "The fans are not answering the thermal guard. Save your work and restart the machine.", true);
                         // A level the fans are not taking is not a level. Max has its own command path; try it.
                         guardStalled = true;
-                        lock (applySync) GuardFans();
+                        lock (applySync) { if (!stopping) GuardFans(); }
                     }
                     bool safe = (!cpuKnown || t < GuardCpuSafe) && (!chassisUsable || c < GuardChassisSafe);
                     // One warm sample no longer restarts the minute. A sensor sitting a degree under its own
                     // threshold crosses it now and then, and requiring sixty unbroken seconds meant the guard
                     // could hold maximum fan on a machine that had already cooled, indefinitely.
                     if (safe) guardWarmTicks = 0; else guardWarmTicks++;
-                    if (guardWarmTicks >= 2) { guardSafeSince = DateTime.MinValue; lock (applySync) GuardFans(); }
-                    else if (!safe) { lock (applySync) GuardFans(); }
+                    if (guardWarmTicks >= 2) { guardSafeSince = DateTime.MinValue; lock (applySync) { if (!stopping) GuardFans(); } }
+                    else if (!safe) { lock (applySync) { if (!stopping) GuardFans(); } }
                     else if (guardSafeSince == DateTime.MinValue) guardSafeSince = DateTime.Now;
                     else if ((DateTime.Now - guardSafeSince).TotalSeconds >= GuardHoldSeconds) {
                         GuardActive = false;
@@ -1740,7 +1772,7 @@ namespace Ohman {
                         Log.Write("thermal guard released; fan mode back to " + S.Fan);
                         Fire(Toast, "Thermal guard released", false);
                         curLevel1 = curLevel2 = -1;         // unknown after max fan; the curve starts again from its floor
-                        lock (applySync) { ApplyFanCore(); lastFanWrite = DateTime.Now; }   // the current mode's own fan setting, nothing saved
+                        lock (applySync) { if (!stopping) { ApplyFanCore(); lastFanWrite = DateTime.Now; } }   // the current mode's own fan setting, nothing saved
                         Changed();
                     }
                 }
@@ -1934,7 +1966,9 @@ namespace Ohman {
         // ---------- keyboard lighting ----------
         void InitLight(bool apply = true) {
             try {
-                Light = Hw.IsDemo ? (ILighting)new DemoLighting() : (BiosOk ? BiosLighting.Detect() : null);   // not !ReadOnly: see TryLight
+                // Not !ReadOnly (see TryLight), but not a desktop either: there is no built-in keyboard for 0x20009 to light,
+                // and on 89B5 (#83) 1.3.0 rewrote its backlight byte at start on a machine it showed as read-only.
+                Light = Hw.IsDemo ? (ILighting)new DemoLighting() : (BiosOk && !Desktop ? BiosLighting.Detect() : null);
                 // A keyboard the firmware describes as white-only (BiosLighting.WhiteOnly) starts hidden, once. It
                 // goes through the owner's own switch rather than around it, so Settings > Keyboard lighting
                 // controls still brings the page back and that choice then stands.
@@ -2141,7 +2175,7 @@ namespace Ohman {
             var sb = new StringBuilder();
             sb.AppendLine(Program.AppName + " diagnostics " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
             sb.AppendLine("hardware: " + (Hw.IsDemo ? "DEMO (simulated)" : "BIOS via root\\wmi hpqBIntM"));
-            sb.AppendLine("platform: " + Model + " board " + Board + " -> " + (Supported ? P.Name + (Generic ? " [generic, unverified]" : "") : "UNSUPPORTED (read-only)"));
+            sb.AppendLine("platform: " + Model + " board " + Board + " -> " + (Supported ? P.Name + (Generic ? (Platforms.Reported(Board) ? " [generic, verified by its owner]" : " [generic, unverified]") : "") : "UNSUPPORTED (read-only)"));
             sb.AppendLine("bios ok: " + BiosOk + (LastError.Length > 0 ? "  last error: " + LastError : ""));
             sb.AppendLine("fans: " + FanCount + "   system data: " + Info.Hex + "   policy v" + Info.ThermalPolicy + "  swFan=" + Info.SwFanControl + "  PL4=" + Info.DefaultPl4 + "W  baseTdp=" + Info.DefaultConcurrentTdp + "W");
             try { var f = Hw.GetFanLevels(); sb.AppendLine("fan levels: " + f[0] + " / " + f[1] + "  (x100 RPM)"); } catch (Exception ex) { sb.AppendLine("fan levels: " + ex.Message); }
@@ -2155,7 +2189,7 @@ namespace Ohman {
             // ceilings cannot be told apart without this: the profile/table value, then what was measured here.
             sb.AppendLine("fan ceiling: " + (P.Curve != null ? P.Curve.Ceiling : -1) + "  (profile/table " + pristineCeiling + ", learned " + (S.FanCeilingSeen > 0 ? "" + S.FanCeilingSeen : "none")
                 + ", max flag " + (S.MaxIgnored ? "ignored" : maxProven ? "proven" : "not tested this run") + ", fastest seen " + ceilingHighWater + ")");
-            sb.AppendLine("fan drive: written " + curLevel1 + "/" + curLevel2 + "  cpu " + Fmt(CpuTemp) + " (last single reading " + Fmt(CpuTempNow) + ")  gpu " + Fmt(GpuTemp) + "  ir " + Fmt(IrTemp) + "  guard=" + GuardActive + "  writeFailures=" + fanWriteFailures + "  route=" + Route + (ScreenOff ? "  screen off: firmware curve" : ""));
+            sb.AppendLine("fan drive: written " + curLevel1 + "/" + curLevel2 + "  cpu " + Fmt(CpuTemp) + " (last single reading " + Fmt(CpuTempNow) + ")  gpu " + Fmt(GpuTemp) + "  ir " + Fmt(IrTemp) + "  guard=" + GuardActive + "  writeFailures=" + fanWriteFailures + "  route=" + Route + (ScreenOff ? "  screen off: firmware curve" : "") + (FirmwareHolding ? "  HELD BY FIRMWARE" : ""));
             sb.AppendLine("driver: " + (DriverReady ? "PawnIO " + (Hw.IsDemo ? "simulated" : "" + DriverVersion) + " · cpu " + (Cpu != null ? Cpu.Describe : "none")
                 + " · ec " + (Ec == null ? "none" : (ecVerified ? Ec.Map.Name : "map rejected") + (Ec.Resting ? " (resting)" : "") + " · " + EcProof) : "none (" + DriverWhy + ")"));
             sb.AppendLine("last heartbeat: " + (LastHeartbeat == DateTime.MinValue ? "never" : LastHeartbeat.ToString("HH:mm:ss")) + "   last key event: " + (LastEventTime == DateTime.MinValue ? "none" : LastEventId + "/" + LastEventData + " at " + LastEventTime.ToString("HH:mm:ss")));
