@@ -783,7 +783,7 @@ namespace Ohman {
             MarkStopping();
             try { workReady.Set(); } catch { }
             try { if (fx != null) fx.Dispose(); } catch { }
-            CloseDriver();
+            lock (applySync) CloseDriver();
             try { if (fanTimer != null) fanTimer.Dispose(); } catch { }
             try { if (heartbeat != null) heartbeat.Dispose(); } catch { }
             try { if (guard != null) guard.Dispose(); } catch { }
