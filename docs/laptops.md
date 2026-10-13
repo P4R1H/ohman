@@ -40,7 +40,7 @@ by a person yet. See [Verifying your laptop](#verifying-your-laptop), it takes f
 | Model | Board ids |
 |---|---|
 | OMEN 16 (2021–2022) | `8A42`, `8A43`, `8A44`, `8A4C` ✓, `8A4D` |
-| OMEN 16 (2023–2025) | `8BA9`, `8BAA`, `8BAB` ✓, `8BCA` ✓, `8BCD` ✓, `8C76` ✓, `8C77`, `8C78`, `8D24`, `8D26`, `8D2F` ✓, `8E35` ✓ |
+| OMEN 16 (2023–2025) | `8BA9` ✓, `8BAA`, `8BAB` ✓, `8BCA` ✓, `8BCD` ✓, `8C76` ✓, `8C77`, `8C78`, `8D24`, `8D26`, `8D2F` ✓, `8E35` ✓ |
 | OMEN MAX 16 (2025) | `8D41`, `8D87` ✓, `8D88` |
 | Other boards `hp-wmi` lists as OMEN | `8DD6` |
 
