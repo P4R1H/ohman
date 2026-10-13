@@ -367,7 +367,11 @@ namespace Ohman {
         /// agree with the CPU's own sensor when the driver can supply one. The tachometers have to read like fan
         /// speeds, and have to agree with the firmware's own answer when it will give one.</summary>
         public bool Verify(int[] mailboxRpm, double dieTemp, out string why) {
-            return VerifyReading(Read(), Map, mailboxRpm, dieTemp, LastError, out why);
+            EcReading r = Read();
+            // -1 is a register that did not answer in time, not a value. One such read rejected the map on 8E35 for a
+            // whole session (#87), while the start before fitted and every later reading agreed. Ask once more. Reads only.
+            if (r != null && r.Cpu < 0) { Thread.Sleep(250); r = Read(); }
+            return VerifyReading(r, Map, mailboxRpm, dieTemp, LastError, out why);
         }
 
         public static bool VerifyReading(EcReading r, EcMap map, int[] mailboxRpm, double dieTemp, string lastError, out string why) {
@@ -384,6 +388,7 @@ namespace Ohman {
             byte cpuReg = map != null ? map.CpuTemp : (byte)0x57;
             bool tempAbsent = r.Cpu == 0;
             if (!tempAbsent) {
+                if (r.Cpu < 0) { why = "0x" + cpuReg.ToString("X2") + " did not answer"; return false; }
                 if (r.Cpu < 20 || r.Cpu > 110) { why = "0x" + cpuReg.ToString("X2") + " reads " + r.Cpu + ", which is not a temperature"; return false; }
                 if (!double.IsNaN(dieTemp) && Math.Abs(r.Cpu - dieTemp) > 25) {
                     why = "it reads " + r.Cpu + " where the CPU itself reads " + dieTemp.ToString("0");

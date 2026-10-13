@@ -1628,10 +1628,13 @@ namespace Ohman {
             kbdBig.Selectable = pick;
             kbdBig.Off = m <= 0;
             kbdBig.WindowsOwned = m == 2;
-            kbdBig.Smooth = effect;
+            // Hard zones in every mode: that is what the keyboard lights. The blend drew zone 3 (WASD) as a fourth band
+            // on the right-hand keys and mixed neighbours the hardware never mixes, so Breathe and Wave never matched a
+            // four-zone board (#87); on a per-key board it painted every key in lamp 0's colour.
+            kbdBig.Smooth = false;
             kbdMini.Off = m <= 0;
             kbdMini.WindowsOwned = m == 2;
-            kbdMini.Smooth = effect;
+            kbdMini.Smooth = false;
             kbdBig.Level = kbdMini.Level = S.LightLevel / 100.0;
             if (!pick) { kbdBig.Selected.Clear(); kbdBig.Hover.Clear(); }
             string fxName = new[] { "static", "breathe", "cycle", "wave" }[Math.Max(0, Math.Min(3, fx))];
