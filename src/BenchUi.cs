@@ -452,17 +452,8 @@ namespace Ohman {
             if (state.StartsWith("result") || state.StartsWith("share")) { var all = Runs(); if (all.Count > 0) shown = all[0]; }
             int pg; if (state.StartsWith("result") && int.TryParse(state.Substring(6), out pg)) { giFor = "Result"; gi = pg; }   // result7: that graph
             if (state.StartsWith("share")) { shareOpen = true; shareGraph = 0; int l; if (int.TryParse(state.Substring(5), out l)) E.S.ShareLayout = l; }
-            if (state.StartsWith("runs")) showRuns = true;
+            if (state == "runs") showRuns = true;
             Render();
-            // runs1: the first row as the mouse sees it; runs2: its bin clicked once (screenshot aid)
-            if ((state == "runs1" || state == "runs2") && runRows.Children.Count > 0) {
-                var row = (Border)runRows.Children[0];
-                row.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = Mouse.MouseEnterEvent });
-                if (state == "runs2") foreach (UIElement c in ((Grid)row.Child).Children) {
-                    var bb = c as Border;
-                    if (bb != null && bb.ToolTip as string == "Delete this run") bb.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left) { RoutedEvent = UIElement.MouseLeftButtonUpEvent });
-                }
-            }
         }
 
         // ---------- building ----------

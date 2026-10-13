@@ -2132,11 +2132,10 @@ namespace Ohman {
             Changed();
         }
 
-        /// <summary>Colour of zone i at a given phase for an effect. Shared with the editor's preview.</summary>
         /// <summary>The four-zone order from HP's own driver (OMENLighting.sys publishes the zones to Windows as a
         /// four-lamp LampArray, 0461:0000), or OmenMon's order when there is no such device. Only lamp attributes are
         /// read: nothing is lit or changed.</summary>
-        static bool zoneOrderRead;
+        bool zoneOrderRead;
         void ZoneOrderFromHp() {
             if (zoneOrderRead) return;
             zoneOrderRead = true;
@@ -2157,10 +2156,9 @@ namespace Ohman {
                 Log.Write("keyboard zones: no HP lighting device with four lamps; OmenMon's order (right, middle, left, wasd)");
             } catch (Exception ex) { Log.Write("keyboard zones: " + ex.Message + "; OmenMon's order"); }
         }
-        /// <summary>Where a zone sits in the wave. Four-zone boards number their zones right, middle, left, WASD, and
-        /// the wave used to step through that numbering: left and right a half-turn apart, and WASD, which sits inside
-        /// the left zone, a quarter-turn past it, so the colour jumped instead of flowing across the board (#87). Now
-        /// it goes by where each zone is: left, WASD just inside it, middle, right.</summary>
+        /// <summary>Where a zone sits in the wave. The wave used to step through the colour-table numbering, which says
+        /// nothing about where a zone is, so on a four-zone board the colour jumped instead of flowing across (#87).
+        /// It goes by position now: left, WASD just inside it, middle, right.</summary>
         static double WaveOffset(int zones, int i) {
             if (zones == 4) {
                 double pos = i == KeyboardLayouts.ZoneLeft ? 0 : i == KeyboardLayouts.ZoneWasd ? 0.35 : i == KeyboardLayouts.ZoneMiddle ? 1 : 2;
@@ -2168,6 +2166,7 @@ namespace Ohman {
             }
             return i * (360.0 / Math.Max(1, zones));
         }
+        /// <summary>Colour of zone i at a given phase for an effect. Shared with the editor's preview.</summary>
         public static Rgb EffectFrame(int effect, double phase, Rgb[] baseColors, int i) {
             switch (effect) {
                 case 1: return baseColors[i].Scale(0.15 + 0.85 * (0.5 + 0.5 * Math.Sin(phase * 1.6)));                 // breathe
@@ -2221,7 +2220,8 @@ namespace Ohman {
             try { sb.AppendLine("gpu power: " + Hw.GetGpuPower()); } catch (Exception ex) { sb.AppendLine("gpu power: " + ex.Message); }
             sb.AppendLine("settings: mode=" + ModeName + " (BIOS 0x" + ModeByte.ToString("X2") + (OnBattery ? ", DC" : ", AC") + ") fan=" + S.Fan + " " + S.Fan1 + "/" + S.Fan2 + " tdp=" + CurrentTdp + "W gpu=" + EffectiveGpu + (S.GpuAuto ? "(auto)" : "") + " key=" + KeyId + "/" + KeyData + "→" + S.Key + " ecoCool=" + S.EcoCool);
             sb.AppendLine("graphics: " + (GpuMode >= 0 && GpuMode < 4 ? GpuModeNames[GpuMode] : "unknown") + " (offered mask 0x" + Info.GpuModes.ToString("X2") + ")" + (GpuModePending >= 0 ? " -> " + GpuModeNames[GpuModePending] + " after restart" : ""));
-            sb.AppendLine("lighting: " + (Light == null ? (S.HideLight ? "hidden in Settings" : "none") : Light.Describe + " mode=" + S.Light + " level=" + S.LightLevel + " colours=" + S.LightColors + " windowsControl=" + WinLighting.HasControl));
+            sb.AppendLine("lighting: " + (Light == null ? (S.HideLight ? "hidden in Settings" : "none") : Light.Describe + " mode=" + S.Light + " level=" + S.LightLevel + " colours=" + S.LightColors + " windowsControl=" + WinLighting.HasControl
+                + (Light.Zones == 4 ? " zones=" + KeyboardLayouts.ZoneSource + " (left " + KeyboardLayouts.ZoneLeft + " wasd " + KeyboardLayouts.ZoneWasd + " middle " + KeyboardLayouts.ZoneMiddle + " right " + KeyboardLayouts.ZoneRight + ")" : "")));
             // Which top the fan page divides by and where it came from. Two identical boards showing different
             // ceilings cannot be told apart without this: the profile/table value, then what was measured here.
             sb.AppendLine("fan ceiling: " + (P.Curve != null ? P.Curve.Ceiling : -1) + "  (profile/table " + pristineCeiling + ", learned " + (S.FanCeilingSeen > 0 ? "" + S.FanCeilingSeen : "none")

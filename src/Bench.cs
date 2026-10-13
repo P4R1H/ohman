@@ -1001,7 +1001,7 @@ namespace Ohman {
             lock (sync) {
                 Reset();
                 poseNoTool = state == "first";
-                if (state == "first" || state == "ready" || state.StartsWith("result") || state.StartsWith("runs") || state.StartsWith("share")) return;
+                if (state == "first" || state == "ready" || state.StartsWith("result") || state == "runs" || state.StartsWith("share")) return;
                 Game = "Cyberpunk 2077"; Exe = "Cyberpunk2077"; Pid = OwnPid; MeasureChoice = 2;
                 if (state == "waiting") { Phase = BenchPhase.Waiting; Game = ""; return; }
                 for (int i = 0; i < 138; i++) WarmTemps.Add(48 + 36 * (1 - Math.Exp(-i / 40.0)) + (rnd.NextDouble() - 0.5) * 1.4);
