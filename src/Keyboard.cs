@@ -24,7 +24,24 @@ namespace Ohman {
     }
 
     public static class KeyboardLayouts {
-        public const int ZoneRight = 0, ZoneMiddle = 1, ZoneLeft = 2, ZoneWasd = 3;
+        /// <summary>Which colour-table entry lights which part of the board. OmenMon's order (right, middle, left,
+        /// WASD) until the machine says otherwise: HP's own lighting driver publishes the four zones as lamps with
+        /// their positions, and on the Transcend 14 those read 40/80/175/300 mm from the left, entry 0 leftmost, which
+        /// the 1.1 colour test had already seen (red/green/blue/white lit left to right). So the order is per machine.</summary>
+        public static int ZoneRight = 0, ZoneMiddle = 1, ZoneLeft = 2, ZoneWasd = 3;
+        public static string ZoneSource = "OmenMon's order";
+        /// <summary>Set the four roles from the lamps' positions across the board, in mm or any unit: left to right a
+        /// four-zone keyboard is the left block, WASD (inside it), the middle and the right. OmenMon's order is what
+        /// this gives for lamps at right, middle, left, WASD, so boards that were right stay right. False, and nothing
+        /// changed, unless there are four distinct positions.</summary>
+        public static bool ZonesFromPositions(int[] x) {
+            if (x == null || x.Length != 4) return false;
+            int[] idx = { 0, 1, 2, 3 };
+            Array.Sort((int[])x.Clone(), idx);
+            for (int i = 1; i < 4; i++) if (x[idx[i]] <= x[idx[i - 1]]) return false;
+            ZoneLeft = idx[0]; ZoneWasd = idx[1]; ZoneMiddle = idx[2]; ZoneRight = idx[3];
+            return true;
+        }
         /// <summary>Zone indices in left-to-right reading order, for chips and legends.</summary>
         public static int[] DisplayOrder(int zones) { return zones == 4 ? new[] { ZoneLeft, ZoneMiddle, ZoneRight, ZoneWasd } : new[] { 0 }; }
         public static string ZoneName(int zones, int zone) {

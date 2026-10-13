@@ -1991,6 +1991,8 @@ namespace Ohman {
                 // LampArray at all, and on the machine that proved it the only LampArray present was a Logitech
                 // driver's. HP's own MCU protocol on their mi_02 interface is what OGH uses (McuKeyboard.cs).
                 // Detecting it only asks (two GETs), so it is safe on a probe-only start too.
+                // A four-zone board: HP's virtual lighting device knows where its zones are, so ask it (reads only).
+                if (!Hw.IsDemo && Light != null && !Light.Inert && Light.Zones == 4 && Light is BiosLighting) ZoneOrderFromHp();
                 if (!Hw.IsDemo && Light != null && Light.Inert) {
                     var mcu = McuKeyboardLighting.Detect();
                     // An untested Primax table gives way to a keyboard LampArray that is actually there: a board that
@@ -2131,6 +2133,30 @@ namespace Ohman {
         }
 
         /// <summary>Colour of zone i at a given phase for an effect. Shared with the editor's preview.</summary>
+        /// <summary>The four-zone order from HP's own driver (OMENLighting.sys publishes the zones to Windows as a
+        /// four-lamp LampArray, 0461:0000), or OmenMon's order when there is no such device. Only lamp attributes are
+        /// read: nothing is lit or changed.</summary>
+        static bool zoneOrderRead;
+        void ZoneOrderFromHp() {
+            if (zoneOrderRead) return;
+            zoneOrderRead = true;
+            try {
+                foreach (var la in LampArray.All()) {
+                    try {
+                        if (la.LampCount != 4 || !la.Internal || la.VendorId != 0x0461) continue;
+                        var mm = new int[4];
+                        for (int i = 0; i < 4; i++) mm[i] = la.X[i] / 1000;
+                        if (KeyboardLayouts.ZonesFromPositions(la.X)) {
+                            KeyboardLayouts.ZoneSource = "HP's lighting device";
+                            Log.Write("keyboard zones from HP's lighting device: lamps at " + mm[0] + "/" + mm[1] + "/" + mm[2] + "/" + mm[3] + " mm -> left " + KeyboardLayouts.ZoneLeft
+                                + ", wasd " + KeyboardLayouts.ZoneWasd + ", middle " + KeyboardLayouts.ZoneMiddle + ", right " + KeyboardLayouts.ZoneRight);
+                            return;
+                        }
+                    } finally { la.Dispose(); }
+                }
+                Log.Write("keyboard zones: no HP lighting device with four lamps; OmenMon's order (right, middle, left, wasd)");
+            } catch (Exception ex) { Log.Write("keyboard zones: " + ex.Message + "; OmenMon's order"); }
+        }
         /// <summary>Where a zone sits in the wave. Four-zone boards number their zones right, middle, left, WASD, and
         /// the wave used to step through that numbering: left and right a half-turn apart, and WASD, which sits inside
         /// the left zone, a quarter-turn past it, so the colour jumped instead of flowing across the board (#87). Now
