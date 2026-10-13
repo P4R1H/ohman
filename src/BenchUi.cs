@@ -334,6 +334,7 @@ namespace Ohman {
         public const double PageH = 604;
         const string IcoPlay = "M7 4.5 L19.5 12 L7 19.5 Z", IcoDown = "M12 4 V15 M7.5 10.5 L12 15 L16.5 10.5 M5 19.5 H19", IcoList = "M4 6 H20 M4 12 H20 M4 18 H14";
         const string IcoPad = "M6.5 8.5 H17.5 A4 4 0 0 1 21.5 12.5 V14.5 A3 3 0 0 1 16.4 16.6 L15 15.2 H9 L7.6 16.6 A3 3 0 0 1 2.5 14.5 V12.5 A4 4 0 0 1 6.5 8.5 Z M7.5 11 V14 M6 12.5 H9 M15.5 12 H15.6 M17.5 13.5 H17.6";
+        const string IcoTrash = "M5 7 H19 M10 7 V5 H14 V7 M7 7 L8 19 H16 L17 7 M10.5 10.5 V15.5 M13.5 10.5 V15.5";
         const string IcoPencil = "M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z";
         static readonly string[] GraphNames = { "FPS", "CPU temperature", "GPU temperature", "CPU power", "GPU power", "CPU clock", "GPU load", "Fans" };
 
@@ -451,8 +452,17 @@ namespace Ohman {
             if (state.StartsWith("result") || state.StartsWith("share")) { var all = Runs(); if (all.Count > 0) shown = all[0]; }
             int pg; if (state.StartsWith("result") && int.TryParse(state.Substring(6), out pg)) { giFor = "Result"; gi = pg; }   // result7: that graph
             if (state.StartsWith("share")) { shareOpen = true; shareGraph = 0; int l; if (int.TryParse(state.Substring(5), out l)) E.S.ShareLayout = l; }
-            if (state == "runs") showRuns = true;
+            if (state.StartsWith("runs")) showRuns = true;
             Render();
+            // runs1: the first row as the mouse sees it; runs2: its bin clicked once (screenshot aid)
+            if ((state == "runs1" || state == "runs2") && runRows.Children.Count > 0) {
+                var row = (Border)runRows.Children[0];
+                row.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = Mouse.MouseEnterEvent });
+                if (state == "runs2") foreach (UIElement c in ((Grid)row.Child).Children) {
+                    var bb = c as Border;
+                    if (bb != null && bb.ToolTip as string == "Delete this run") bb.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left) { RoutedEvent = UIElement.MouseLeftButtonUpEvent });
+                }
+            }
         }
 
         // ---------- building ----------
@@ -1236,9 +1246,30 @@ namespace Ohman {
             if (prev != null) { double dv = r.AvgFps - prev.AvgFps; d.Text = (dv >= 0 ? "+" : "−") + Math.Abs(dv).ToString("0", CultureInfo.InvariantCulture); d.Foreground = Ui.Brush(Math.Abs(dv) < 0.5 ? Ink.Ref : dv > 0 ? Ink.Good : Ink.WarnText); }
             Grid.SetColumn(mid, 1); Grid.SetColumn(d, 2);
             g.Children.Add(nums); g.Children.Add(mid); g.Children.Add(d);
+            // Delete (#85): a bin on hover where the delta sits; one click asks, the second deletes. No dialog over a game.
+            var binIcon = new WPath { Data = Ink.Geo(IcoTrash), Stroke = Ui.Foot, StrokeThickness = 1.6, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round, Width = 14, Height = 14, Stretch = Stretch.Uniform };
+            var binAsk = Ink.Mono(11, Ui.Brush(Ink.WarnText)); binAsk.Text = "delete"; binAsk.Visibility = Visibility.Collapsed;
+            var binBox = new Grid(); binBox.Children.Add(binIcon); binBox.Children.Add(binAsk);
+            var bin = new Border { Child = binBox, Background = Brushes.Transparent, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Padding = new Thickness(6, 8, 0, 8), Visibility = Visibility.Collapsed, ToolTip = "Delete this run" };
+            bool armed = false;
+            bin.MouseLeftButtonUp += delegate(object o, MouseButtonEventArgs e) {
+                e.Handled = true;                               // the row under it would open the run
+                if (!armed) { armed = true; binIcon.Visibility = Visibility.Collapsed; binAsk.Visibility = Visibility.Visible; bin.ToolTip = "Click again to delete"; return; }
+                if (RunStore.Delete(r)) {
+                    if (shown != null && shown.Id == r.Id) shown = null;
+                    if (lastRun != null && lastRun.Id == r.Id) lastRun = null;
+                    runs = null;
+                    var h = Toast; if (h != null) h("Run deleted", false);
+                }
+                Render();
+            };
+            Grid.SetColumn(bin, 1); Grid.SetColumnSpan(bin, 2); g.Children.Add(bin);   // "delete" is wider than the delta column
             var b = new Border { Child = g, BorderBrush = Ink.LineB, BorderThickness = new Thickness(0, 0, 0, 1), Background = Brushes.Transparent, Cursor = Cursors.Hand };
-            b.MouseEnter += delegate { b.Background = Ui.Brush("#1B1815"); };
-            b.MouseLeave += delegate { b.Background = Brushes.Transparent; };
+            b.MouseEnter += delegate { b.Background = Ui.Brush("#1B1815"); d.Visibility = Visibility.Collapsed; bin.Visibility = Visibility.Visible; };
+            b.MouseLeave += delegate {
+                b.Background = Brushes.Transparent; d.Visibility = Visibility.Visible; bin.Visibility = Visibility.Collapsed;
+                armed = false; binIcon.Visibility = Visibility.Visible; binAsk.Visibility = Visibility.Collapsed; bin.ToolTip = "Delete this run";
+            };
             b.MouseLeftButtonUp += delegate { CommitSettings(); shown = r; showRuns = false; gi = 0; giFor = "Result"; Render(); };
             b.ToolTip = r.Local.ToString("d MMM yyyy, HH:mm", CultureInfo.InvariantCulture) + (r.Settings.Length > 0 ? " · " + r.Settings : "");
             return b;

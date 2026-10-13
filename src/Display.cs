@@ -107,7 +107,10 @@ namespace Ohman {
             return r.ToArray();
         }
 
-        /// <summary>The rates worth a button: 60 Hz, the highest, and the lowest at or above 48 Hz when that is neither.</summary>
+        /// <summary>The rates worth a button: the highest, and 60 Hz; the lowest at or above 48 Hz only on a panel
+        /// without 60. On 8D2F (#81) a 48 Hz mode applied through this API reports 48 in Ohman and in Windows while
+        /// the panel keeps running at 144 (an adaptive-sync panel's sub-60 modes are only honoured through Windows'
+        /// own path), so a button below 60 would say a rate it does not deliver.</summary>
         public static int[] Choices() {
             var all = Rates();
             if (all.Length < 2) return new int[0];
@@ -115,7 +118,7 @@ namespace Ohman {
             int max = all[all.Length - 1];
             pick[max] = true;
             foreach (int r in all) if (r == 60) pick[60] = true;
-            foreach (int r in all) if (r >= 48) { pick[r] = true; break; }
+            if (!pick.ContainsKey(60)) foreach (int r in all) if (r >= 48) { pick[r] = true; break; }
             var l = new List<int>(pick.Keys);
             return l.ToArray();
         }

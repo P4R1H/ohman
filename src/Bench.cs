@@ -501,6 +501,19 @@ namespace Ohman {
             } catch { }
         }
 
+        /// <summary>Remove one stored run (#85: a run made on the wrong settings stayed in the history for good). Only a
+        /// file of our own name inside runs\ is ever deleted.</summary>
+        public static bool Delete(BenchRun r) {
+            if (r == null || string.IsNullOrEmpty(r.Id)) return false;
+            try {
+                string path = Path.Combine(Dir, Safe(r.Id) + ".run");
+                if (!File.Exists(path)) return false;
+                File.Delete(path);
+                Log.Write("benchmark deleted: " + r.Id);
+                return true;
+            } catch (Exception ex) { Log.Write("benchmark delete " + r.Id + ": " + ex.Message); return false; }
+        }
+
         /// <summary>Every run, newest first, summaries only.</summary>
         public static List<BenchRun> List() {
             var list = new List<BenchRun>();
@@ -988,7 +1001,7 @@ namespace Ohman {
             lock (sync) {
                 Reset();
                 poseNoTool = state == "first";
-                if (state == "first" || state == "ready" || state.StartsWith("result") || state == "runs" || state.StartsWith("share")) return;
+                if (state == "first" || state == "ready" || state.StartsWith("result") || state.StartsWith("runs") || state.StartsWith("share")) return;
                 Game = "Cyberpunk 2077"; Exe = "Cyberpunk2077"; Pid = OwnPid; MeasureChoice = 2;
                 if (state == "waiting") { Phase = BenchPhase.Waiting; Game = ""; return; }
                 for (int i = 0; i < 138; i++) WarmTemps.Add(48 + 36 * (1 - Math.Exp(-i / 40.0)) + (rnd.NextDouble() - 0.5) * 1.4);
