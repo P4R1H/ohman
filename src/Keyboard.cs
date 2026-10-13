@@ -280,15 +280,20 @@ namespace Ohman {
         /// <summary>The colour a key shows when the zones are blended: the two nearest zone centres, mixed by how far
         /// across the board the key sits. Four bands read as one sweep, which is what a wave actually looks like.</summary>
         Color SmoothColor(KeyDef k) {
-            int n = Math.Min(zones, shown.Length);
+            // Only a four-zone board has bands to blend; a per-key board already has a colour per key (blending it
+            // painted every key in lamp 0's colour). WASD sits inside the left band and keeps its own colour, and the
+            // sweep runs over the three bands across the board: before, WASD's colour was drawn as a fourth band on
+            // the right-hand keys, where the keyboard never shows it (#87).
+            if (zones != 4 || shown.Length < 4) return ToColor(shown[Math.Min(shown.Length - 1, Math.Max(0, k.Zone))]);
+            if (k.Zone == KeyboardLayouts.ZoneWasd) return ToColor(shown[KeyboardLayouts.ZoneWasd]);
+            int[] order = { KeyboardLayouts.ZoneLeft, KeyboardLayouts.ZoneMiddle, KeyboardLayouts.ZoneRight };
+            const int n = 3;
             double t = (k.X + k.W / 2) / unitsW * n - 0.5;                       // position in zone-centre units
             int i0 = (int)Math.Floor(t), i1 = i0 + 1;
             double f = t - i0;
             i0 = Math.Max(0, Math.Min(n - 1, i0));
             i1 = Math.Max(0, Math.Min(n - 1, i1));
-            var order = KeyboardLayouts.DisplayOrder(n);
-            int a = i0 < order.Length ? order[i0] : 0, b = i1 < order.Length ? order[i1] : 0;
-            return Mix(ToColor(shown[a]), ToColor(shown[b]), f);
+            return Mix(ToColor(shown[order[i0]]), ToColor(shown[order[i1]]), f);
         }
         static double Luma(Color c) { return (0.299 * c.R + 0.587 * c.G + 0.114 * c.B) / 255.0; }
 

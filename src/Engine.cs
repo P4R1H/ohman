@@ -2131,11 +2131,22 @@ namespace Ohman {
         }
 
         /// <summary>Colour of zone i at a given phase for an effect. Shared with the editor's preview.</summary>
+        /// <summary>Where a zone sits in the wave. Four-zone boards number their zones right, middle, left, WASD, and
+        /// the wave used to step through that numbering: left and right a half-turn apart, and WASD, which sits inside
+        /// the left zone, a quarter-turn past it, so the colour jumped instead of flowing across the board (#87). Now
+        /// it goes by where each zone is: left, WASD just inside it, middle, right.</summary>
+        static double WaveOffset(int zones, int i) {
+            if (zones == 4) {
+                double pos = i == KeyboardLayouts.ZoneLeft ? 0 : i == KeyboardLayouts.ZoneWasd ? 0.35 : i == KeyboardLayouts.ZoneMiddle ? 1 : 2;
+                return -pos * 70;                   // about 70 degrees of hue per zone, travelling left to right
+            }
+            return i * (360.0 / Math.Max(1, zones));
+        }
         public static Rgb EffectFrame(int effect, double phase, Rgb[] baseColors, int i) {
             switch (effect) {
                 case 1: return baseColors[i].Scale(0.15 + 0.85 * (0.5 + 0.5 * Math.Sin(phase * 1.6)));                 // breathe
                 case 2: return Rgb.FromHue(phase * 25);                                                                  // cycle: every zone through the spectrum
-                case 3: return Rgb.FromHue(phase * 25 + i * (360.0 / Math.Max(1, baseColors.Length)));                   // wave: zones offset
+                case 3: return Rgb.FromHue(phase * 25 + WaveOffset(baseColors.Length, i));                               // wave: zones offset
                 default: return baseColors[i];
             }
         }
