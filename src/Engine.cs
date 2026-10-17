@@ -1948,6 +1948,13 @@ namespace Ohman {
             try {
                 int[] rates = Display.Rates();
                 if (rates.Length < 2) return;
+                // 1.3.1 offered 48 Hz next to 60, and on 8D2F (#81) that mode reads 48 while the panel stays at 144.
+                // The button is gone; a rate saved from it moves to 60 once, rather than being reapplied unseen.
+                if (S.RefreshHz > 0 && S.RefreshHz < 60 && Array.IndexOf(rates, 60) >= 0) {
+                    Log.Write("refresh rate: saved " + S.RefreshHz + " Hz is below 60 on a panel that has 60; now 60");
+                    S.RefreshHz = 60;
+                    S.Save();
+                }
                 int want = S.LowHzOnBattery && onBattery ? Display.BatteryHz()
                          : S.RefreshHz > 0 ? S.RefreshHz
                          : S.LowHzOnBattery ? Display.HighestHz()   // we lowered it, so we put it back
@@ -1985,14 +1992,14 @@ namespace Ohman {
                 // the Fn key keeps working because the firmware handles it without us. Not on the probe-only path:
                 // the support report should still say what keyboard this is.
                 if (apply && Light != null && S.HideLight) { Log.Write("keyboard lighting: hidden in Settings (" + Light.Describe + " detected); the keyboard is left alone"); Light = null; return; }
+                // A four-zone board: HP's virtual lighting device knows where its zones are, so ask it (reads only).
+                if (Light != null && !Light.Inert && Light.Zones == 4 && Light is BiosLighting) ZoneOrderFromHp();
                 // A per-key board answers the firmware calls and lights nothing by them. Its colours live on the
                 // keyboard's own HID lighting interface, so look for that before giving up on it.
                 // The Primax keyboards of the 2021-2024 OMEN 16/17 (0461:4E9A / 4E9B) come first: they have no
                 // LampArray at all, and on the machine that proved it the only LampArray present was a Logitech
                 // driver's. HP's own MCU protocol on their mi_02 interface is what OGH uses (McuKeyboard.cs).
                 // Detecting it only asks (two GETs), so it is safe on a probe-only start too.
-                // A four-zone board: HP's virtual lighting device knows where its zones are, so ask it (reads only).
-                if (!Hw.IsDemo && Light != null && !Light.Inert && Light.Zones == 4 && Light is BiosLighting) ZoneOrderFromHp();
                 if (!Hw.IsDemo && Light != null && Light.Inert) {
                     var mcu = McuKeyboardLighting.Detect();
                     // An untested Primax table gives way to a keyboard LampArray that is actually there: a board that
@@ -2133,28 +2140,35 @@ namespace Ohman {
         }
 
         /// <summary>The four-zone order from HP's own driver (OMENLighting.sys publishes the zones to Windows as a
-        /// four-lamp LampArray, 0461:0000), or OmenMon's order when there is no such device. Only lamp attributes are
-        /// read: nothing is lit or changed.</summary>
+        /// four-lamp LampArray, 0461:0000), or OmenMon's order otherwise. Only lamp attributes are read: nothing is lit
+        /// or changed. The positions are applied only on boards whose owners have confirmed them: the 14-inch 8C58 and
+        /// the 16-inch 8E35 report the same 323x106 mm box, so the geometry may be the driver's own constant rather
+        /// than this board's, and a board OmenMon's order already fits would be turned around by it. Elsewhere the
+        /// positions are logged, which is how the next board gets confirmed.</summary>
+        static readonly string[] HpZoneOrderBoards = { "8C58", "8E35" };
         bool zoneOrderRead;
         void ZoneOrderFromHp() {
             if (zoneOrderRead) return;
             zoneOrderRead = true;
+            List<LampArray> all = null;
             try {
-                foreach (var la in LampArray.All()) {
-                    try {
-                        if (la.LampCount != 4 || !la.Internal || la.VendorId != 0x0461) continue;
-                        var mm = new int[4];
-                        for (int i = 0; i < 4; i++) mm[i] = la.X[i] / 1000;
-                        if (KeyboardLayouts.ZonesFromPositions(la.X)) {
-                            KeyboardLayouts.ZoneSource = "HP's lighting device";
-                            Log.Write("keyboard zones from HP's lighting device: lamps at " + mm[0] + "/" + mm[1] + "/" + mm[2] + "/" + mm[3] + " mm -> left " + KeyboardLayouts.ZoneLeft
-                                + ", wasd " + KeyboardLayouts.ZoneWasd + ", middle " + KeyboardLayouts.ZoneMiddle + ", right " + KeyboardLayouts.ZoneRight);
-                            return;
-                        }
-                    } finally { la.Dispose(); }
+                all = LampArray.All(0x0461, 0x0000);
+                foreach (var la in all) {
+                    if (la.LampCount != 4 || la.Kind != LampArray.KindKeyboard) continue;
+                    var mm = new int[4];
+                    for (int i = 0; i < 4; i++) mm[i] = la.X[i] / 1000;
+                    string at = "lamps at " + mm[0] + "/" + mm[1] + "/" + mm[2] + "/" + mm[3] + " mm";
+                    if (!la.AllAnswered) { Log.Write("keyboard zones: HP's lighting device did not describe every lamp (" + at + "); OmenMon's order"); return; }
+                    if (!Families.In(HpZoneOrderBoards, Board)) { Log.Write("keyboard zones: HP's lighting device has " + at + ", not confirmed on this board; OmenMon's order"); return; }
+                    if (!KeyboardLayouts.ZonesFromPositions(la.X)) { Log.Write("keyboard zones: HP's lighting device has " + at + ", not four distinct places; OmenMon's order"); return; }
+                    KeyboardLayouts.ZoneSource = "HP's lighting device";
+                    Log.Write("keyboard zones from HP's lighting device: " + at + " -> left " + KeyboardLayouts.ZoneLeft
+                        + ", wasd " + KeyboardLayouts.ZoneWasd + ", middle " + KeyboardLayouts.ZoneMiddle + ", right " + KeyboardLayouts.ZoneRight);
+                    return;
                 }
                 Log.Write("keyboard zones: no HP lighting device with four lamps; OmenMon's order (right, middle, left, wasd)");
             } catch (Exception ex) { Log.Write("keyboard zones: " + ex.Message + "; OmenMon's order"); }
+            finally { if (all != null) foreach (var la in all) la.Dispose(); }
         }
         /// <summary>Where a zone sits in the wave. The wave used to step through the colour-table numbering, which says
         /// nothing about where a zone is, so on a four-zone board the colour jumped instead of flowing across (#87).

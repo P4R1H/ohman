@@ -1243,15 +1243,19 @@ namespace Ohman {
             var binBox = new Grid(); binBox.Children.Add(binIcon); binBox.Children.Add(binAsk);
             var bin = new Border { Child = binBox, Background = Brushes.Transparent, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Padding = new Thickness(6, 8, 0, 8), Visibility = Visibility.Collapsed, ToolTip = "Delete this run" };
             bool armed = false;
+            int armedAt = 0;
             bin.MouseLeftButtonUp += delegate(object o, MouseButtonEventArgs e) {
                 e.Handled = true;                               // the row under it would open the run
-                if (!armed) { armed = true; binIcon.Visibility = Visibility.Collapsed; binAsk.Visibility = Visibility.Visible; bin.ToolTip = "Click again to delete"; return; }
+                if (!armed) { armed = true; armedAt = Environment.TickCount; binIcon.Visibility = Visibility.Collapsed; binAsk.Visibility = Visibility.Visible; bin.ToolTip = "Click again to delete"; return; }
+                if (unchecked(Environment.TickCount - armedAt) < 500) return;   // a double-click is one click, not the answer to the ask
+                var h = Toast;
                 if (RunStore.Delete(r)) {
                     if (shown != null && shown.Id == r.Id) shown = null;
                     if (lastRun != null && lastRun.Id == r.Id) lastRun = null;
                     runs = null;
-                    var h = Toast; if (h != null) h("Run deleted", false);
+                    if (h != null) h("Run deleted", false);
                 }
+                else if (h != null) h("Could not delete this run", true);
                 Render();
             };
             Grid.SetColumn(bin, 1); Grid.SetColumnSpan(bin, 2); g.Children.Add(bin);   // "delete" is wider than the delta column

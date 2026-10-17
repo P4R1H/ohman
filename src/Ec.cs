@@ -369,8 +369,9 @@ namespace Ohman {
         public bool Verify(int[] mailboxRpm, double dieTemp, out string why) {
             EcReading r = Read();
             // -1 is a register that did not answer in time, not a value. One such read rejected the map on 8E35 for a
-            // whole session (#87), while the start before fitted and every later reading agreed. Ask once more. Reads only.
-            if (r != null && r.Cpu < 0) { Thread.Sleep(250); r = Read(); }
+            // whole session (#87), while the start before fitted and every later reading agreed. Ask once more when any
+            // register the check needs did not answer. Reads only.
+            if (r != null && (r.Cpu < 0 || r.Rpm1 < 0 || r.Rpm2 < 0 || r.Manual < 0)) { Thread.Sleep(250); r = Read(); }
             return VerifyReading(r, Map, mailboxRpm, dieTemp, LastError, out why);
         }
 

@@ -501,13 +501,14 @@ namespace Ohman {
             } catch { }
         }
 
-        /// <summary>Remove one stored run (#85: a run made on the wrong settings stayed in the history for good). Only a
-        /// file of our own name inside runs\ is ever deleted.</summary>
+        /// <summary>Remove one stored run (#85: a run made on the wrong settings stayed in the history for good). Only the
+        /// .run file the run was read from, and only when it sits directly in runs\, is ever deleted.</summary>
         public static bool Delete(BenchRun r) {
-            if (r == null || string.IsNullOrEmpty(r.Id)) return false;
+            if (r == null || string.IsNullOrEmpty(r.File)) return false;
             try {
-                string path = Path.Combine(Dir, Safe(r.Id) + ".run");
-                if (!File.Exists(path)) return false;
+                string path = Path.GetFullPath(r.File);
+                if (!string.Equals(Path.GetDirectoryName(path), Path.GetFullPath(Dir).TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase)
+                    || !path.EndsWith(".run", StringComparison.OrdinalIgnoreCase) || !File.Exists(path)) return false;
                 File.Delete(path);
                 Log.Write("benchmark deleted: " + r.Id);
                 return true;

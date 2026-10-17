@@ -120,7 +120,7 @@ namespace Ohman {
             foreach (int r in all) if (r == 60) pick[60] = true;
             if (!pick.ContainsKey(60)) foreach (int r in all) if (r >= 48) { pick[r] = true; break; }
             var l = new List<int>(pick.Keys);
-            return l.ToArray();
+            return l.Count < 2 ? new int[0] : l.ToArray();     // one button is no choice (a 48/60 panel is left alone)
         }
         /// <summary>The battery rate: 60 Hz when the panel has it, else the lowest rate at or above 48 Hz, else the lowest.</summary>
         public static int BatteryHz() {

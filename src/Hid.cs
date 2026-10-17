@@ -171,6 +171,7 @@ namespace Ohman {
         /// <summary>Lamp i's position in micrometres from the top-left of the bounding box.</summary>
         public readonly int[] X, Y;
         readonly bool[] programmable;
+        readonly bool[] answered;
 
         LampArray(IntPtr h, Hid.Info info, byte[] attrs) {
             handle = h;
@@ -188,6 +189,7 @@ namespace Ohman {
             X = new int[LampCount];
             Y = new int[LampCount];
             programmable = new bool[LampCount];
+            answered = new bool[LampCount];
             ReadLamps();
         }
 
@@ -196,10 +198,14 @@ namespace Ohman {
         static int I32(byte[] b, int i) { return unchecked((int)U32(b, i)); }
 
         /// <summary>Every HID lighting collection on the machine, opened and interrogated. Read-only.</summary>
-        public static List<LampArray> All() {
+        public static List<LampArray> All() { return All(0, -1); }
+        /// <summary>Only the lighting collections of one vendor (and product, when productId is not -1): the rest are
+        /// never opened, so nothing is asked of a plugged-in device that is not the one wanted.</summary>
+        public static List<LampArray> All(ushort vendorId, int productId) {
             var found = new List<LampArray>();
             foreach (var info in Hid.Enumerate()) {
                 if (info.UsagePage != UsagePageLighting || info.Usage != UsageLampArray) continue;
+                if (vendorId != 0 && (info.VendorId != vendorId || (productId >= 0 && info.ProductId != productId))) continue;
                 if (info.FeatureLen < 24) { Log.Write("lamparray: " + info + ": feature report too short, skipped"); continue; }
                 IntPtr h = Hid.Open(info.Path);
                 if (h == Hid.Invalid) { Log.Write("lamparray: " + info + ": cannot open"); continue; }
@@ -248,6 +254,9 @@ namespace Ohman {
                     " mm, min update " + (MinUpdateMicroseconds / 1000) + " ms";
             }
         }
+        /// <summary>True when every lamp answered its attributes request. A lamp that did not keeps position 0, which
+        /// is indistinguishable from a lamp at the edge of the board.</summary>
+        public bool AllAnswered { get { foreach (bool a in answered) if (!a) return false; return true; } }
         public bool AnyProgrammable { get { foreach (bool p in programmable) if (p) return true; return false; } }
         public bool Programmable(int lamp) { return lamp >= 0 && lamp < programmable.Length && programmable[lamp]; }
 
@@ -275,6 +284,7 @@ namespace Ohman {
                     // Reading it as a u16 took the byte after it too, which is off the end of a report that
                     // stops at 28: it only ever gave the right answer because the buffer is zero filled.
                     KeyUsage[id] = featureLen > 28 ? rep[28] : (ushort)0;   // the HID usage of the key under the lamp
+                    answered[id] = true;
                 } catch { }
             }
         }
