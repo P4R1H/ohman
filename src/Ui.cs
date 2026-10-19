@@ -2094,6 +2094,7 @@ namespace Ohman {
                 slPower.Value = S.TdpOffset;
                 txtPower.Text = "+" + S.TdpOffset + " W";
                 if (E.PowerRefused) powerRow.Visibility = Visibility.Collapsed;      // the firmware said no; see ApplyPowerCore
+                gpuRow.Visibility = E.P.HasGpuPower ? Visibility.Visible : Visibility.Collapsed;   // a later answer to 0x21 brings it in
                 GpuLevel g = E.EffectiveGpu;
                 string gpuName = g == GpuLevel.Max ? "GPU max" : g == GpuLevel.Boost ? "GPU boost" : "GPU base";
                 // Two ways this number lies. 0 means the firmware does not implement 0x23 at all. And on a board

@@ -124,6 +124,7 @@ namespace Ohman {
         public bool DriverUse = true;               // use the PawnIO driver when it is installed
         public int FanCeilingSeen;                  // top fan level measured on this machine, 0 = not learned yet
         public bool MaxIgnored;                     // this firmware takes the max-fan command and does nothing with it
+        public string FanLevelsRefusedOn = "";       // board whose firmware refused fan levels with its own error code in an earlier session
         public bool DriverInstalledByOhman = false; // we put it there, so Uninstall may offer to take it away
         public bool DriverRestartPending = false;   // the installer asked for a restart and has not had one
         public string DriverNudgeDismissed = "";    // the Ohman version whose Home-page nudge was closed
@@ -236,6 +237,7 @@ namespace Ohman {
                         case "DriverNudgeDismissed": s.DriverNudgeDismissed = v.Length > 24 ? v.Substring(0, 24) : v; break;
                         case "FanCeilingSeen": { int fc; if (int.TryParse(v, out fc) && fc >= 0 && fc <= 255) s.FanCeilingSeen = fc; break; }
                         case "MaxIgnored": s.MaxIgnored = v == "1"; break;
+                        case "FanLevelsRefusedOn": s.FanLevelsRefusedOn = v.Length > 8 ? v.Substring(0, 8) : v; break;
                         case "BenchWarm": if (TryInt(v, out n)) s.BenchWarm = Math.Max(0, Math.Min(2, n)); break;
                         case "BenchMeasure": if (TryInt(v, out n)) s.BenchMeasure = Math.Max(0, Math.Min(2, n)); break;
                         case "ShareLayout": if (TryInt(v, out n)) s.ShareLayout = Math.Max(0, Math.Min(2, n)); break;
@@ -318,6 +320,7 @@ namespace Ohman {
                 sb.AppendLine("DriverNudgeDismissed=" + DriverNudgeDismissed);
                 sb.AppendLine("FanCeilingSeen=" + FanCeilingSeen);
                 if (MaxIgnored) sb.AppendLine("MaxIgnored=1");
+                if (FanLevelsRefusedOn.Length > 0) sb.AppendLine("FanLevelsRefusedOn=" + FanLevelsRefusedOn);
                 sb.AppendLine("MaxBackWhenCool=" + MaxBackWhenCool);
                 sb.AppendLine("MaxStopAfterMin=" + MaxStopAfterMin);
                 sb.AppendLine("ManualLinked=" + ManualLinked);
@@ -532,7 +535,12 @@ namespace Ohman {
                     // no verified profile: build one from what the firmware says about itself, the way the Linux driver does
                     var g = Platforms.Generic(Board, Info);
                     if (g != null) {
-                        try { Hw.GetGpuPower(); g.HasGpuPower = true; } catch (Exception ex) { Log.Write("generic: no GPU power control (" + ex.Message + ")"); }
+                        try { Hw.GetGpuPower(); g.HasGpuPower = true; }
+                        catch (BiosException ex) { Log.Write("generic: no GPU power control (" + ex.Message + ")"); }
+                        // A WMI failure is not the firmware saying no: 8D2F answers 0x21 in one session and fails the call in
+                        // the next (#81), and 8D40 failed it in its support run (#91), so its GPU stayed at the default limit
+                        // while OGH set it to Max. Ask again from the heartbeat a few times before taking it as absent.
+                        catch (Exception ex) { gpuProbeLeft = GpuProbeRetries; Log.Write("generic: GPU power query failed (" + ex.Message + "); asking again"); }
                         try { int top = Hw.GetFanTableMax(); if (top > g.Curve.Ceiling) g.Curve.Rescale(top); } catch { }
                         P = g;
                         Supported = true;
@@ -549,6 +557,11 @@ namespace Ohman {
                 catch (Exception ex) { Log.Write("graphics mode read: " + ex.Message + " - graphics switching not offered"); }
                 Log.Write("BIOS ok: fans=" + FanCount + " policy=v" + Info.ThermalPolicy + " swFan=" + Info.SwFanControl + " defPL4=" + Info.DefaultPl4 + "W baseTdp=" + Info.DefaultConcurrentTdp + "W raw=" + Info.Hex + (Hw.IsDemo ? " (DEMO)" : ""));
             } catch (Exception ex) { BiosOk = false; LastError = ex.Message; Log.Write("BIOS self-test FAILED: " + ex.Message); }
+            if (S.FanLevelsRefusedOn.Length > 0 && S.FanLevelsRefusedOn == Board && !refusedBefore) {
+                refusedBefore = true;
+                fanRefusals = FanWriteGiveUp - 1;
+                Log.Write("fan levels: this firmware refused them in an earlier session; one more refusal and they go through the driver");
+            }
             InitDriver();           // reads only; the fan route it may pick is not written until ApplyAll below
             // Everything above only looked. Everything below changes the machine, and the support report wants the
             // first half without the second: it must describe this laptop, not reconfigure it.
@@ -813,12 +826,13 @@ namespace Ohman {
         }
 
         bool Try(Action a, string what) { return Try(a, what, true); }
+        Exception tryError;                 // what the last failed Try threw: a BiosException is the firmware's own no
         /// <summary>toast false: log only. For a command re-sent by the heartbeat, one toast says it; forty-five
         /// seconds later the same toast says nothing new (8D26: "Set power failed" on every heartbeat).</summary>
         bool Try(Action a, string what, bool toast) {
             if (ReadOnly) { Log.Write("read-only (unsupported board '" + Board + "'): skipped " + what); return false; }
-            try { a(); LastError = ""; return true; }
-            catch (Exception ex) { LastError = ex.Message; Log.Write("FAIL " + what + ": " + ex.Message); if (toast) Fire(Toast, what + " failed: " + ex.Message, true); return false; }
+            try { a(); LastError = ""; tryError = null; return true; }
+            catch (Exception ex) { LastError = ex.Message; tryError = ex; Log.Write("FAIL " + what + ": " + ex.Message); if (toast) Fire(Toast, what + " failed: " + ex.Message, true); return false; }
         }
         void Fire(Action<string, bool> h, string m, bool err) { if (h != null) { try { h(m, err); } catch { } } }
         void Changed() { var h = StateChanged; if (h != null) { try { h(); } catch { } } }
@@ -1013,6 +1027,12 @@ namespace Ohman {
         public bool CanSetFanLevels { get { return !fanLevelsRefused || Route == FanRoute.Ec; } }
         const int FanWriteGiveUp = 8;
         bool fanLevelsRefused;
+        // Only the firmware's own error code counts towards giving up. A WMI call that fails outright says nothing about
+        // fan levels: 8D2F in iGPU-only mode fails every call that way (#81), and the board's own channel works.
+        int fanRefusals;
+        // The firmware refused fan levels in an earlier session on this board, so one more refusal is enough this time
+        // instead of eight (about six minutes at the backed-off rate, #93). One accepted level forgets it.
+        bool refusedBefore;
 
         /// <param name="top">A higher cap than the curve's for this one write (Max as a level, see MaxFan). The
         /// mailbox only: the firmware caps a level it cannot reach, the EC has not been shown to.</param>
@@ -1039,19 +1059,21 @@ namespace Ohman {
             if (!above && !topRefused && pristineCeiling > P.Curve.Ceiling && (l1 >= P.Curve.Ceiling || l2 >= P.Curve.Ceiling)) {
                 int a1 = l1 >= P.Curve.Ceiling ? pristineCeiling : l1, a2 = l2 >= P.Curve.Ceiling ? pristineCeiling : l2;
                 if (Try(delegate { Hw.GetFanCount(); Hw.SetFanLevels(a1, a2); }, what + " at the profile's top", false)) {
-                    curLevel1 = l1; curLevel2 = l2; fanWriteFailures = 0; fanFailureShown = false; return true;
+                    curLevel1 = l1; curLevel2 = l2; fanWriteFailures = 0; fanFailureShown = false; FanLevelsTaken(); return true;
                 }
                 topRefused = true;
                 Log.Write("fan ceiling: a level above the learned " + P.Curve.Ceiling + " was refused; the top stays there");
             }
-            if (Try(delegate { Hw.GetFanCount(); Hw.SetFanLevels(l1, l2); }, what)) { curLevel1 = l1; curLevel2 = l2; fanWriteFailures = 0; fanFailureShown = false; return true; }
+            if (Try(delegate { Hw.GetFanCount(); Hw.SetFanLevels(l1, l2); }, what)) { curLevel1 = l1; curLevel2 = l2; fanWriteFailures = 0; fanFailureShown = false; FanLevelsTaken(); return true; }
             // A level above the ceiling that is refused says nothing about levels the fans can reach; counting it
             // toward giving up would switch fan levels off, and with them Max-as-a-level and the guard's level.
             if (above) return false;
             fanWriteFailures++;
-            if (fanWriteFailures >= FanWriteGiveUp) {
+            if (tryError is BiosException) fanRefusals++;
+            if (fanRefusals >= FanWriteGiveUp) {
                 fanLevelsRefused = true;
-                Log.Write("giving up on fan levels after " + fanWriteFailures + " refusals; this firmware will not take them. Max fan and the modes are unaffected.");
+                Log.Write("giving up on fan levels after " + fanRefusals + " refusals; this firmware will not take them. Max fan and the modes are unaffected.");
+                if (S.FanLevelsRefusedOn != Board) { S.FanLevelsRefusedOn = Board; S.Save(); }
                 // The refusal is exactly what the EC route exists for. With the driver and a map, switch and
                 // carry on; without, tell the owner, and the Home page will point at the driver if a map exists.
                 if (ChooseRoute() == FanRoute.Ec) { Say("Fan levels now go through the driver"); return WriteLevelsEc(l1, l2, what); }
@@ -1062,6 +1084,16 @@ namespace Ohman {
                 Fire(Toast, "Fan writes failing; firmware curve will take over", true);
             }
             return false;
+        }
+
+        /// <summary>A fan level the firmware took: whatever it refused before was not this board's final word.</summary>
+        void FanLevelsTaken() {
+            fanRefusals = 0;
+            if (!refusedBefore) return;
+            refusedBefore = false;
+            S.FanLevelsRefusedOn = "";
+            S.Save();
+            Log.Write("fan levels: the firmware took one after refusing them in an earlier session; that is forgotten");
         }
 
         /// <summary>Fan levels through the EC. The mailbox's max-fan flag is left alone on purpose: it works on
@@ -1149,7 +1181,17 @@ namespace Ohman {
                     int[] rpm = null;
                     double die = double.NaN;
                     try { rpm = Hw.GetFanLevels(); } catch { }
-                    try { if (Cpu != null) die = Cpu.Poll().DieTemp; } catch { }
+                    // The coolest of three light polls. One reading caught the start-up spike on 8A4F (#93): 82 against an EC
+                    // reading of 49 with the ACPI zone at 50, and the map was rejected for the whole session. The floor is the
+                    // die's own temperature; the spikes are what reading it does to it (research.md, reading the die).
+                    try {
+                        if (Cpu != null)
+                            for (int i = 0; i < 3; i++) {
+                                if (i > 0) Thread.Sleep(150);
+                                double t = Cpu.Poll(false).DieTemp;
+                                if (!double.IsNaN(t) && (double.IsNaN(die) || t < die)) die = t;
+                            }
+                    } catch { }
                     ecVerified = ec.Verify(rpm, die, out EcProof);
                     Log.Write("driver: the EC map " + (ecVerified ? "fits this board: " : "does NOT fit this board: ") + EcProof);
                     Ec = ec;
@@ -1176,10 +1218,13 @@ namespace Ohman {
         /// <summary>Would a fan level ever go through the EC on this board? False wherever the firmware's own
         /// channel works, and there nothing may write the EC's fan registers: the firmware reads them too, and
         /// two writers with no arbitration between them is the whole of the 1.1 stopped-fans bug.</summary>
-        public bool EcFanRouteWanted { get { return (P.DriverFor & DriverFor.FanLevels) != 0 || fanLevelsRefused; } }
+        public bool EcFanRouteWanted { get { return EcFanRouteNow || refusedBefore; } }
+        /// <summary>The route as of now. A refusal remembered from an earlier session is not one yet: the mailbox is
+        /// asked once first, and a refusal then gives up at once (refusedBefore), so a board that changed its mind is heard.</summary>
+        bool EcFanRouteNow { get { return (P.DriverFor & DriverFor.FanLevels) != 0 || fanLevelsRefused; } }
 
         FanRoute ChooseRoute() {
-            bool need = EcFanRouteWanted;
+            bool need = EcFanRouteNow;
             FanRoute was = Route;
             Route = (Ec != null && ecVerified && need && !Ec.Resting) ? FanRoute.Ec : FanRoute.Mailbox;
             // A route taking over starts clean: fanWriteFailures counts mailbox refusals, and three of them back
@@ -1195,7 +1240,7 @@ namespace Ohman {
                 if (DriverReady || !S.DriverUse || DriverBusy) return null;
                 if (S.DriverNudgeDismissed == Program.Version) return null;
                 if (S.DriverRestartPending) return "Restart Windows to finish installing the driver";
-                bool fans = (P.DriverFor & DriverFor.FanLevels) != 0 || (fanLevelsRefused && P.Ec != null);
+                bool fans = (P.DriverFor & DriverFor.FanLevels) != 0 || ((fanLevelsRefused || refusedBefore) && P.Ec != null);
                 return fans ? "Fan levels on this board need a driver" : null;
             }
         }
@@ -1513,6 +1558,23 @@ namespace Ohman {
                 if (why != cpuLimitWhy) { cpuLimitWhy = why; Log.Write(why == null ? "cpu limits: PL1 " + pl1 + " W, PL2 " + pl2 + " W (" + ModeName + ", OGH's values)" : "cpu limits not set: " + why); }
             }
         }
+        const int GpuProbeRetries = 5;
+        int gpuProbeLeft;
+        /// <summary>The start-up 0x21 query failed as a call rather than being answered no; ask again, and the first answer
+        /// turns GPU power on for the session exactly as if the start had seen it. Under applySync (the heartbeat).</summary>
+        void RetryGpuProbe() {
+            if (gpuProbeLeft <= 0 || P.HasGpuPower || ReadOnly) return;
+            gpuProbeLeft--;
+            try {
+                Hw.GetGpuPower();
+                P.HasGpuPower = true;
+                gpuProbeLeft = 0;
+                Log.Write("generic profile: the GPU power query answered on a later try; gpuPower=True");
+                ApplyGpuCore();
+                Changed();
+            } catch (BiosException ex) { gpuProbeLeft = 0; Log.Write("generic: no GPU power control (" + ex.Message + ")"); }
+            catch (Exception ex) { if (gpuProbeLeft == 0) Log.Write("generic: GPU power query still failing (" + ex.Message + "); not offered this session"); }
+        }
         void ApplyGpuCore() {
             if (!P.HasGpuPower) return;
             // payloads come from the platform profile (Transcend 14: Base {0,0,1,75}, Boost {0,1,1,87}, Max {1,1,1,87} as OGH sends them)
@@ -1657,6 +1719,7 @@ namespace Ohman {
                     if (GuardActive) GuardFans();
                     Try(delegate { Hw.SetMode(ModeByte, FansByBios); }, "Set mode");   // fans are handled by FanTick; this only pins mode and power
                     ApplyPowerCore();
+                    RetryGpuProbe();
                     LastHeartbeat = DateTime.Now;
                 }
                 if (S.SuppressOgh && !Hw.IsDemo && Supported) KillOgh();
@@ -2217,7 +2280,7 @@ namespace Ohman {
             // ceilings cannot be told apart without this: the profile/table value, then what was measured here.
             sb.AppendLine("fan ceiling: " + (P.Curve != null ? P.Curve.Ceiling : -1) + "  (profile/table " + pristineCeiling + ", learned " + (S.FanCeilingSeen > 0 ? "" + S.FanCeilingSeen : "none")
                 + ", max flag " + (S.MaxIgnored ? "ignored" : maxProven ? "proven" : "not tested this run") + ", fastest seen " + ceilingHighWater + ")");
-            sb.AppendLine("fan drive: written " + curLevel1 + "/" + curLevel2 + "  cpu " + Fmt(CpuTemp) + " (last single reading " + Fmt(CpuTempNow) + ")  gpu " + Fmt(GpuTemp) + "  ir " + Fmt(IrTemp) + "  guard=" + GuardActive + "  writeFailures=" + fanWriteFailures + "  route=" + Route + (ScreenOff ? "  screen off: firmware curve" : "") + (FirmwareHolding ? "  HELD BY FIRMWARE" : ""));
+            sb.AppendLine("fan drive: written " + curLevel1 + "/" + curLevel2 + "  cpu " + Fmt(CpuTemp) + " (last single reading " + Fmt(CpuTempNow) + ")  gpu " + Fmt(GpuTemp) + "  ir " + Fmt(IrTemp) + "  guard=" + GuardActive + "  writeFailures=" + fanWriteFailures + " refusals=" + fanRefusals + (refusedBefore ? " (refused in an earlier session)" : "") + "  route=" + Route + (ScreenOff ? "  screen off: firmware curve" : "") + (FirmwareHolding ? "  HELD BY FIRMWARE" : ""));
             sb.AppendLine("driver: " + (DriverReady ? "PawnIO " + (Hw.IsDemo ? "simulated" : "" + DriverVersion) + " · cpu " + (Cpu != null ? Cpu.Describe : "none")
                 + " · ec " + (Ec == null ? "none" : (ecVerified ? Ec.Map.Name : "map rejected") + (Ec.Resting ? " (resting)" : "") + " · " + EcProof) : "none (" + DriverWhy + ")"));
             sb.AppendLine("last heartbeat: " + (LastHeartbeat == DateTime.MinValue ? "never" : LastHeartbeat.ToString("HH:mm:ss")) + "   last key event: " + (LastEventTime == DateTime.MinValue ? "none" : LastEventId + "/" + LastEventData + " at " + LastEventTime.ToString("HH:mm:ss")));
