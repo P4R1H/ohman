@@ -24,7 +24,7 @@ namespace Ohman {
         public int[] GpuCurveLevels;                // the GPU fan's own curve, used when CurveLinked is off
         public bool CurveLinked = true;             // one curve for both fans (the hotter chip wins)
         public int CurveFloor = 0;                  // lowest level the curve may drive (0 = the profile's own floor)
-        public int CurveRamp = 5;                   // seconds per 300 rpm step when following the curve (1 = at once, 10 = very gentle)
+        public int CurveRamp = 5;                   // seconds the curve must want the fans before they start from off, and per 300 rpm step after (1 = at once, 10 = very gentle)
         public int TdpOffset = 0;
         public GpuLevel Gpu = GpuLevel.Boost;
         public bool GpuAuto = true;                 // follow the mode: Eco->Base, Balanced->Boost, Performance->Max (what OGH does)
@@ -1396,6 +1396,16 @@ namespace Ohman {
             int[] target = curve.Target(smoothCpu, smoothGpu, IrTemp);
             int n1 = immediate ? target[0] : curve.Step(curLevel1, target[0]);
             int n2 = immediate ? target[1] : curve.Step(curLevel2, target[1]);
+            // Ramp delay: fans that are off stay off until the curve has wanted them for that long. Before, the first
+            // step from off went out as the floor speed on the next tick, so the setting only slowed the climb once the
+            // fans were already audible, and one warm tick over a 0 point started them (#92). The guard is not
+            // delayed: it returns before this runs.
+            if (immediate || curLevel1 != 0 || curLevel2 != 0 || (n1 <= 0 && n2 <= 0)) spinUpSince = DateTime.MinValue;
+            else {
+                if (spinUpSince == DateTime.MinValue) spinUpSince = DateTime.Now;
+                // +1: the tick is 5 s and lands a few ms either side, so 10 s means the second tick, not the third
+                if ((DateTime.Now - spinUpSince).TotalSeconds + 1 < S.Cur.CurveRamp) n1 = n2 = 0;
+            }
             bool changed = n1 != curLevel1 || n2 != curLevel2;
             bool refresh = (DateTime.Now - lastFanWrite).TotalSeconds >= 30;     // keep-alive even when steady
             // a change smaller than the deadband is not worth a write, unless it is on its way up or we are refreshing
@@ -1407,6 +1417,7 @@ namespace Ohman {
             if (changed && ok) Log.Write("curve " + n1 + "/" + n2 + " (target " + target[0] + ", cpu " + Fmt(smoothCpu) + " gpu " + Fmt(smoothGpu) + " ir " + Fmt(IrTemp) + ")");
         }
         DateTime lastFanWrite = DateTime.MinValue;
+        DateTime spinUpSince = DateTime.MinValue;   // when the curve first asked for fans while they were off (ramp delay)
         public static readonly int[] CurveTemps = { 30, 40, 50, 60, 70, 80, 90 };
         /// <summary>The mode's own curve as a FanCurve: the same six points for CPU and GPU, the vendor's chassis table and bounds.</summary>
         FanCurve CustomCurve() {
