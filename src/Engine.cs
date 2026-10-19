@@ -826,13 +826,15 @@ namespace Ohman {
         }
 
         bool Try(Action a, string what) { return Try(a, what, true); }
-        Exception tryError;                 // what the last failed Try threw: a BiosException is the firmware's own no
         /// <summary>toast false: log only. For a command re-sent by the heartbeat, one toast says it; forty-five
         /// seconds later the same toast says nothing new (8D26: "Set power failed" on every heartbeat).</summary>
-        bool Try(Action a, string what, bool toast) {
+        bool Try(Action a, string what, bool toast) { Exception unused; return Try(a, what, toast, out unused); }
+        /// <summary>error: what the call threw, null when it ran or was skipped. A BiosException is the firmware's own no.</summary>
+        bool Try(Action a, string what, bool toast, out Exception error) {
+            error = null;
             if (ReadOnly) { Log.Write("read-only (unsupported board '" + Board + "'): skipped " + what); return false; }
-            try { a(); LastError = ""; tryError = null; return true; }
-            catch (Exception ex) { LastError = ex.Message; tryError = ex; Log.Write("FAIL " + what + ": " + ex.Message); if (toast) Fire(Toast, what + " failed: " + ex.Message, true); return false; }
+            try { a(); LastError = ""; return true; }
+            catch (Exception ex) { error = ex; LastError = ex.Message; Log.Write("FAIL " + what + ": " + ex.Message); if (toast) Fire(Toast, what + " failed: " + ex.Message, true); return false; }
         }
         void Fire(Action<string, bool> h, string m, bool err) { if (h != null) { try { h(m, err); } catch { } } }
         void Changed() { var h = StateChanged; if (h != null) { try { h(); } catch { } } }
@@ -1012,6 +1014,7 @@ namespace Ohman {
             Fire(Toast, "The firmware is holding the fans at " + Rpm(Math.Max(f[0], f[1])) + " and ignoring the curve. Switching modes usually frees them.", true);
         }
         public double GpuTemp = double.NaN, IrTemp = double.NaN;   // GpuTemp fed by the UI sensor loop; IrTemp read here
+        public bool GpuAsleep;                            // the dGPU is in D3: GpuTemp is NaN on purpose, not unknown
         int fanWriteFailures;
 
         /// <summary>Whether this firmware still takes fan levels. Driven by what it does, not by what it says.
@@ -1064,12 +1067,13 @@ namespace Ohman {
                 topRefused = true;
                 Log.Write("fan ceiling: a level above the learned " + P.Curve.Ceiling + " was refused; the top stays there");
             }
-            if (Try(delegate { Hw.GetFanCount(); Hw.SetFanLevels(l1, l2); }, what)) { curLevel1 = l1; curLevel2 = l2; fanWriteFailures = 0; fanFailureShown = false; FanLevelsTaken(); return true; }
+            Exception writeError;
+            if (Try(delegate { Hw.GetFanCount(); Hw.SetFanLevels(l1, l2); }, what, true, out writeError)) { curLevel1 = l1; curLevel2 = l2; fanWriteFailures = 0; fanFailureShown = false; FanLevelsTaken(); return true; }
             // A level above the ceiling that is refused says nothing about levels the fans can reach; counting it
             // toward giving up would switch fan levels off, and with them Max-as-a-level and the guard's level.
             if (above) return false;
             fanWriteFailures++;
-            if (tryError is BiosException) fanRefusals++;
+            if (writeError is BiosException) fanRefusals++;
             if (fanRefusals >= FanWriteGiveUp) {
                 fanLevelsRefused = true;
                 Log.Write("giving up on fan levels after " + fanRefusals + " refusals; this firmware will not take them. Max fan and the modes are unaffected.");
@@ -1240,7 +1244,7 @@ namespace Ohman {
                 if (DriverReady || !S.DriverUse || DriverBusy) return null;
                 if (S.DriverNudgeDismissed == Program.Version) return null;
                 if (S.DriverRestartPending) return "Restart Windows to finish installing the driver";
-                bool fans = (P.DriverFor & DriverFor.FanLevels) != 0 || ((fanLevelsRefused || refusedBefore) && P.Ec != null);
+                bool fans = (P.DriverFor & DriverFor.FanLevels) != 0 || (EcFanRouteWanted && P.Ec != null);
                 return fans ? "Fan levels on this board need a driver" : null;
             }
         }

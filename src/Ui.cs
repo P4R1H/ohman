@@ -1751,7 +1751,7 @@ namespace Ohman {
                 txtFanRight.Text = "Ctrl+Alt+M toggles";
             } else {
                 txtFanApplied.Text = E.GuardActive ? "Thermal guard: max fan until cool" : "Applied to " + E.ModeName;
-                txtFanRight.Text = "CPU " + (double.IsNaN(E.CpuTemp) ? "--" : E.CpuTemp.ToString("0") + "°") + " · GPU " + (double.IsNaN(E.GpuTemp) ? "--" : E.GpuTemp.ToString("0") + "°");
+                txtFanRight.Text = "CPU " + (double.IsNaN(E.CpuTemp) ? "--" : E.CpuTemp.ToString("0") + "°") + " · GPU " + (E.GpuAsleep ? "asleep" : double.IsNaN(E.GpuTemp) ? "--" : E.GpuTemp.ToString("0") + "°");
             }
         }
         void UpdateCurveLive() {
@@ -2173,6 +2173,7 @@ namespace Ohman {
             if (!double.IsNaN(s.CpuTemp)) { int d = (int)Math.Round(s.CpuTemp); if (d != cpuTipFor) { cpuTipFor = d; chipCpu.ToolTip = "CPU is " + d + "\u00b0 right now"; } }
             // a sleeping GPU makes no heat; its last reading is from before it slept and must not drive the fans (#95)
             E.GpuTemp = s.GpuAsleep ? double.NaN : s.GpuTemp;
+            E.GpuAsleep = s.GpuAsleep;
             onBattery = s.OnBattery;
             UpdateTrayTemp(s.CpuTemp);
             if (!double.IsNaN(s.CpuTemp)) { tempTrail.Add(s.CpuTemp); if (tempTrail.Count > 8) tempTrail.RemoveAt(0); sensorsSeen = true; }

@@ -278,6 +278,9 @@ namespace Ohman {
                 if (nvmlLoaded && !nvmlGone) { if (gpuQuiet < 3) want = Math.Min(want, intervalMs - 100); }
                 else want = Math.Max(want, GpuTrayMs);
             }
+            // Asleep, the check below reads Windows' device record and does not wake it, so look often: a GPU that
+            // wakes for a load is read within seconds instead of after the idle interval (#95).
+            if (last != null && last.GpuAsleep) want = Math.Min(want, 4000);
             if ((DateTime.Now - lastNv).TotalMilliseconds < want) return false;
             // Asking nvidia-smi anything wakes the GPU to answer, and a hybrid laptop's dGPU spends most of its day
             // asleep. One owner saw it pinned awake at 60-100 W idle. Asleep is also the answer: it is cool.
