@@ -51,7 +51,10 @@ if ($elevated) {
             $in = ([wmiclass]"root\wmi:hpqBDataIn").CreateInstance()
             $in.Sign = [byte[]](0x53,0x45,0x43,0x55); $in.Command = 0x20008; $in.CommandType = $type; $in.Size = $data.Length; $in.hpqBData = [byte[]]$data
             $p = $intf.GetMethodParameters("hpqBIOSInt$outSize"); $p.InData = $in
-            $r = $intf.InvokeMethod("hpqBIOSInt$outSize", $p, $null)   # the parameter-object form is the one that returns OutData
+            # One call that throws (WMI "Generic failure", seen on 0x21 on the 2025 boards) used to abort every query after
+            # it and read as "not answered". It is the call failing, not the firmware saying no, and the rest still run.
+            try { $r = $intf.InvokeMethod("hpqBIOSInt$outSize", $p, $null) }   # the parameter-object form is the one that returns OutData
+            catch { $script:RAW[$type] = @{ rc = "wmi"; bytes = @() }; return ("FAILED (" + (Scrub $_.Exception.Message) + ") - the call failed, not a firmware no") }
             $od = $r.OutData
             $bytes = @(); if ($od -and $od.Data) { $bytes = @($od.Data) }
             $rc = $(if ($od) { $od.rwReturnCode } else { "?" })
@@ -118,7 +121,8 @@ if ($elevated) {
         $gp = $script:RAW[0x21]
         if ($gp -and $gp.rc -eq 0 -and $gp.bytes.Count -ge 4) {
             L ("  gpu power now:       cTGP=" + $gp.bytes[0] + " PPAB=" + $gp.bytes[1] + " dState=" + $gp.bytes[2] + " peakTemp=" + $gp.bytes[3] + " C")
-        } else { L "  gpu power (0x21):    not answered - no GPU power control on this board" }
+        } elseif ($gp -and $gp.rc -eq "wmi") { L "  gpu power (0x21):    the call failed (it can depend on the GPU's state); not proof the board lacks it" }
+        else { L "  gpu power (0x21):    not answered - no GPU power control on this board" }
     } catch { L ("  decode failed: " + (Scrub $_.Exception.Message)) }
 }
 
@@ -158,13 +162,19 @@ try {
               ForEach-Object { Join-Path $_.FullName 'LocalCache\Local\HPOMEN' } | Where-Object { Test-Path $_ } | Select-Object -First 1
     if (-not $logDir) { L "  (OGH has never run on this machine)" }
     else {
+        # OGH keeps its log open while it runs; ReadLines asks for it unshared and fails ("being used by another process").
+        function SharedLines($path) {
+            $fs = New-Object IO.FileStream($path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+            $sr = New-Object IO.StreamReader($fs)
+            try { while ($null -ne ($line = $sr.ReadLine())) { $line } } finally { $sr.Dispose() }
+        }
         $logs = Get-ChildItem $logDir -Filter 'HPOMEN*.log' -ErrorAction Stop | Sort-Object LastWriteTime -Descending | Select-Object -First 4
         $keys = 'IsCtgpModeSupport','IsIccMaxSupport','IsSurfaceTempSupport','ChangeTppToDynamicBoost',
                 'GetUnleashedModePowerLimit4','GetUnleashedModeSurfaceTemp','GetUnleashedModeTppOffset',
                 'GetUnleashedModeTppMode','IsEnableTgpPpab','SetPL1DefaultValue'
         $hits = @{}
         foreach ($f in $logs) {
-            foreach ($line in [IO.File]::ReadLines($f.FullName)) {
+            foreach ($line in (SharedLines $f.FullName)) {
                 foreach ($k in $keys) {
                     if ($line -like "*$k*" -and -not $hits.ContainsKey($k)) {
                         $hits[$k] = ($line -replace '^.*\[INF\]\s*', '' -replace '\[PID: \d+\] \[TID: \d+\] ', '').Trim()
@@ -177,7 +187,7 @@ try {
         # The payloads OGH sends are the ground truth for any byte we are unsure about.
         $sent = @{}
         foreach ($f in $logs) {
-            foreach ($line in [IO.File]::ReadLines($f.FullName)) {
+            foreach ($line in (SharedLines $f.FullName)) {
                 if ($line -match 'inputData=([0-9,]{3,40}),\s*$') {
                     $v = $matches[1]
                     if ($v -ne '0,0,0,0') { if ($sent.ContainsKey($v)) { $sent[$v]++ } else { $sent[$v] = 1 } }
