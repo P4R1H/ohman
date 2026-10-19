@@ -146,7 +146,7 @@ namespace Ohman {
                 // But 8BA9 (support 07 3D, type 0) is a four-zone board whose owner confirmed the zones, so type 0
                 // alone is not enough: these are the two shapes no RGB board has ever answered with.
                 //   support 01 00, colour table byte 0 = 00 and black: 88F8, 8BB1, 8DCD (white, owners), 8A26
-                //   support byte 0 = 06 (bit 0 clear) with type 0:     878A (#46), 88ED, 8E10, 8E5C (white, owners)
+                //   support byte 0 = 06 (bit 0 clear) with type 0:     878A (#46), 88ED, 8E10, 8E5C, 8DD0 (white, owners)
                 // Every RGB or per-key board reports 03, 07 or 0F with a non-zero second byte and 03 at byte 0 of
                 // the colour table; the one 06 among them (8BAD) is type 3. Type must have been answered: 8574
                 // refuses all of 0x20008 and its layout is unknown, not standard.
