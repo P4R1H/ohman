@@ -1698,8 +1698,10 @@ namespace Ohman {
                     txtCurveHint.Text = "read-only";
                 } else if (f == FanMode.Custom) {
                     if (!curveDebounce.IsEnabled && !curveView.Dragging && Volatile.Read(ref curvePending) == 0) curveView.Levels = (int[])(curveGpu ? S.Cur.GpuCurveLevels : S.Cur.CurveLevels).Clone();
-                    txtCurveTitle.Text = curveGpu ? "GPU curve" : "CPU curve";
-                    txtCurveHint.Text = "drag a point · shift-drag moves all";
+                    txtCurveTitle.Text = !linked ? "Fan curve" : "CPU curve";      // unlinked, the CPU / GPU switch beside it names the fan
+                    // With the CPU / GPU switch beside the title the full hint runs into it (#89), so it keeps the half
+                    // that is not obvious.
+                    txtCurveHint.Text = linked ? "drag a point · shift-drag moves all" : "shift-drag moves all";
                 }
                 slFan1.Value = S.Fan1;
                 slFan2.Value = S.Fan2;
