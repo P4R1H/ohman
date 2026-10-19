@@ -1,7 +1,7 @@
 ﻿// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman: keyboard drawing. One control renders both the small glyph on the Home page and the Keyboard page's map:
-// flat coloured keys, nothing more. The layout is a list of keys in key units; a four-zone key carries the colour-table
-// entry that lights it, and which entry is which part of the board is per machine (KeyboardLayouts.ZoneLeft and co.).
+// flat coloured keys, nothing more. The layout is a list of keys in key units; zones follow HP's four-zone firmware
+// order (0 right, 1 middle, 2 left, 3 WASD), which is also the order of the colour table.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -24,24 +24,10 @@ namespace Ohman {
     }
 
     public static class KeyboardLayouts {
-        /// <summary>Which colour-table entry lights which part of the board. OmenMon's order (right, middle, left,
-        /// WASD) until the machine says otherwise: HP's own lighting driver publishes the four zones as lamps with
-        /// their positions, and on the Transcend 14 those read 40/80/175/300 mm from the left, entry 0 leftmost, which
-        /// the 1.1 colour test had already seen (red/green/blue/white lit left to right). So the order is per machine.</summary>
-        public static int ZoneRight = 0, ZoneMiddle = 1, ZoneLeft = 2, ZoneWasd = 3;
-        public static string ZoneSource = "OmenMon's order";
-        /// <summary>Set the four roles from the lamps' positions across the board, in mm or any unit: left to right a
-        /// four-zone keyboard is the left block, WASD (inside it), the middle and the right. OmenMon's order is what
-        /// this gives for lamps at right, middle, left, WASD, so boards that were right stay right. False, and nothing
-        /// changed, unless there are four distinct positions.</summary>
-        public static bool ZonesFromPositions(int[] x) {
-            if (x == null || x.Length != 4) return false;
-            int[] idx = { 0, 1, 2, 3 };
-            Array.Sort((int[])x.Clone(), idx);
-            for (int i = 1; i < 4; i++) if (x[idx[i]] <= x[idx[i - 1]]) return false;
-            ZoneLeft = idx[0]; ZoneWasd = idx[1]; ZoneMiddle = idx[2]; ZoneRight = idx[3];
-            return true;
-        }
+        /// <summary>Which colour-table entry lights which part of the board: OmenMon's order, confirmed by owners on 8912
+        /// (a photo of the zones lit in four colours) and 8E35 (#87). HP's virtual lighting device reports the same lamp
+        /// positions on a 14-inch and a 16-inch board, so they are its own constant and say nothing about the order.</summary>
+        public const int ZoneRight = 0, ZoneMiddle = 1, ZoneLeft = 2, ZoneWasd = 3;
         /// <summary>Zone indices in left-to-right reading order, for chips and legends.</summary>
         public static int[] DisplayOrder(int zones) { return zones == 4 ? new[] { ZoneLeft, ZoneMiddle, ZoneRight, ZoneWasd } : new[] { 0 }; }
         public static string ZoneName(int zones, int zone) {
@@ -83,7 +69,10 @@ namespace Ohman {
                 if (zones != 4) { k.Zone = 0; continue; }
                 double mid = k.X + k.W / 2;
                 bool wasd = k.Label == "W" || k.Label == "A" || k.Label == "S" || k.Label == "D";
-                k.Zone = wasd ? ZoneWasd : mid < 4.6 ? ZoneLeft : mid < 9.2 ? ZoneMiddle : ZoneRight;
+                // Edges from an owner's photo of an 8912 lit in four colours (#65): R, F, V, 5 and F5 are the left zone's last
+                // keys, ], ', / and F12 the middle's, and on the bottom row everything after the right Alt is the right zone.
+                double rightFrom = k.Row == 5 ? 11.4 : 13.25;
+                k.Zone = wasd ? ZoneWasd : mid < 5.9 ? ZoneLeft : mid < rightFrom ? ZoneMiddle : ZoneRight;
             }
             return keys;
         }
