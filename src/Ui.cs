@@ -2170,7 +2170,8 @@ namespace Ohman {
             E.CpuTemp = s.CpuTemp;
             E.CpuTempNow = s.CpuTempNow;
             if (!double.IsNaN(s.CpuTemp)) { int d = (int)Math.Round(s.CpuTemp); if (d != cpuTipFor) { cpuTipFor = d; chipCpu.ToolTip = "CPU is " + d + "\u00b0 right now"; } }
-            E.GpuTemp = s.GpuTemp;
+            // a sleeping GPU makes no heat; its last reading is from before it slept and must not drive the fans (#95)
+            E.GpuTemp = s.GpuAsleep ? double.NaN : s.GpuTemp;
             onBattery = s.OnBattery;
             UpdateTrayTemp(s.CpuTemp);
             if (!double.IsNaN(s.CpuTemp)) { tempTrail.Add(s.CpuTemp); if (tempTrail.Count > 8) tempTrail.RemoveAt(0); sensorsSeen = true; }

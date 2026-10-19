@@ -21,6 +21,7 @@ namespace Ohman {
         public DateTime GpuRead = DateTime.MinValue;      // when the GPU numbers below were actually measured
         public double GpuTemp = double.NaN, GpuLoad = double.NaN, GpuWatts = double.NaN, GpuMhz = double.NaN;
         public ulong GpuLimits = ulong.MaxValue;          // NVML clock event reasons (what holds the GPU clock back); MaxValue = unknown
+        public bool GpuAsleep;                            // the dGPU was in D3 at the last check: GpuTemp is the reading from before it slept
         public bool OnBattery;
         public int BatteryPercent = -1;
     }
@@ -210,7 +211,7 @@ namespace Ohman {
                     if (gpuQuiet >= 3) CloseNvml();             // quiet: let it sleep, nothing of ours held open
                     if (!double.IsNaN(s.GpuTemp)) s.GpuRead = DateTime.Now;
                 }
-                else lock (sync) { s.GpuTemp = last.GpuTemp; s.GpuLoad = last.GpuLoad; s.GpuWatts = last.GpuWatts; s.GpuMhz = last.GpuMhz; s.GpuLimits = last.GpuLimits; s.GpuRead = last.GpuRead; }
+                else lock (sync) { s.GpuTemp = last.GpuTemp; s.GpuLoad = last.GpuLoad; s.GpuWatts = last.GpuWatts; s.GpuMhz = last.GpuMhz; s.GpuLimits = last.GpuLimits; s.GpuRead = last.GpuRead; s.GpuAsleep = last.GpuAsleep; }
                 // carrying the last number forward is fine for a display; it is not fine for the fan curve, which would
                 // believe an idle GPU while a job heats it up between two backed-off reads
                 if (s.GpuRead != DateTime.MinValue && (DateTime.Now - s.GpuRead).TotalMilliseconds > GpuStaleMs) { s.GpuTemp = double.NaN; s.GpuLoad = double.NaN; s.GpuWatts = double.NaN; s.GpuMhz = double.NaN; s.GpuLimits = ulong.MaxValue; }
@@ -283,7 +284,9 @@ namespace Ohman {
             // It cannot heat up while it sleeps, so its last reading stays good; without this it went stale and the
             // Home page showed an unknown GPU temperature on every hybrid laptop idling on the iGPU.
             // Its temperature stays good while it sleeps; its load, power, clock and limits do not: a GPU in D3 does nothing.
-            if (GpuAsleep()) { CloseNvml(); lastNv = DateTime.Now; lock (sync) { if (last != null && last.GpuRead != DateTime.MinValue) { last.GpuRead = DateTime.Now; last.GpuLoad = 0; last.GpuWatts = 0; last.GpuMhz = double.NaN; last.GpuLimits = ulong.MaxValue; } } return false; }
+            // Good for the display only: it is the temperature it went to sleep at, not what it is now, and it cools from
+            // there. Flagged so the fan curve does not hold the fans on it for hours after a game (#95).
+            if (GpuAsleep()) { CloseNvml(); lastNv = DateTime.Now; lock (sync) { if (last != null) { last.GpuAsleep = true; if (last.GpuRead != DateTime.MinValue) { last.GpuRead = DateTime.Now; last.GpuLoad = 0; last.GpuWatts = 0; last.GpuMhz = double.NaN; last.GpuLimits = ulong.MaxValue; } } } return false; }
             return true;
         }
 
