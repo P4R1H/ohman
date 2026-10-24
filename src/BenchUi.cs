@@ -37,6 +37,10 @@ namespace Ohman {
         public static string F1(double v) { return double.IsNaN(v) || double.IsInfinity(v) ? "--" : v.ToString("0.0", Inv); }
         public static string F2(double v) { return double.IsNaN(v) || double.IsInfinity(v) ? "--" : v.ToString("0.00", Inv); }
         public static string K(double rpm) { return double.IsNaN(rpm) ? "--" : rpm >= 1000 ? (rpm / 1000).ToString("0.0", Inv) + "k" : rpm.ToString("0", Inv); }
+        /// <summary>A change in fps as the page, the Runs list and the card all write it: a sign, no decimals.</summary>
+        public static string Delta(double d) { return (d >= 0 ? "+" : "−") + Math.Abs(d).ToString("0", Inv); }
+        /// <summary>Its colour: grey under half a frame, green up, amber down.</summary>
+        public static Color DeltaColor(double d) { return Math.Abs(d) < 0.5 ? Ref : d > 0 ? Good : WarnText; }
         public static string Clock(double s) { if (double.IsNaN(s) || s < 0) s = 0; int t = (int)Math.Round(s); return (t / 60) + ":" + (t % 60).ToString("00", Inv); }
         public static Geometry Geo(string d) { var g = Geometry.Parse(d); g.Freeze(); return g; }
     }
@@ -440,7 +444,6 @@ namespace Ohman {
             settingsBox.Visibility = Visibility.Collapsed; settingsBox.Margin = new Thickness(-6, -3, 12, -3);
             settingsBox.KeyDown += delegate(object o, KeyEventArgs ke) { if (ke.Key == Key.Enter) { CommitSettings(); ke.Handled = true; } else if (ke.Key == Key.Escape) { settingsBox.Visibility = Visibility.Collapsed; settingsBtn.Visibility = Visibility.Visible; ke.Handled = true; } };
             settingsBox.LostKeyboardFocus += delegate { CommitSettings(); };
-            meta.ColumnDefinitions.Add(new ColumnDefinition()); meta.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             meta.Children.Add(settingsBtn); meta.Children.Add(settingsBox);
             Grid.SetRow(meta, 2);
             dash.Children.Add(meta);
@@ -521,40 +524,62 @@ namespace Ohman {
             heroTile.Child = g;
         }
         /// <summary>The hero's numbers: FPS and the two lows, and the bars of the runs before this one in the same setup
-        /// (the same game, mode, resolution and power source) with what changed. r is the run on show, or null live.</summary>
-        void Hero(string fps, string low1, string low01, BenchRun r, double liveFps, Color mode) {
+        /// (the same game, mode, resolution and power source) with what changed. r is the run on show; live, setup is the
+        /// running one (null before it has a game) and note says what the live number is.</summary>
+        void Hero(string fps, string low1, string low01, BenchRun r, BenchRun setup, double liveFps, Color mode, string note) {
             heroFps.Text = fps; heroLow.Text = low1; heroLow01.Text = low01; heroFps.Foreground = Ui.TextB;
             heroLow.Foreground = Ui.Brush(mode); heroLow01.Foreground = Ui.TextB;
-            var before = new List<double>();
-            BenchRun prev = null;
-            if (r != null) {
-                var all = Runs();
-                for (int i = all.Count - 1; i >= 0; i--) { var o = all[i]; if (o.Id != r.Id && o.Started < r.Started && r.SameSetup(o)) before.Add(o.AvgFps); }
-                prev = Previous(r);
-                before.Add(r.AvgFps);
-                recent.Set(before, true, Ui.ModeColor(r.ModeIndex));
-            } else {
-                if (liveFps > 0) before.Add(liveFps);
-                recent.Set(before, liveFps > 0, mode);
-            }
-            if (r == null) { heroDelta.Text = liveFps > 0 ? "so far" : "your runs show up here"; heroDelta.Foreground = Ui.Foot; return; }
-            if (prev != null) {
-                double d = r.AvgFps - prev.AvgFps;
-                heroDelta.Inlines.Clear();
-                heroDelta.Inlines.Add(new Run((d >= 0 ? "+" : "−") + Math.Abs(d).ToString("0", CultureInfo.InvariantCulture) + " fps") { Foreground = Ui.Brush(Math.Abs(d) < 0.5 ? Ink.Ref : d > 0 ? Ink.Good : Ink.WarnText) });
-                heroDelta.Inlines.Add(new Run(" vs " + prev.Day) { Foreground = Ui.Foot });
-            } else {
+            BenchRun key = r ?? setup;
+            var before = new List<double>(Earlier(key));
+            BenchRun prev = r != null ? Previous(r) : null;
+            if (r != null) before.Add(r.AvgFps);
+            else if (liveFps > 0) before.Add(liveFps);
+            recent.Set(before, r != null || liveFps > 0, r != null ? Ui.ModeColor(r.ModeIndex) : mode);
+            string text, rest = ""; Color c = Ink.Ref; bool own = false;
+            if (r == null) { text = note; }
+            else if (prev != null) { double d = r.AvgFps - prev.AvgFps; text = Ink.Delta(d) + " fps"; rest = " vs " + prev.Day; c = Ink.DeltaColor(d); own = true; }
+            else {
                 bool modeBefore = false;
                 foreach (var o in Runs()) if (o.Id != r.Id && string.Equals(o.Exe, r.Exe, StringComparison.OrdinalIgnoreCase) && o.ModeIndex == r.ModeIndex && o.Started < r.Started) { modeBefore = true; break; }
-                heroDelta.Inlines.Clear();
-                heroDelta.Inlines.Add(new Run(modeBefore ? "first in this setup" : "first " + Engine.ModeNames[r.ModeIndex] + " run") { Foreground = Ui.TextB });
+                text = modeBefore ? "first in this setup" : "first " + Engine.ModeNames[r.ModeIndex] + " run";
+                c = Ui.Col("#EDEAE8"); own = true;
             }
+            string k = text + "|" + rest + "|" + c;
+            if (k == heroDeltaKey) return;                   // Render runs every second; the line only changes with the run
+            heroDeltaKey = k;
+            heroDelta.Inlines.Clear();
+            heroDelta.Inlines.Add(new Run(text) { Foreground = own ? Ui.Brush(c) : Ui.Foot });
+            if (rest.Length > 0) heroDelta.Inlines.Add(new Run(rest) { Foreground = Ui.Foot });
+        }
+        string heroDeltaKey = "";
+        // the earlier runs of one setup, oldest first, kept until the run on show or the list of runs changes
+        List<double> earlier = new List<double>();
+        string earlierFor = "";
+        List<BenchRun> earlierFrom;
+        List<double> Earlier(BenchRun key) {
+            var all = Runs();
+            string id = key == null ? "" : key.Id + "|" + key.Exe + "|" + key.ModeIndex + "|" + key.ResW + "x" + key.ResH + "|" + key.OnAc;
+            if (id == earlierFor && ReferenceEquals(all, earlierFrom)) return earlier;
+            earlierFor = id; earlierFrom = all;
+            earlier = new List<double>();
+            if (key != null)
+                for (int i = all.Count - 1; i >= 0; i--) { var o = all[i]; if (o.Id != key.Id && o.Started < key.Started && key.SameSetup(o)) earlier.Add(o.AvgFps); }
+            return earlier;
+        }
+        /// <summary>The running benchmark as a run that has not been saved yet: enough for SameSetup, started now.</summary>
+        static BenchRun LiveSetup(BenchView v) {
+            if (string.IsNullOrEmpty(v.Exe)) return null;
+            return new BenchRun { Id = "live", Exe = v.Exe, ModeIndex = v.Mode, ResW = v.ResW, ResH = v.ResH, OnAc = v.OnAc, Started = DateTime.MaxValue };
         }
         string graphNote = "";
         void FtLine(string a, string b) { ftAs = a; ftBs = b; }
+        string underKey = "";
         /// <summary>The line under the graph. On FPS it is the run's frame time; on the others, the graph's own note
         /// (peak, how fast it is settling, the other fan), so the header can stay one name and one number.</summary>
         void UnderLine(int g0) {
+            string k = g0 + "|" + graphTag + "|" + ftAs + "|" + ftBs + "|" + subAv.Text + "|" + subAt.Text + "|" + graphNote + "|" + subAv.Foreground;
+            if (k == underKey) return;                       // the same line as a second ago: nothing to lay out again
+            underKey = k;
             ftLine.Inlines.Clear();
             if (graphTag.Length > 0) ftLine.Inlines.Add(new Run(graphTag + "  ") { Foreground = Ui.Accent });
             if (g0 == 0 && ftAs.Length > 0) {
@@ -1038,7 +1063,7 @@ namespace Ohman {
             chart.Repaint();
             // frame time
             FtLine(Ink.F1(r.FtP50) + " ms", " · p99 " + Ink.F1(r.FtP99) + " · stutter " + Ink.F1(r.StutterPct) + "%");
-            Hero(Ink.F0(r.AvgFps), double.IsNaN(r.Low1) ? "—" : Ink.F0(r.Low1), double.IsNaN(r.Low01) ? "—" : Ink.F0(r.Low01), r, double.NaN, Ui.ModeColor(r.ModeIndex));
+            Hero(Ink.F0(r.AvgFps), double.IsNaN(r.Low1) ? "—" : Ink.F0(r.Low1), double.IsNaN(r.Low01) ? "—" : Ink.F0(r.Low01), r, null, double.NaN, Ui.ModeColor(r.ModeIndex), "");
             UnderLine(g0);
             Tiles(r.CpuTAvg, r.CpuTMax, r.CpuWAvg, r.CpuMhzAvg, r.GpuTAvg, r.GpuTMax, r.GpuWAvg, r.GpuMhzAvg, r.FpsPerWatt,
                 Nz(r.Fan1Avg), Nz(r.Fan2Avg), true, r.RpmPerLevel, r.FanCeiling);
@@ -1112,15 +1137,17 @@ namespace Ohman {
                 var so = SoFar();
                 if (so == null) FtLine("", "");
                 else FtLine(Ink.F1(so.P50) + " ms", " · p99 " + Ink.F1(so.P99) + " · stutter " + Ink.F1(so.StutterPct) + "%");
+                // under 30 frames there is no average yet: the number is the rate right now, grey like the warm-up's
                 double avg = so == null ? v.LiveFps : so.AvgFps;
-                Hero(Ink.F0(avg), so == null || double.IsNaN(so.Low1) ? "--" : Ink.F0(so.Low1), so == null || double.IsNaN(so.Low01) ? "--" : Ink.F0(so.Low01), null, avg, Ui.Accent.Color);
+                Hero(Ink.F0(avg), so == null || double.IsNaN(so.Low1) ? "--" : Ink.F0(so.Low1), so == null || double.IsNaN(so.Low01) ? "--" : Ink.F0(so.Low01), null, LiveSetup(v),
+                    so == null ? double.NaN : avg, Ui.Accent.Color, so == null ? "counting frames" : "so far");
             } else {
                 soFar = null; soFarFt = null; soFarAt = 0;
                 FtLine("", "");
-                Hero(warming && v.LiveFps > 0 ? Ink.F0(v.LiveFps) : "--", "--", "--", null, double.NaN, Ui.Accent.Color);
-                if (warming) heroDelta.Text = "warming up, not counted";
+                string note = warming ? "warming up, not counted" : v.Phase == BenchPhase.Waiting ? "waiting for a game" : "your runs show up here";
+                Hero(warming && v.LiveFps > 0 ? Ink.F0(v.LiveFps) : "--", "--", "--", null, LiveSetup(v), double.NaN, Ui.Accent.Color, note);
             }
-            heroFps.Foreground = measuring ? Ui.TextB : Ui.Sub;      // not counted yet, so not the run's number
+            heroFps.Foreground = measuring && SoFar() != null ? Ui.TextB : Ui.Sub;      // not counted yet, so not the run's number
             UnderLine(g0);
             // tiles from the latest reading
             int f1 = fans == null ? -1 : fans[0], fan2 = fans == null ? -1 : fans[1];
@@ -1203,7 +1230,7 @@ namespace Ohman {
             sub.Inlines.Add(new Run(" low" + tail));
             if (d.HasValue) {
                 sub.Inlines.Add(new Run(" · "));
-                sub.Inlines.Add(new Run((d.Value >= 0 ? "+" : "−") + Math.Abs(d.Value).ToString("0", CultureInfo.InvariantCulture) + " fps") { Foreground = Ui.Brush(Math.Abs(d.Value) < 0.5 ? Ink.Ref : d.Value > 0 ? Ink.Good : Ink.WarnText) });
+                sub.Inlines.Add(new Run(Ink.Delta(d.Value) + " fps") { Foreground = Ui.Brush(Ink.DeltaColor(d.Value)) });
             }
         }
         FrameworkElement Row(BenchRun r) {
@@ -1226,7 +1253,7 @@ namespace Ohman {
             mid.Children.Add(l1); mid.Children.Add(l2);
             var prev = Previous(r);
             var d = Ink.Mono(11, Ui.Foot); d.HorizontalAlignment = HorizontalAlignment.Right;
-            if (prev != null) { double dv = r.AvgFps - prev.AvgFps; d.Text = (dv >= 0 ? "+" : "−") + Math.Abs(dv).ToString("0", CultureInfo.InvariantCulture); d.Foreground = Ui.Brush(Math.Abs(dv) < 0.5 ? Ink.Ref : dv > 0 ? Ink.Good : Ink.WarnText); }
+            if (prev != null) { double dv = r.AvgFps - prev.AvgFps; d.Text = Ink.Delta(dv); d.Foreground = Ui.Brush(Ink.DeltaColor(dv)); }
             Grid.SetColumn(mid, 1); Grid.SetColumn(d, 2);
             g.Children.Add(nums); g.Children.Add(mid); g.Children.Add(d);
             // Delete (#85): a bin on hover where the delta sits; one click asks, the second deletes. No dialog over a game.
@@ -1532,7 +1559,7 @@ namespace Ohman {
                 c.Children.Add(Chip(r.Local.ToString("d MMM yyyy", CultureInfo.InvariantCulture), Dim));
                 if (prev != null) {
                     double d = r.AvgFps - prev.AvgFps;
-                    c.Children.Add(Chip((d >= 0 ? "+" : "−") + Math.Abs(d).ToString("0", CultureInfo.InvariantCulture) + " fps vs " + prev.Day, Ui.Brush(Math.Abs(d) < 0.5 ? Ink.Ref : d > 0 ? Ink.Good : Ink.WarnText)));
+                    c.Children.Add(Chip(Ink.Delta(d) + " fps vs " + prev.Day, Ui.Brush(Ink.DeltaColor(d))));
                 }
                 foreach (string f in r.Flags) c.Children.Add(Chip(f, Ui.Brush(Ink.WarnText)));
                 hl.Children.Add(c);

@@ -1575,7 +1575,8 @@ namespace Ohman {
                 return new BenchView {
                     Phase = Phase, Error = Error, Paused = Paused, Game = Game, Exe = Exe, Window = Window, WarmSec = WarmSec, MeasuredSec = MeasuredSec, CountLeft = CountLeft,
                     WarmSlope = WarmSlope, LiveFps = LiveFps, WarmChoice = WarmChoice, MeasureChoice = MeasureChoice, MeasureTarget = MeasureTarget,
-                    WarmTemps = WarmTemps.ToArray(), Live = Live.ToArray(), Frames = frames.Count, GuardFired = GuardFired
+                    WarmTemps = WarmTemps.ToArray(), Live = Live.ToArray(), Frames = frames.Count, GuardFired = GuardFired,
+                    Mode = startMode, OnAc = startOnAc, ResW = resW, ResH = resH
                 };
             }
         }
@@ -1603,6 +1604,8 @@ namespace Ohman {
         public IntPtr Window;
         public double WarmSec, MeasuredSec, CountLeft, WarmSlope, LiveFps;
         public int WarmChoice, MeasureChoice, MeasureTarget, Frames;
+        public int Mode, ResW, ResH;                     // the setup the run will be saved with (SameSetup), as far as it is known
+        public bool OnAc;
         public double[] WarmTemps;
         public BenchSample[] Live;
     }
