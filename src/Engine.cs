@@ -1568,29 +1568,39 @@ namespace Ohman {
         // setting matters, until the firmware answers. Its own no (BiosException) still ends it. 0x21 is a read.
         bool gpuProbePending;
         int gpuProbeFailures;
+        // Both GPU retries (the 0x21 question and a failed 0x22) back off from one heartbeat to 15 minutes. Where the GPU's
+        // sleep cannot be seen (no NVML, an AMD dGPU, iGPU-only with the device gone) nothing else would stop a call that
+        // always fails as a call from going out every 45 s for the whole session.
+        DateTime gpuRetryAt = DateTime.MinValue;
+        int gpuRetryGap;
+        bool GpuRetryDue { get { return DateTime.Now >= gpuRetryAt; } }
+        void GpuRetryFailed() { gpuRetryGap = gpuRetryGap == 0 ? 45 : Math.Min(900, gpuRetryGap * 2); gpuRetryAt = DateTime.Now.AddSeconds(gpuRetryGap); }
+        void GpuRetryReset() { gpuRetryGap = 0; gpuRetryAt = DateTime.MinValue; }
         /// <summary>Under applySync (the heartbeat). The first answer turns GPU power on exactly as if the start had seen it.</summary>
         void RetryGpuProbe() {
-            if (!gpuProbePending || P.HasGpuPower || ReadOnly || GpuAsleep) return;
+            if (!gpuProbePending || P.HasGpuPower || ReadOnly || GpuAsleep || !GpuRetryDue) return;
             try {
                 Hw.GetGpuPower();
                 P.HasGpuPower = true;
                 gpuProbePending = false;
+                GpuRetryReset();
                 Log.Write("generic profile: the GPU power query answered after " + gpuProbeFailures + " more failures; gpuPower=True");
                 ApplyGpuCore();
                 Changed();
             } catch (BiosException ex) { gpuProbePending = false; Log.Write("generic: no GPU power control (" + ex.Message + ")"); }
-            catch (Exception ex) { if (++gpuProbeFailures == 5) Log.Write("generic: GPU power query still failing with the GPU awake (" + ex.Message + "); still asking each heartbeat"); }
+            catch (Exception ex) { GpuRetryFailed(); if (++gpuProbeFailures == 5) Log.Write("generic: GPU power query still failing with the GPU awake (" + ex.Message + "); asking less and less often"); }
         }
-        bool gpuWriteFailed;                // the last 0x22 failed as a call (not a firmware no): the heartbeat sends it again
+        bool gpuWriteFailed;                // the last 0x22 failed as a call (not a firmware no): the heartbeat sends the current level again
         void ApplyGpuCore() { ApplyGpuCore(true); }
         void ApplyGpuCore(bool toast) {
-            if (!P.HasGpuPower) return;
+            if (!P.HasGpuPower) { gpuWriteFailed = false; return; }
             // payloads come from the platform profile (Transcend 14: Base {0,0,1,75}, Boost {0,1,1,87}, Max {1,1,1,87} as OGH sends them)
             GpuLevel g = EffectiveGpu;
             byte[] p = g == GpuLevel.Max ? P.GpuMax : g == GpuLevel.Boost ? P.GpuBoost : P.GpuBase;
             Exception err;
             bool ok = Try(delegate { Hw.SetGpuPower(p[0] != 0, p[1] != 0, p[3]); }, "GPU power", toast, out err);
             gpuWriteFailed = !ok && err != null && !(err is BiosException);
+            if (gpuWriteFailed) GpuRetryFailed(); else if (ok) GpuRetryReset();
         }
 
         public void SetMode(int index, bool announce) {
@@ -1731,7 +1741,7 @@ namespace Ohman {
                     if (!ReadOnly) Try(delegate { Hw.SetMode(ModeByte, FansByBios); }, "Set mode");   // fans are handled by FanTick; this only pins mode and power
                     ApplyPowerCore();
                     RetryGpuProbe();
-                    if (gpuWriteFailed && !GpuAsleep) ApplyGpuCore(false);   // the same payload, once the GPU can take it
+                    if (gpuWriteFailed && !GpuAsleep && GpuRetryDue) ApplyGpuCore(false);   // the current level, once the GPU can take it
                     LastHeartbeat = DateTime.Now;
                 }
                 if (S.SuppressOgh && !Hw.IsDemo && Supported) KillOgh();
@@ -2057,6 +2067,9 @@ namespace Ohman {
         }
 
         // ---------- keyboard lighting ----------
+        /// <summary>What was detected when the owner had hidden the keyboard page, else null: a hidden keyboard and no keyboard
+        /// read the same from Light alone.</summary>
+        public string LightHidden;
         void InitLight(bool apply = true) {
             try {
                 // Not !ReadOnly (see TryLight), but not a desktop either: there is no built-in keyboard for 0x20009 to light,
@@ -2077,7 +2090,7 @@ namespace Ohman {
                 // Detect has only read; from here on nothing is written, and
                 // the Fn key keeps working because the firmware handles it without us. Not on the probe-only path:
                 // the support report should still say what keyboard this is.
-                if (apply && Light != null && S.HideLight) { Log.Write("keyboard lighting: hidden in Settings (" + Light.Describe + " detected); the keyboard is left alone"); Light = null; return; }
+                if (apply && Light != null && S.HideLight) { Log.Write("keyboard lighting: hidden in Settings (" + Light.Describe + " detected); the keyboard is left alone"); LightHidden = Light.Describe; Light = null; return; }
                 // A per-key board answers the firmware calls and lights nothing by them. Its colours live on the
                 // keyboard's own HID lighting interface, so look for that before giving up on it.
                 // The Primax keyboards of the 2021-2024 OMEN 16/17 (0461:4E9A / 4E9B) come first: they have no
@@ -2288,7 +2301,7 @@ namespace Ohman {
             try { sb.AppendLine("gpu power: " + Hw.GetGpuPower()); } catch (Exception ex) { sb.AppendLine("gpu power: " + ex.Message); }
             sb.AppendLine("settings: mode=" + ModeName + " (BIOS 0x" + ModeByte.ToString("X2") + (OnBattery ? ", DC" : ", AC") + ") fan=" + S.Fan + " " + S.Fan1 + "/" + S.Fan2 + " tdp=" + CurrentTdp + "W gpu=" + EffectiveGpu + (S.GpuAuto ? "(auto)" : "") + " key=" + KeyId + "/" + KeyData + "→" + S.Key + " ecoCool=" + S.EcoCool);
             sb.AppendLine("graphics: " + (GpuMode >= 0 && GpuMode < 4 ? GpuModeNames[GpuMode] : "unknown") + " (offered mask 0x" + Info.GpuModes.ToString("X2") + ")" + (GpuModePending >= 0 ? " -> " + GpuModeNames[GpuModePending] + " after restart" : ""));
-            sb.AppendLine("lighting: " + (Light == null ? (S.HideLight ? "hidden in Settings" : "none") : Light.Describe + " mode=" + S.Light + " level=" + S.LightLevel + " colours=" + S.LightColors + " windowsControl=" + WinLighting.HasControl));
+            sb.AppendLine("lighting: " + (Light == null ? (LightHidden != null ? "hidden in Settings (" + LightHidden + ")" : "none") : Light.Describe + " mode=" + S.Light + " level=" + S.LightLevel + " colours=" + S.LightColors + " windowsControl=" + WinLighting.HasControl));
             // Which top the fan page divides by and where it came from. Two identical boards showing different
             // ceilings cannot be told apart without this: the profile/table value, then what was measured here.
             sb.AppendLine("fan ceiling: " + (P.Curve != null ? P.Curve.Ceiling : -1) + "  (profile/table " + pristineCeiling + ", learned " + (S.FanCeilingSeen > 0 ? "" + S.FanCeilingSeen : "none")

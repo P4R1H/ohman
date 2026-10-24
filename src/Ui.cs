@@ -1635,8 +1635,9 @@ namespace Ohman {
             kbdBig.Level = kbdMini.Level = S.LightLevel / 100.0;
             if (!pick) { kbdBig.Selected.Clear(); kbdBig.Hover.Clear(); }
             string fxName = new[] { "static", "breathe", "cycle", "wave" }[Math.Max(0, Math.Min(3, fx))];
-            // breathe runs in the firmware too, but it breathes the colours you picked, so it is not "colour fixed"
-            txtKbdStatus.Text = untouched ? "per-key · keyboard's own lighting" : inert && m != 2 ? "per-key · no interface we can drive" : m == 2 ? "windows lighting" : m == 0 ? "backlight off" : fx >= 2 ? "firmware effect · colour fixed" : E.Light.Describe + " · " + fxName;
+            // Cycle and wave paint colours of their own, so the picker has nothing to set; Ohman draws them itself on a
+            // four-zone keyboard, so "firmware effect" was wrong there (#87 read it as a firmware limit).
+            txtKbdStatus.Text = untouched ? "per-key · keyboard's own lighting" : inert && m != 2 ? "per-key · no interface we can drive" : m == 2 ? "windows lighting" : m == 0 ? "backlight off" : fx >= 2 ? E.Light.Describe + " · " + fxName + " · own colours" : E.Light.Describe + " · " + fxName;
             UpdateSelectionText();
             miniNeedsFrame = true;
             kbdBig.Repaint();
