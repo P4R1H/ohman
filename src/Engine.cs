@@ -539,8 +539,8 @@ namespace Ohman {
                         catch (BiosException ex) { Log.Write("generic: no GPU power control (" + ex.Message + ")"); }
                         // A WMI failure is not the firmware saying no: 8D2F answers 0x21 in one session and fails the call in
                         // the next (#81), and 8D40 failed it in its support run (#91), so its GPU stayed at the default limit
-                        // while OGH set it to Max. Ask again from the heartbeat a few times before taking it as absent.
-                        catch (Exception ex) { gpuProbeLeft = GpuProbeRetries; Log.Write("generic: GPU power query failed (" + ex.Message + "); asking again"); }
+                        // while OGH set it to Max. Ask again from the heartbeat until it answers either way.
+                        catch (Exception ex) { gpuProbePending = true; Log.Write("generic: GPU power query failed (" + ex.Message + "); asking again while the GPU is awake"); }
                         try { int top = Hw.GetFanTableMax(); if (top > g.Curve.Ceiling) g.Curve.Rescale(top); } catch { }
                         P = g;
                         Supported = true;
@@ -1562,29 +1562,35 @@ namespace Ohman {
                 if (why != cpuLimitWhy) { cpuLimitWhy = why; Log.Write(why == null ? "cpu limits: PL1 " + pl1 + " W, PL2 " + pl2 + " W (" + ModeName + ", OGH's values)" : "cpu limits not set: " + why); }
             }
         }
-        const int GpuProbeRetries = 5;
-        int gpuProbeLeft;
-        /// <summary>The start-up 0x21 query failed as a call rather than being answered no; ask again, and the first answer
-        /// turns GPU power on for the session exactly as if the start had seen it. Under applySync (the heartbeat).</summary>
+        // The failure follows the GPU, not the board: 8D2F fails 0x21 in iGPU-only mode and answers it in Hybrid (#81).
+        // Five tries was under four minutes of a desktop with the dGPU asleep (#91): the game started later and nothing
+        // asked again. So ask on every heartbeat while the dGPU is awake, which is when the call can answer and when the
+        // setting matters, until the firmware answers. Its own no (BiosException) still ends it. 0x21 is a read.
+        bool gpuProbePending;
+        int gpuProbeFailures;
+        /// <summary>Under applySync (the heartbeat). The first answer turns GPU power on exactly as if the start had seen it.</summary>
         void RetryGpuProbe() {
-            if (gpuProbeLeft <= 0 || P.HasGpuPower || ReadOnly) return;
-            gpuProbeLeft--;
+            if (!gpuProbePending || P.HasGpuPower || ReadOnly || GpuAsleep) return;
             try {
                 Hw.GetGpuPower();
                 P.HasGpuPower = true;
-                gpuProbeLeft = 0;
-                Log.Write("generic profile: the GPU power query answered on a later try; gpuPower=True");
+                gpuProbePending = false;
+                Log.Write("generic profile: the GPU power query answered after " + gpuProbeFailures + " more failures; gpuPower=True");
                 ApplyGpuCore();
                 Changed();
-            } catch (BiosException ex) { gpuProbeLeft = 0; Log.Write("generic: no GPU power control (" + ex.Message + ")"); }
-            catch (Exception ex) { if (gpuProbeLeft == 0) Log.Write("generic: GPU power query still failing (" + ex.Message + "); not offered this session"); }
+            } catch (BiosException ex) { gpuProbePending = false; Log.Write("generic: no GPU power control (" + ex.Message + ")"); }
+            catch (Exception ex) { if (++gpuProbeFailures == 5) Log.Write("generic: GPU power query still failing with the GPU awake (" + ex.Message + "); still asking each heartbeat"); }
         }
-        void ApplyGpuCore() {
+        bool gpuWriteFailed;                // the last 0x22 failed as a call (not a firmware no): the heartbeat sends it again
+        void ApplyGpuCore() { ApplyGpuCore(true); }
+        void ApplyGpuCore(bool toast) {
             if (!P.HasGpuPower) return;
             // payloads come from the platform profile (Transcend 14: Base {0,0,1,75}, Boost {0,1,1,87}, Max {1,1,1,87} as OGH sends them)
             GpuLevel g = EffectiveGpu;
             byte[] p = g == GpuLevel.Max ? P.GpuMax : g == GpuLevel.Boost ? P.GpuBoost : P.GpuBase;
-            Try(delegate { Hw.SetGpuPower(p[0] != 0, p[1] != 0, p[3]); }, "GPU power");
+            Exception err;
+            bool ok = Try(delegate { Hw.SetGpuPower(p[0] != 0, p[1] != 0, p[3]); }, "GPU power", toast, out err);
+            gpuWriteFailed = !ok && err != null && !(err is BiosException);
         }
 
         public void SetMode(int index, bool announce) {
@@ -1721,9 +1727,11 @@ namespace Ohman {
                 lock (applySync) {
                     if (stopping) return;               // after the exit hand-off: a mode without the BIOS byte would undo it
                     if (GuardActive) GuardFans();
-                    Try(delegate { Hw.SetMode(ModeByte, FansByBios); }, "Set mode");   // fans are handled by FanTick; this only pins mode and power
+                    // Read-only: no mode to pin, and Try would log the skip on every heartbeat forever (8574, #97).
+                    if (!ReadOnly) Try(delegate { Hw.SetMode(ModeByte, FansByBios); }, "Set mode");   // fans are handled by FanTick; this only pins mode and power
                     ApplyPowerCore();
                     RetryGpuProbe();
+                    if (gpuWriteFailed && !GpuAsleep) ApplyGpuCore(false);   // the same payload, once the GPU can take it
                     LastHeartbeat = DateTime.Now;
                 }
                 if (S.SuppressOgh && !Hw.IsDemo && Supported) KillOgh();
@@ -2217,10 +2225,11 @@ namespace Ohman {
 
         /// <summary>Where a zone sits in the wave. The wave used to step through the colour-table numbering, which says
         /// nothing about where a zone is, so on a four-zone board the colour jumped instead of flowing across (#87).
-        /// It goes by position now: left, WASD just inside it, middle, right.</summary>
+        /// It goes by position now: left, middle, right, and WASD with the left block it sits in. A step of its own
+        /// made WASD a different colour from the keys around it on the keyboard (#87).</summary>
         static double WaveOffset(int zones, int i) {
             if (zones == 4) {
-                double pos = i == KeyboardLayouts.ZoneLeft ? 0 : i == KeyboardLayouts.ZoneWasd ? 0.35 : i == KeyboardLayouts.ZoneMiddle ? 1 : 2;
+                double pos = i == KeyboardLayouts.ZoneLeft || i == KeyboardLayouts.ZoneWasd ? 0 : i == KeyboardLayouts.ZoneMiddle ? 1 : 2;
                 return -pos * 70;                   // about 70 degrees of hue per zone, travelling left to right
             }
             return i * (360.0 / Math.Max(1, zones));

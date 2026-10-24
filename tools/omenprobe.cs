@@ -1,6 +1,6 @@
 ﻿// omenprobe â€” tiny CLI to exercise the HP hpqBIntM WMI BIOS interface. Must run elevated.
 // Usage:
-//   omenprobe read                          -> run every known read command, print raw bytes
+//   omenprobe read                          -> the documented read-only queries, print raw bytes
 //   omenprobe call <typeHex> <outSize> [bytes...]   e.g. call 1A 4 FF 31 00 00
 //   omenprobe maxfan                        -> does max fan actually do anything on this board?
 //   omenprobe fan <level>                   -> write one fan level to both fans and read it back
@@ -77,28 +77,21 @@ static class P {
     static int Main(string[] a) {
         try {
             if (a.Length == 0 || a[0] == "read") {
+                // Only queries a reference names as reads under 0x20008: hp-wmi.c's hp_wmi_gm_commandtype (0x11, 0x21, 0x26,
+                // 0x28, 0x2D, 0x2F) and the ones Ohman itself sends after OmenMon (0x23, 0x2B, 0x2C), at the sizes Ohman uses.
+                // HP mixes getters and setters in one opcode space with no naming rule (0x19 sets XMP, 0x31 sets idle), and
+                // 0x10 is the firmware's fan trigger, so an opcode nobody documents is not known to be a read. An 8DD2 hard
+                // reset while this ran with twelve more of them (#98) is reason enough not to find out on someone's laptop.
                 byte[] z4 = { 0, 0, 0, 0 };
                 Try("GetFanLevel(0x2D)", 0x2D, z4, 128);
                 Try("GetFanTable(0x2F)", 0x2F, z4, 128);
-                Try("GetFanMode?(0x0F)", 0x0F, z4, 4);      // hp-wmi: HPWMI_FAN_SPEED_GET_QUERY? cross-check
+                Try("GetFanType(0x2C)", 0x2C, z4, 128);
+                Try("GetFanSpeed(0x11)", 0x11, z4, 4);
                 Try("GetMaxFan(0x26)", 0x26, z4, 4);
                 Try("GetTemp(0x23)", 0x23, z4, 4);
                 Try("GetGpuPower(0x21)", 0x21, z4, 4);
                 Try("GetSystemDesign(0x28)", 0x28, z4, 128);
-                Try("GetSystemDesign(0x28)/1024", 0x28, z4, 1024);
-                Try("GetTemp0x23/128", 0x23, z4, 128);
-                Try("GetFanRpm?(0x2C)", 0x2C, z4, 128);
-                Try("GetPerfMode?(0x1B)", 0x1B, z4, 4);
                 Try("GetKbdType(0x2B)", 0x2B, z4, 4);
-                Try("GetBiosStatus?(0x30)", 0x30, z4, 4);
-                Try("GetCpuPower?(0x2A)", 0x2A, z4, 4);
-                Try("Get0x11", 0x11, z4, 4);
-                Try("Get0x12", 0x12, z4, 4);
-                Try("Get0x13", 0x13, z4, 4);
-                Try("Get0x24", 0x24, z4, 4);
-                Try("Get0x25", 0x25, z4, 4);
-                Try("GetThermalPolicyVer?(0x35)", 0x35, z4, 4);
-                Try("GetBorn(0x36)", 0x36, z4, 128);
                 return 0;
             }
             if (a[0] == "call") {

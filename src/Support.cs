@@ -145,7 +145,7 @@ namespace Ohman {
                 sb.AppendLine("Mode bytes: eco 0x" + e.P.ModeEco.ToString("X2") + " balanced 0x" + e.P.ModeBalanced.ToString("X2")
                     + " performance 0x" + e.P.ModePerformance.ToString("X2") + " (v" + e.P.ThermalPolicy + ")"
                     + (e.P.ModeEco == e.P.ModeBalanced ? "  [eco and balanced are the same byte on this firmware]" : ""));
-            sb.AppendLine("Fans: " + (e.FanCount > 0 ? "" + e.FanCount : "not reported") + "   Lighting: " + (e.Light == null ? "none detected" : e.Light.Describe));
+            sb.AppendLine("Fans: " + (e.FanCount > 0 ? "" + e.FanCount : "not reported") + "   Lighting: " + (e.Light == null ? (e.S.HideLight ? "hidden in Settings" : "none detected") : e.Light.Describe));
             sb.AppendLine("Power gain: " + (e.Supported && e.P != null && e.P.HasPowerGain ? "yes" : "no") + "   GPU power: " + (e.Supported && e.P != null && e.P.HasGpuPower ? "yes" : "no"));
             if (e.LastError.Length > 0) sb.AppendLine("Last BIOS error: " + Scrub(e.LastError));
             sb.AppendLine();
@@ -384,7 +384,7 @@ namespace Ohman {
                     + " performance 0x" + e.P.ModePerformance.ToString("X2") + " cool 0x" + e.P.ModeCool.ToString("X2")
                     + "   (v" + e.P.ThermalPolicy + ")"
                     + (e.P.ModeEco == e.P.ModeBalanced ? "   <- eco and balanced are the same byte on this firmware" : ""));
-            sb.AppendLine("  lighting: " + (e.Light == null ? "none detected" : e.Light.Describe + (e.Light.Inert ? "  (firmware answers but drives nothing; per-key board)" : "")));
+            sb.AppendLine("  lighting: " + (e.Light == null ? (e.S.HideLight ? "hidden in Settings by the owner" : "none detected") : e.Light.Describe + (e.Light.Inert ? "  (firmware answers but drives nothing; per-key board)" : "")));
             sb.AppendLine("  fans:     " + e.FanCount + "   graphics: " + e.GpuMode);
             sb.AppendLine();
 

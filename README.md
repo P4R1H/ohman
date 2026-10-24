@@ -115,7 +115,7 @@ request; see [CONTRIBUTING.md](CONTRIBUTING.md).
 | | |
 |---|---|
 | `tools\support-info.cmd` | data for a support request |
-| `tools\verify.cmd` | read-only check of every query the app uses, plus a key-event capture |
+| `tools\verify.cmd` | read-only check of the documented firmware queries, plus a key-event capture |
 | `tools\lighttest.cmd` | read-only: every lighting device on the machine and which ones are switched on |
 | `tools\drivertest.cmd` | read-only: why the driver is or is not working, and what it reads next to what Ohman had without it |
 | `tools\powertest.ps1` | A/B the power-gain slider on GPU watts and clocks |
