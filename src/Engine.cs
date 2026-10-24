@@ -802,7 +802,12 @@ namespace Ohman {
             MarkStopping();
             try { workReady.Set(); } catch { }
             try { if (fx != null) fx.Dispose(); } catch { }
-            CloseDriver();
+            bool held = false;
+            try {
+                held = Monitor.TryEnter(applySync, 2000);
+                if (held) CloseDriver();
+                else Log.Write("driver close skipped: the hardware lock stayed busy for 2 s, so the driver is left open until the process exits");
+            } finally { if (held) Monitor.Exit(applySync); }
             try { if (fanTimer != null) fanTimer.Dispose(); } catch { }
             try { if (heartbeat != null) heartbeat.Dispose(); } catch { }
             try { if (guard != null) guard.Dispose(); } catch { }
