@@ -1,6 +1,7 @@
 ﻿// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman: the Benchmark page, the in-game pill and the share card. The page is one layout for every state: a step
-// strip, a chart that flips through every metric, the frame-time histogram, four sensor tiles, and one action row.
+// strip, the FPS beside the runs before it, a chart that flips through every metric, four sensors in a strip, and one
+// action row.
 // Built in code like the rest of the app's controls; every size and colour comes from the design canvas.
 using System;
 using System.Collections.Generic;
@@ -52,7 +53,7 @@ namespace Ohman {
         public double MinSpan = 10;
         public List<int> Marks = new List<int>();   // value indexes to draw a dashed pause marker before
         public SeriesChart() { Height = 74; SnapsToDevicePixels = true; }
-        protected override Size MeasureOverride(Size a) { return new Size(double.IsInfinity(a.Width) ? 224 : a.Width, 74); }
+        protected override Size MeasureOverride(Size a) { return new Size(double.IsInfinity(a.Width) ? 224 : a.Width, Height); }
         public void Repaint() { InvalidateVisual(); }
         protected override void OnRender(DrawingContext dc) {
             double W = ActualWidth, H = ActualHeight;
@@ -108,131 +109,71 @@ namespace Ohman {
         }
     }
 
-    /// <summary>The frame-time histogram, or a line saying why there is none yet.</summary>
-    sealed class FrameHist : FrameworkElement {
-        public double[] Bins;                     // 0..1 each, in proportion to the tallest; null = show Hint
-        public int Slow = -1;                     // first bin past the stutter line: drawn in the accent
-        public string Hint = "";
-        static Typeface face;
-        public FrameHist() { Height = 34; }
-        protected override Size MeasureOverride(Size a) { return new Size(double.IsInfinity(a.Width) ? 350 : a.Width, 34); }
-        public void Repaint() { InvalidateVisual(); }
-        protected override void OnRender(DrawingContext dc) {
-            double W = ActualWidth, H = ActualHeight;
-            if (W <= 0) return;
-            if (Bins == null) {
-                dc.DrawRoundedRectangle(Ui.Sunken, null, new Rect(0, 0, W, H), 6, 6);
-                if (face == null) face = new Typeface(Ui.MonoFont, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
-                var ft = new FormattedText(Hint ?? "", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, face, 10.5, Ui.Brush(Ink.Hint), 1.0);
-                dc.DrawText(ft, new Point(Math.Round((W - ft.Width) / 2), Math.Round((H - ft.Height) / 2)));
-                return;
-            }
-            int n = Bins.Length;
-            double pitch = W / n, bw = Math.Max(2, pitch - 2.5);
-            var bin = Ui.Brush(Ink.Bin);
-            var acc = Ui.Accent;
-            dc.DrawLine(new Pen(Ink.LineB, 1), new Point(0, H - 0.5), new Point(W, H - 0.5));
-            for (int i = 0; i < n; i++) {
-                if (Bins[i] <= 0) continue;
-                bool late = Slow >= 0 && i >= Slow;
-                double h = Math.Max(late ? 4 : 2, Bins[i] * (H - 1));             // a slow frame is never too small to see
-                dc.DrawRoundedRectangle(late ? (Brush)acc : bin, null, new Rect(i * pitch, H - h, bw, h), 1.5, 1.5);
-            }
-            if (Slow > 0) {
-                double x = Math.Round(Slow * pitch - 1.25) + 0.5;
-                dc.DrawLine(new Pen(new SolidColorBrush(Ink.Ref), 1) { DashStyle = new DashStyle(new double[] { 2, 3 }, 0) }, new Point(x, 0), new Point(x, H));
-            }
-        }
-
-        /// <summary>The bars fill the width: the body spans where the frames actually are (the fastest half percent to
-        /// the 99th percentile, on 0.1 ms steps, the resolution a stored run keeps), and anything slower than 2.5 times
-        /// the median, where the stutter rule starts to count, sits apart on the right in the accent behind a line.
-        /// Heights in proportion; the slow frames are never drawn too small to see.</summary>
-        public void From(List<double> ft) {
-            if (ft == null || ft.Count < 30) { Bins = null; return; }
-            var x = ft.ToArray(); Array.Sort(x);
-            Build(x, null, x[x.Length / 2]);
-        }
-        public void From(int[] hist, double median) {
-            if (hist == null || hist.Length == 0 || !(median > 0)) { Bins = null; return; }
-            var v = new List<double>(); var w = new List<double>();
-            for (int i = 0; i < hist.Length; i++) {
-                if (hist[i] <= 0) continue;
-                v.Add(i >= 1000 ? Math.Max(100, median * 4) : i / 10.0 + 0.05);           // the last bin is everything from 100 ms
-                w.Add(hist[i]);
-            }
-            if (v.Count == 0) { Bins = null; return; }
-            Build(v.ToArray(), w.ToArray(), median);
-        }
-        /// <summary>v ascending; wt null means one frame each.</summary>
-        void Build(double[] v, double[] wt, double med) {
-            double total = 0;
-            for (int i = 0; i < v.Length; i++) total += wt == null ? 1 : wt[i];
-            Func<double, double> q = delegate(double pr) {
-                double want = pr * total, acc = 0;
-                for (int i = 0; i < v.Length; i++) { acc += wt == null ? 1 : wt[i]; if (acc >= want) return v[i]; }
-                return v[v.Length - 1];
-            };
-            double thr = med * 2.5, lo = q(0.005), hi = Math.Min(q(0.99), thr);
-            double pad = Math.Max(hi - lo, med * 0.1) * 0.1;
-            lo = Math.Max(0, Math.Floor((lo - pad) * 10) / 10);
-            hi = Math.Min(thr, hi + pad);
-            if (hi - lo < 0.8) hi = Math.Min(thr, lo + 0.8);                               // at least eight steps
-            int k = Math.Max(1, (int)Math.Ceiling((hi - lo) / 0.1 / 40));                     // 0.1 ms steps, at most 40 bars
-            double bw = k * 0.1;
-            int n = Math.Max(1, (int)Math.Ceiling((hi - lo) / bw - 1e-9));
-            bool slow = v[v.Length - 1] >= thr;
-            const int SlowBins = 6;                                                            // 2.5x to 4x the median, the last taking the rest
-            var c = new double[n + (slow ? 1 + SlowBins : 0)];
-            for (int i = 0; i < v.Length; i++) {
-                double x = v[i], cnt = wt == null ? 1 : wt[i];
-                if (x >= thr) c[n + 1 + Math.Min(SlowBins - 1, (int)((x - thr) / (med * 0.25)))] += cnt;
-                else c[Math.Max(0, Math.Min(n - 1, (int)((x - lo) / bw)))] += cnt;
-            }
-            Slow = slow ? n + 1 : -1;
-            Scale(c);
-        }
-        void Scale(double[] c) {
-            int N = c.Length;
-            double max = 0; foreach (double v in c) max = Math.Max(max, v);
-            Bins = new double[N];
-            for (int i = 0; i < N; i++) Bins[i] = max > 0 && c[i] > 0 ? c[i] / max : 0;   // in proportion: the peak is the shape worth seeing
-            Repaint();
-        }
-    }
-
-    /// <summary>One of the four sensor tiles: label (and a note on the same line), big value, a bar, one line.</summary>
-    sealed class BarTile : Border {
-        readonly TextBlock big, sub;
+    /// <summary>One of the four sensors in the strip under the graph: a tracked label, the value, a thin bar. What the
+    /// big tiles said underneath (peak, watts, clock) is the tooltip.</summary>
+    sealed class MiniTile : Border {
         readonly Run val = new Run(), unit = new Run();
         readonly ColumnDefinition c1 = new ColumnDefinition(), c2 = new ColumnDefinition(), c3 = new ColumnDefinition();
         readonly Border b1 = new Border(), b2 = new Border();
-        public BarTile(bool left) {
-            BorderBrush = Ink.LineB;
-            BorderThickness = new Thickness(0, 0, left ? 1 : 0, 1);
-            Padding = left ? new Thickness(0, 14, 16, 14) : new Thickness(16, 14, 0, 14);
+        public MiniTile(string label) {
+            Padding = new Thickness(0, 10, 10, 12);
+            Background = Brushes.Transparent;
             var sp = new StackPanel();
-            // the Home page's big number: Plex Sans 42 semibold, the unit in grey at 18 (degrees) or 15 (the rest)
-            big = new TextBlock { FontFamily = Ui.UiFont, FontSize = 42, FontWeight = FontWeights.SemiBold, Foreground = Ui.TextB, LineHeight = 46, LineStackingStrategy = LineStackingStrategy.BlockLineHeight };
-            unit.FontWeight = FontWeights.Normal; unit.Foreground = Ui.Sub;
+            sp.Children.Add(Ink.Label(label));
+            var big = new TextBlock { FontFamily = Ui.UiFont, FontSize = 20, FontWeight = FontWeights.SemiBold, Foreground = Ui.TextB, Margin = new Thickness(0, 6, 0, 0) };
+            unit.FontWeight = FontWeights.Normal; unit.Foreground = Ui.Sub; unit.FontSize = 11;
             big.Inlines.Add(val); big.Inlines.Add(unit);
-            var track = new Grid { Height = 5, Margin = new Thickness(0, 8, 0, 0), ClipToBounds = true };
-            track.Children.Add(new Border { Background = Ink.LineB, CornerRadius = new CornerRadius(2.5) });
+            var track = new Grid { Height = 3, Margin = new Thickness(0, 7, 0, 0), ClipToBounds = true };
+            track.Children.Add(new Border { Background = Ink.LineB, CornerRadius = new CornerRadius(1.5) });
             var bars = new Grid();
             bars.ColumnDefinitions.Add(c1); bars.ColumnDefinitions.Add(c2); bars.ColumnDefinitions.Add(c3);
             Grid.SetColumn(b2, 1);
             bars.Children.Add(b1); bars.Children.Add(b2);
-            track.Children.Add(new Border { CornerRadius = new CornerRadius(2.5), Child = bars, ClipToBounds = true });
-            // and its caption: Plex Sans 12.5 in the Sub grey, "CPU · 14% · 2.9 GHz"
-            sub = Ink.Sans(12.5, Ui.Sub); sub.Margin = new Thickness(0, 7, 0, 0);
-            sp.Children.Add(big); sp.Children.Add(track); sp.Children.Add(sub);
+            track.Children.Add(new Border { CornerRadius = new CornerRadius(1.5), Child = bars, ClipToBounds = true });
+            sp.Children.Add(big); sp.Children.Add(track);
             Child = sp;
         }
         public void Set(string value, string u, double f1, Color k1, double f2, Color k2, string caption) {
-            val.Text = value; unit.Text = u; unit.FontSize = u.StartsWith("°") ? 18 : 15; sub.Text = caption ?? "";
+            val.Text = value; unit.Text = u; ToolTip = string.IsNullOrEmpty(caption) ? null : caption;
             f1 = double.IsNaN(f1) ? 0 : Math.Max(0, Math.Min(1, f1)); f2 = double.IsNaN(f2) ? 0 : Math.Max(0, Math.Min(1 - f1, f2));
             c1.Width = new GridLength(f1, GridUnitType.Star); c2.Width = new GridLength(f2, GridUnitType.Star); c3.Width = new GridLength(Math.Max(0.0001, 1 - f1 - f2), GridUnitType.Star);
             b1.Background = Ui.Brush(k1); b2.Background = Ui.Brush(k2);
+        }
+    }
+
+    /// <summary>This run beside the ones before it in the same setup: four slots, oldest on the left, the newest in the
+    /// mode's colour. Slots with no run yet are drawn empty, so the first run and the tenth look like the same page.</summary>
+    sealed class RecentBars : FrameworkElement {
+        double[] vals = new double[0];
+        Color now = Ui.BalColor;
+        bool lastIsNow;
+        static Typeface face;
+        const int Slots = 4;
+        const double W = 22, Gap = 6, Top = 14, H = 46;
+        public RecentBars() { Width = Slots * W + (Slots - 1) * Gap; Height = Top + H; SnapsToDevicePixels = true; }
+        /// <summary>Oldest first; the last one is this run when lastIsNow. Only the newest four are drawn.</summary>
+        public void Set(List<double> oldestFirst, bool lastIsNow, Color mode) {
+            int skip = Math.Max(0, oldestFirst.Count - Slots);
+            vals = oldestFirst.GetRange(skip, oldestFirst.Count - skip).ToArray();
+            this.lastIsNow = lastIsNow; now = mode;
+            InvalidateVisual();
+        }
+        protected override void OnRender(DrawingContext dc) {
+            if (face == null) face = new Typeface(Ui.MonoFont, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+            double hi = 0; foreach (double v in vals) if (v > hi) hi = v;
+            int empty = Slots - vals.Length;
+            var dash = new Pen(Ui.Brush(Ink.Dot), 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
+            for (int i = 0; i < Slots; i++) {
+                double x = i * (W + Gap);
+                if (i < empty) { dc.DrawRoundedRectangle(null, dash, new Rect(x + 0.5, Top + H - 30 + 0.5, W - 1, 29), 3, 3); continue; }
+                double v = vals[i - empty];
+                bool isNow = lastIsNow && i == Slots - 1;
+                // from zero, so a 6 fps change looks like one; the number above each bar says it exactly
+                double h = hi > 0 && v > 0 ? Math.Max(4, v / hi * H) : 4;
+                dc.DrawRoundedRectangle(Ui.Brush(isNow ? now : Color.FromRgb(0x3A, 0x35, 0x31)), null, new Rect(x, Top + H - h, W, h), 3, 3);
+                var t = new FormattedText(Ink.F0(v), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, face, 9.5, Ui.Brush(isNow ? "#EDEAE8" : "#A8A3A0"), 1.0);
+                dc.DrawText(t, new Point(Math.Round(x + W / 2 - t.Width / 2), Math.Round(Top + H - h - 3 - t.Height)));
+            }
         }
     }
 
@@ -355,22 +296,26 @@ namespace Ohman {
         readonly Border settingsBtn = new Border { Background = Brushes.Transparent, Cursor = Cursors.Hand, ToolTip = "The game's own settings for this run: click to edit" };
         readonly TextBlock settingsText = Ink.Sans(12.5, Ui.SegText);
         readonly TextBox settingsBox = new TextBox();
-        readonly TextBlock delta = Ink.Mono(10.5, Ui.Brush(Ink.Good));
         readonly Grid board = new Grid { Margin = new Thickness(0, 12, 0, 0) };
         readonly Border chartTile = new Border { BorderBrush = Ink.LineB, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(0, 10, 0, 12) };
-        readonly TextBlock chartLabel = Ink.Sans(14, Ui.TextB), chartHint = Ink.Mono(11, Ui.Desc);
+        readonly TextBlock chartLabel = Ink.Sans(14, Ui.TextB);
+        string graphTag = "", ftAs = "", ftBs = "";       // the line under the graph: a tag ("live", "settling"), then frame time or the graph's own note
         readonly StackPanel dots = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        readonly TextBlock bigText = new TextBlock { FontSize = 42, FontWeight = FontWeights.SemiBold, Foreground = Ui.TextB, LineHeight = 44, LineStackingStrategy = LineStackingStrategy.BlockLineHeight };
+        readonly TextBlock chartValue = Ink.Sans(14, Ui.TextB);
         readonly Run bigVal = new Run(), bigUnit = new Run();
-        readonly TextBlock subA = Ink.Sans(12.5, Ui.TextB), sub2 = Ink.Sans(12.5, Ui.Sub);
         readonly Run subAv = new Run(), subAt = new Run();
         readonly SeriesChart chart = new SeriesChart();
+        // the hero: the run's FPS and lows, and how it sits against the runs before it in the same setup
+        readonly Border heroTile = new Border { BorderBrush = Ink.LineB, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(0, 12, 0, 12) };
+        readonly TextBlock heroBig = new TextBlock { FontSize = 56, FontWeight = FontWeights.SemiBold, Foreground = Ui.TextB, LineHeight = 58, LineStackingStrategy = LineStackingStrategy.BlockLineHeight };
+        readonly Run heroFps = new Run(), heroUnit = new Run(" fps");
+        readonly TextBlock heroSub = Ink.Mono(11, Ui.Foot);
+        readonly Run heroLow = new Run(), heroLow01 = new Run();
+        readonly RecentBars recent = new RecentBars();
+        readonly TextBlock heroDelta = Ink.Mono(10.5, Ui.Foot);
+        readonly TextBlock ftLine = Ink.Mono(10.5, Ui.Foot);
         readonly Border waitTile = new Border { BorderBrush = Ink.LineB, BorderThickness = new Thickness(0, 0, 0, 1), Height = 98 };
-        readonly Border ftTile = new Border { BorderBrush = Ink.LineB, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(0, 12, 0, 12) };
-        readonly TextBlock ftRight = Ink.Mono(11.5, Ui.TextB);
-        readonly Run ftA = new Run(), ftB = new Run();
-        readonly FrameHist hist = new FrameHist();
-        readonly BarTile tCpu = new BarTile(true), tGpu = new BarTile(false), tPow = new BarTile(true), tFan = new BarTile(false);
+        readonly MiniTile tCpu = new MiniTile("CPU"), tGpu = new MiniTile("GPU"), tPow = new MiniTile("POWER"), tFan = new MiniTile("FANS");
         // ---- the bottom ----
         readonly Grid bottom = new Grid();
         readonly ActionButton main = new ActionButton(), side = new ActionButton();
@@ -496,30 +441,24 @@ namespace Ohman {
             settingsBox.KeyDown += delegate(object o, KeyEventArgs ke) { if (ke.Key == Key.Enter) { CommitSettings(); ke.Handled = true; } else if (ke.Key == Key.Escape) { settingsBox.Visibility = Visibility.Collapsed; settingsBtn.Visibility = Visibility.Visible; ke.Handled = true; } };
             settingsBox.LostKeyboardFocus += delegate { CommitSettings(); };
             meta.ColumnDefinitions.Add(new ColumnDefinition()); meta.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            delta.HorizontalAlignment = HorizontalAlignment.Right; Grid.SetColumn(delta, 1);
-            meta.Children.Add(settingsBtn); meta.Children.Add(settingsBox); meta.Children.Add(delta);
+            meta.Children.Add(settingsBtn); meta.Children.Add(settingsBox);
             Grid.SetRow(meta, 2);
             dash.Children.Add(meta);
-            // the board
-            board.ColumnDefinitions.Add(new ColumnDefinition()); board.ColumnDefinitions.Add(new ColumnDefinition());
-            for (int i = 0; i < 4; i++) board.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var top = new Border { BorderBrush = Ink.LineB, BorderThickness = new Thickness(0, 1, 0, 0), IsHitTestVisible = false };
-            Grid.SetColumnSpan(top, 2); Grid.SetRowSpan(top, 4);
+            // the board: the hero, the graph (or the wait tile), the four sensors in one strip
+            for (int i = 0; i < 3; i++) board.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            BuildHero();
+            board.Children.Add(heroTile);
             BuildChart();
-            Grid.SetColumnSpan(chartTile, 2); board.Children.Add(chartTile);
+            Grid.SetRow(chartTile, 1); board.Children.Add(chartTile);
             BuildWait();
-            Grid.SetColumnSpan(waitTile, 2); board.Children.Add(waitTile);
-            var ftHead = new Grid();
-            var ftTitle = Ink.Sans(14, Ui.TextB); ftTitle.Text = "Frame time";
-            ftHead.Children.Add(ftTitle);
-            ftRight.HorizontalAlignment = HorizontalAlignment.Right; ftB.Foreground = Ui.Desc;
-            ftRight.Inlines.Add(ftA); ftRight.Inlines.Add(ftB);
-            ftHead.Children.Add(ftRight);
-            var ftSp = new StackPanel(); ftSp.Children.Add(ftHead); hist.Margin = new Thickness(0, 10, 0, 0); ftSp.Children.Add(hist);
-            ftTile.Child = ftSp;
-            Grid.SetRow(ftTile, 1); Grid.SetColumnSpan(ftTile, 2); board.Children.Add(ftTile);
-            Grid.SetRow(tCpu, 2); Grid.SetRow(tGpu, 2); Grid.SetColumn(tGpu, 1); Grid.SetRow(tPow, 3); Grid.SetRow(tFan, 3); Grid.SetColumn(tFan, 1);
-            board.Children.Add(tCpu); board.Children.Add(tGpu); board.Children.Add(tPow); board.Children.Add(tFan);
+            Grid.SetRow(waitTile, 1); board.Children.Add(waitTile);
+            var strip4 = new Grid { };
+            var stripLine = new Border { Child = strip4 };
+            MiniTile[] mts = { tCpu, tGpu, tPow, tFan };
+            for (int i = 0; i < 4; i++) { strip4.ColumnDefinitions.Add(new ColumnDefinition()); Grid.SetColumn(mts[i], i); strip4.Children.Add(mts[i]); }
+            Grid.SetRow(stripLine, 2); board.Children.Add(stripLine);
+            var top = new Border { BorderBrush = Ink.LineB, BorderThickness = new Thickness(0, 1, 0, 0), IsHitTestVisible = false };
+            Grid.SetRowSpan(top, 3);
             board.Children.Add(top);
             var boardScroll = new ScrollViewer { Content = board, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Focusable = false, VerticalAlignment = VerticalAlignment.Top };
             Grid.SetRow(boardScroll, 3);
@@ -543,8 +482,11 @@ namespace Ohman {
             var sp = new StackPanel();
             var hdr = new Grid { Height = 26 };
             var lab = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            chartHint.Margin = new Thickness(8, 1, 0, 0);
-            lab.Children.Add(chartLabel); lab.Children.Add(chartHint);
+            chartValue.FontWeight = FontWeights.SemiBold; chartValue.Margin = new Thickness(8, 0, 0, 0);
+            chartValue.Inlines.Add(bigVal); chartValue.Inlines.Add(bigUnit);
+            bigUnit.FontWeight = FontWeights.Normal; bigUnit.Foreground = Ui.Sub; bigUnit.FontSize = 12;
+            subAt.Foreground = Ui.Desc;
+            lab.Children.Add(chartLabel); lab.Children.Add(chartValue);
             hdr.Children.Add(lab);
             var nav = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
             for (int i = 0; i < GraphNames.Length; i++) dots.Children.Add(new Ellipse { Width = 5, Height = 5, Margin = new Thickness(3, 0, 3, 0), Fill = Ui.Brush(Ink.Dot) });
@@ -553,22 +495,77 @@ namespace Ohman {
             nav.Children.Add(Arrow("M9 5 L16 12 L9 19", 1, "Next graph (Right arrow)"));
             hdr.Children.Add(nav);
             sp.Children.Add(hdr);
-            var row = new Grid { Margin = new Thickness(0, 4, 0, 0) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(112) });
-            row.ColumnDefinitions.Add(new ColumnDefinition());
-            var left = new StackPanel { VerticalAlignment = VerticalAlignment.Bottom };
-            bigText.FontFamily = Ui.UiFont;
-            bigUnit.FontSize = 14; bigUnit.FontWeight = FontWeights.Normal; bigUnit.Foreground = Ui.Sub;
-            bigText.Inlines.Add(bigVal); bigText.Inlines.Add(bigUnit);
-            subAt.Foreground = Ui.Sub;
-            subA.Inlines.Add(subAv); subA.Inlines.Add(subAt);
-            subA.Margin = new Thickness(0, 4, 0, 0); sub2.Margin = new Thickness(0, 1, 0, 0);
-            left.Children.Add(bigText); left.Children.Add(subA); left.Children.Add(sub2);
-            Grid.SetColumn(chart, 1);
-            chart.VerticalAlignment = VerticalAlignment.Bottom;
-            row.Children.Add(left); row.Children.Add(chart);
-            sp.Children.Add(row);
+            chart.Height = 96; chart.Margin = new Thickness(0, 8, 0, 0);
+            sp.Children.Add(chart);
+            ftLine.Margin = new Thickness(0, 9, 0, 0);
+            sp.Children.Add(ftLine);
             chartTile.Child = sp;
+        }
+        void BuildHero() {
+            var g = new Grid();
+            g.ColumnDefinitions.Add(new ColumnDefinition()); g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var left = new StackPanel { VerticalAlignment = VerticalAlignment.Bottom };
+            heroBig.FontFamily = Ui.UiFont;
+            heroUnit.FontSize = 15; heroUnit.FontWeight = FontWeights.Normal; heroUnit.Foreground = Ui.Sub;
+            heroBig.Inlines.Add(heroFps); heroBig.Inlines.Add(heroUnit);
+            heroSub.Margin = new Thickness(0, 6, 0, 0);
+            heroSub.Inlines.Add(heroLow); heroSub.Inlines.Add(new Run(" 1% low · "));
+            heroSub.Inlines.Add(heroLow01); heroSub.Inlines.Add(new Run(" 0.1%"));
+            left.Children.Add(heroBig); left.Children.Add(heroSub);
+            var right = new StackPanel { VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Right };
+            recent.HorizontalAlignment = HorizontalAlignment.Right;
+            heroDelta.HorizontalAlignment = HorizontalAlignment.Right; heroDelta.Margin = new Thickness(0, 6, 0, 0);
+            right.Children.Add(recent); right.Children.Add(heroDelta);
+            Grid.SetColumn(right, 1);
+            g.Children.Add(left); g.Children.Add(right);
+            heroTile.Child = g;
+        }
+        /// <summary>The hero's numbers: FPS and the two lows, and the bars of the runs before this one in the same setup
+        /// (the same game, mode, resolution and power source) with what changed. r is the run on show, or null live.</summary>
+        void Hero(string fps, string low1, string low01, BenchRun r, double liveFps, Color mode) {
+            heroFps.Text = fps; heroLow.Text = low1; heroLow01.Text = low01; heroFps.Foreground = Ui.TextB;
+            heroLow.Foreground = Ui.Brush(mode); heroLow01.Foreground = Ui.TextB;
+            var before = new List<double>();
+            BenchRun prev = null;
+            if (r != null) {
+                var all = Runs();
+                for (int i = all.Count - 1; i >= 0; i--) { var o = all[i]; if (o.Id != r.Id && o.Started < r.Started && r.SameSetup(o)) before.Add(o.AvgFps); }
+                prev = Previous(r);
+                before.Add(r.AvgFps);
+                recent.Set(before, true, Ui.ModeColor(r.ModeIndex));
+            } else {
+                if (liveFps > 0) before.Add(liveFps);
+                recent.Set(before, liveFps > 0, mode);
+            }
+            if (r == null) { heroDelta.Text = liveFps > 0 ? "so far" : "your runs show up here"; heroDelta.Foreground = Ui.Foot; return; }
+            if (prev != null) {
+                double d = r.AvgFps - prev.AvgFps;
+                heroDelta.Inlines.Clear();
+                heroDelta.Inlines.Add(new Run((d >= 0 ? "+" : "−") + Math.Abs(d).ToString("0", CultureInfo.InvariantCulture) + " fps") { Foreground = Ui.Brush(Math.Abs(d) < 0.5 ? Ink.Ref : d > 0 ? Ink.Good : Ink.WarnText) });
+                heroDelta.Inlines.Add(new Run(" vs " + prev.Day) { Foreground = Ui.Foot });
+            } else {
+                bool modeBefore = false;
+                foreach (var o in Runs()) if (o.Id != r.Id && string.Equals(o.Exe, r.Exe, StringComparison.OrdinalIgnoreCase) && o.ModeIndex == r.ModeIndex && o.Started < r.Started) { modeBefore = true; break; }
+                heroDelta.Inlines.Clear();
+                heroDelta.Inlines.Add(new Run(modeBefore ? "first in this setup" : "first " + Engine.ModeNames[r.ModeIndex] + " run") { Foreground = Ui.TextB });
+            }
+        }
+        string graphNote = "";
+        void FtLine(string a, string b) { ftAs = a; ftBs = b; }
+        /// <summary>The line under the graph. On FPS it is the run's frame time; on the others, the graph's own note
+        /// (peak, how fast it is settling, the other fan), so the header can stay one name and one number.</summary>
+        void UnderLine(int g0) {
+            ftLine.Inlines.Clear();
+            if (graphTag.Length > 0) ftLine.Inlines.Add(new Run(graphTag + "  ") { Foreground = Ui.Accent });
+            if (g0 == 0 && ftAs.Length > 0) {
+                ftLine.Inlines.Add(new Run("frame time "));
+                ftLine.Inlines.Add(new Run(ftAs) { Foreground = Ui.TextB });
+                ftLine.Inlines.Add(new Run(ftBs));
+                return;
+            }
+            if (subAv.Text.Length > 0) ftLine.Inlines.Add(new Run(subAv.Text + " ") { Foreground = subAv.Foreground });
+            if (subAt.Text.Length > 0) ftLine.Inlines.Add(new Run(subAt.Text));
+            if (graphNote.Length > 0) ftLine.Inlines.Add(new Run((subAv.Text.Length + subAt.Text.Length > 0 ? " · " : "") + graphNote));
         }
         Border Arrow(string d, int dir, string tip) {
             var p = new WPath { Data = Ink.Geo(d), Stroke = Ui.SegText, StrokeThickness = 2.6, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round, Width = 11, Height = 11, Stretch = Stretch.Uniform };
@@ -909,12 +906,6 @@ namespace Ohman {
                     settingsText.Text = shown.Settings.Length > 0 ? shown.Settings : "Add the game's settings";
                     settingsText.Foreground = shown.Settings.Length > 0 ? Ui.SegText : Ui.Foot;
                 }
-                var prev = Previous(shown);
-                if (prev != null) {
-                    double d = shown.AvgFps - prev.AvgFps;
-                    delta.Text = (d >= 0 ? "+" : "−") + Math.Abs(d).ToString("0", CultureInfo.InvariantCulture) + " fps vs " + prev.Day;
-                    delta.Foreground = Ui.Brush(Math.Abs(d) < 0.5 ? Ink.Ref : d > 0 ? Ink.Good : Ink.WarnText);
-                } else { delta.Text = "first in this setup"; delta.Foreground = Ui.Foot; }
             }
 
             // board
@@ -1021,7 +1012,7 @@ namespace Ohman {
             int n = s.Count;
             Func<Func<BenchSample, double>, double[]> col = delegate(Func<BenchSample, double> g) { var a = new double[n]; for (int i = 0; i < n; i++) a[i] = g(s[i]); return a; };
             int g0 = Cur();
-            chartLabel.Text = GraphNames[g0]; chartHint.Text = "";
+            chartLabel.Text = GraphNames[g0]; graphTag = "";
             chart.Slots = Math.Max(2, n); chart.Ref = double.NaN; chart.Marks.Clear(); chart.Lo = chart.Hi = double.NaN;
             int rpl = r.RpmPerLevel;
             switch (g0) {
@@ -1046,24 +1037,23 @@ namespace Ohman {
             if (g0 != 0) subAv.Foreground = Ui.TextB;
             chart.Repaint();
             // frame time
-            ftA.Text = Ink.F1(r.FtP50) + " ms"; ftB.Text = " · p99 " + Ink.F1(r.FtP99) + " · " + Ink.F1(r.StutterPct) + "% stutter";
-            hist.From(r.Hist, r.FtP50);
-            if (hist.Bins == null) hist.Hint = "no frame times kept";
-            hist.Repaint();
+            FtLine(Ink.F1(r.FtP50) + " ms", " · p99 " + Ink.F1(r.FtP99) + " · stutter " + Ink.F1(r.StutterPct) + "%");
+            Hero(Ink.F0(r.AvgFps), double.IsNaN(r.Low1) ? "—" : Ink.F0(r.Low1), double.IsNaN(r.Low01) ? "—" : Ink.F0(r.Low01), r, double.NaN, Ui.ModeColor(r.ModeIndex));
+            UnderLine(g0);
             Tiles(r.CpuTAvg, r.CpuTMax, r.CpuWAvg, r.CpuMhzAvg, r.GpuTAvg, r.GpuTMax, r.GpuWAvg, r.GpuMhzAvg, r.FpsPerWatt,
                 Nz(r.Fan1Avg), Nz(r.Fan2Avg), true, r.RpmPerLevel, r.FanCeiling);
         }
 
         void Graph(double[] values, Color c, double minSpan, string big, string unit, double refv, string sa, string sat, string s2) {
             chart.Values = values; chart.Color = c; chart.MinSpan = minSpan;
-            bigVal.Text = big; bigUnit.Text = unit; subAv.Text = sa; subAt.Text = sa.Length > 0 ? " " + sat : sat; sub2.Text = s2 + " ";
+            bigVal.Text = big; bigUnit.Text = unit; subAv.Text = sa; subAt.Text = sat; graphNote = (s2 ?? "").Trim();
         }
 
         // ---------- the board live: idle sensors, warm-up, measuring ----------
         void LiveBoard(BenchView v) {
             int g0 = Cur();
             chartLabel.Text = GraphNames[g0];
-            chartHint.Text = v.Phase == BenchPhase.Warming && g0 == 1 ? "settling" : v.Phase == BenchPhase.Idle || v.Phase == BenchPhase.Fetching || v.Phase == BenchPhase.Waiting ? "live" : "";
+            graphTag = v.Phase == BenchPhase.Warming && g0 == 1 ? "settling" : v.Phase == BenchPhase.Idle || v.Phase == BenchPhase.Fetching || v.Phase == BenchPhase.Waiting ? "live" : "";
             chart.Marks.Clear(); chart.Ref = double.NaN; chart.Lo = chart.Hi = double.NaN; chart.Slots = 100;
             bool measuring = v.Phase == BenchPhase.Measuring || v.Phase == BenchPhase.Finishing;
             var live = v.Live ?? new BenchSample[0];
@@ -1117,18 +1107,21 @@ namespace Ohman {
             if (g0 != 0) subAv.Foreground = Ui.TextB;
             chart.Repaint();
             // frame time
+            bool warming = v.Phase == BenchPhase.Warming || v.Phase == BenchPhase.Countdown;
             if (measuring) {
                 var so = SoFar();
-                if (!ReferenceEquals(histFor, soFarFt)) { hist.From(soFarFt); histFor = soFarFt; }
-                if (hist.Bins == null || so == null) { hist.Bins = null; hist.Hint = "counting frames"; ftA.Text = ""; ftB.Text = ""; }
-                else { ftA.Text = Ink.F1(so.P50) + " ms"; ftB.Text = " · p99 " + Ink.F1(so.P99) + " · " + Ink.F1(so.StutterPct) + "% stutter"; }
+                if (so == null) FtLine("", "");
+                else FtLine(Ink.F1(so.P50) + " ms", " · p99 " + Ink.F1(so.P99) + " · stutter " + Ink.F1(so.StutterPct) + "%");
+                double avg = so == null ? v.LiveFps : so.AvgFps;
+                Hero(Ink.F0(avg), so == null || double.IsNaN(so.Low1) ? "--" : Ink.F0(so.Low1), so == null || double.IsNaN(so.Low01) ? "--" : Ink.F0(so.Low01), null, avg, Ui.Accent.Color);
             } else {
-                soFar = null; soFarFt = null; soFarAt = 0; histFor = null;
-                hist.Bins = null;
-                ftA.Text = v.Phase == BenchPhase.Warming || v.Phase == BenchPhase.Countdown ? Ink.F0(v.LiveFps) + " fps" : ""; ftB.Text = v.Phase == BenchPhase.Warming || v.Phase == BenchPhase.Countdown ? " now" : "";
-                hist.Hint = v.Phase == BenchPhase.Waiting ? "waiting for a game" : v.Phase == BenchPhase.Warming || v.Phase == BenchPhase.Countdown ? "not counted while warming up" : "frame times show here during a run";
+                soFar = null; soFarFt = null; soFarAt = 0;
+                FtLine("", "");
+                Hero(warming && v.LiveFps > 0 ? Ink.F0(v.LiveFps) : "--", "--", "--", null, double.NaN, Ui.Accent.Color);
+                if (warming) heroDelta.Text = "warming up, not counted";
             }
-            hist.Repaint();
+            heroFps.Foreground = measuring ? Ui.TextB : Ui.Sub;      // not counted yet, so not the run's number
+            UnderLine(g0);
             // tiles from the latest reading
             int f1 = fans == null ? -1 : fans[0], fan2 = fans == null ? -1 : fans[1];
             if (s == null) Tiles(double.NaN, double.NaN, double.NaN, double.NaN, double.NaN, double.NaN, double.NaN, double.NaN, double.NaN, f1, fan2, false);
@@ -1140,7 +1133,6 @@ namespace Ohman {
         List<double> soFarFt;
         FrameStats soFar;
         long soFarAt;                                   // Stopwatch ticks: a clock change must not freeze the numbers
-        List<double> histFor;
         FrameStats SoFar() {
             long now = Stopwatch.GetTimestamp();
             if (soFar != null && soFarAt != 0 && (now - soFarAt) < Stopwatch.Frequency * 8 / 10) return soFar;
