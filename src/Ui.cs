@@ -871,7 +871,7 @@ namespace Ohman {
             var g = E.P.Guard;
             SyncGuardLine();
             txtMaxCoolSub.Text = "Below " + g.MaxFanCoolBelow + "° for " + (g.MaxFanCoolSeconds / 60) + " minutes";
-            txtGuardNote.Text = Program.DisplayName + " forces " + (E.GuardLevel > 0 ? E.Rpm(E.GuardLevel) : "max fan") + " above " + E.GuardCpuHot + "° CPU";
+            txtGuardNote.Text = Program.DisplayName + " forces " + (E.GuardLevel > 0 ? "at least " + E.Rpm(E.GuardLevel) : "max fan") + " above " + E.GuardCpuHot + "° CPU";
         }
         /// <summary>Switching the safety net off is the one thing in here that asks twice, wherever it is switched off from.</summary>
         bool ConfirmGuardOff() {
@@ -1208,7 +1208,7 @@ namespace Ohman {
             if (v != null && v.Phase != BenchPhase.Idle && v.Phase != BenchPhase.Fetching)
                 tip = Program.DisplayName + " · benchmark · " + (v.Phase == BenchPhase.Waiting ? "waiting for a game" : v.Paused ? "paused" : v.Phase == BenchPhase.Warming ? "warming up " + Ink.Clock(v.WarmSec)
                     : v.Phase == BenchPhase.Countdown ? "starting" : "measuring " + Ink.Clock(v.MeasuredSec) + " of " + Ink.Clock(v.MeasureTarget));
-            else tip = Program.DisplayName + " · " + E.ModeName + " · " + E.CurrentTdp + " W" + (E.S.Fan == FanMode.Max ? " · max fan" : "");
+            else tip = Program.DisplayName + " · " + E.ModeName + " · " + E.CurrentTdp + " W budget" + (E.GuardActive ? " · thermal guard" : E.S.Fan == FanMode.Max ? " · max fan" : "");
             tray.Text = tip.Length > 63 ? tip.Substring(0, 63) : tip;
         }
 
@@ -1751,7 +1751,7 @@ namespace Ohman {
                 txtFanApplied.Text = "Loud" + (ShowChassis(lastBiosTemp) ? " · ambient " + lastBiosTemp + "°" : "");
                 txtFanRight.Text = "Ctrl+Alt+M toggles";
             } else {
-                txtFanApplied.Text = E.GuardActive ? "Thermal guard: max fan until cool" : "Applied to " + E.ModeName;
+                txtFanApplied.Text = E.GuardActive ? "Thermal guard: " + (E.GuardLevel > 0 ? "at least " + E.Rpm(E.GuardLevel) : "max fan") + " until cool" : "Applied to " + E.ModeName;
                 txtFanRight.Text = "CPU " + (double.IsNaN(E.CpuTemp) ? "--" : E.CpuTemp.ToString("0") + "°") + " · GPU " + (E.GpuAsleep ? "asleep" : double.IsNaN(E.GpuTemp) ? "--" : E.GpuTemp.ToString("0") + "°");
             }
         }

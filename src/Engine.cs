@@ -830,11 +830,39 @@ namespace Ohman {
         /// seconds later the same toast says nothing new (8D26: "Set power failed" on every heartbeat).</summary>
         bool Try(Action a, string what, bool toast) { Exception unused; return Try(a, what, toast, out unused); }
         /// <summary>error: what the call threw, null when it ran or was skipped. A BiosException is the firmware's own no.</summary>
+        /// The same command failing the same way says nothing new the second time: the first failure is toasted and
+        /// logged, repeats are counted and logged every 20th, and a success or a different error starts it over. Some
+        /// firmware fails every mode command as a call in iGPU-only mode, which toasted on every switch and every
+        /// heartbeat (#102) and filled a report's last sixty decisions with that one line (#81).
         bool Try(Action a, string what, bool toast, out Exception error) {
             error = null;
             if (ReadOnly) { Log.Write("read-only (unsupported board '" + Board + "'): skipped " + what); return false; }
-            try { a(); LastError = ""; return true; }
-            catch (Exception ex) { error = ex; LastError = ex.Message; Log.Write("FAIL " + what + ": " + ex.Message); if (toast) Fire(Toast, what + " failed: " + ex.Message, true); return false; }
+            try { a(); LastError = ""; Recovered(what); return true; }
+            catch (Exception ex) {
+                error = ex; LastError = ex.Message;
+                int n = Repeat(what, ex.Message);
+                if (n == 1) Log.Write("FAIL " + what + ": " + ex.Message + (GpuMode == 3 ? " (graphics: iGPU only)" : ""));
+                else if (n % 20 == 0) Log.Write("FAIL " + what + ": " + ex.Message + " (" + n + " times running)");
+                if (toast && n == 1) Fire(Toast, what + " failed: " + ex.Message, true);
+                return false;
+            }
+        }
+        readonly Dictionary<string, KeyValuePair<string, int>> failing = new Dictionary<string, KeyValuePair<string, int>>();
+        int Repeat(string what, string error) {
+            lock (failing) {
+                KeyValuePair<string, int> f;
+                int n = failing.TryGetValue(what, out f) && f.Key == error ? f.Value + 1 : 1;
+                failing[what] = new KeyValuePair<string, int>(error, n);
+                return n;
+            }
+        }
+        void Recovered(string what) {
+            lock (failing) {
+                KeyValuePair<string, int> f;
+                if (!failing.TryGetValue(what, out f)) return;
+                failing.Remove(what);
+                if (f.Value > 1) Log.Write(what + " works again after " + f.Value + " failures");
+            }
         }
         void Fire(Action<string, bool> h, string m, bool err) { if (h != null) { try { h(m, err); } catch { } } }
         void Changed() { var h = StateChanged; if (h != null) { try { h(); } catch { } } }
@@ -1640,7 +1668,7 @@ namespace Ohman {
             S.Fan1 = P.Curve.ClampOrOff(f1);
             S.Fan2 = P.Curve.ClampOrOff(f2);
             S.Save();
-            if (GuardActive && mode != FanMode.Max) { Say("Thermal guard is holding max fan; " + Choice.Fan[Choice.Of(mode)] + " resumes when cool"); Changed(); return; }
+            if (GuardActive && mode != FanMode.Max) { Say("Thermal guard is holding the fans; " + Choice.Fan[Choice.Of(mode)] + " resumes when cool"); Changed(); return; }
             // On battery the mode command carries who drives the fans (FansByBios), and that follows the fan
             // mode: leaving Auto has to take control back before the first level is written.
             if (leavingMax) lock (applySync) MaxFan(false, "Max fan off");
@@ -1722,6 +1750,7 @@ namespace Ohman {
                     if (!Hw.IsDemo && S.TookWinLighting) {
                         try { WinLighting.SetControl(true); S.TookWinLighting = false; S.Save(); } catch (Exception ex) { Log.Write("release lighting: " + ex.Message); }
                     }
+                    if (Light != null) LightHidden = Light.Describe;   // the report said "none detected" after a hide in the session (#103)
                     Light = null;
                 }
             }
@@ -1733,6 +1762,7 @@ namespace Ohman {
         // ---------- heartbeat ----------
         void Heartbeat() {
             try {
+                if (refreshTriesLeft > 0) ApplyRefreshRate(OnBattery, true);   // display work, not BIOS work: before the BIOS check
                 if (!BiosOk && !Hw.IsDemo) return;
                 lock (applySync) {
                     if (stopping) return;               // after the exit hand-off: a mode without the BIOS byte would undo it
@@ -1790,10 +1820,22 @@ namespace Ohman {
             // the owner is already on Max, which the guard must never undercut.
             // FansByBios: on battery in Auto the firmware owns the levels and drops ours, so only max reaches the fans.
             if (GuardLevel <= 0 || guardStalled || !CanSetFanLevels || FansByBios || S.Fan == FanMode.Max) { MaxFan(true, "Guard max fan"); return; }
-            // Never below what the fans are already doing: a guard that slows them at the hottest moment is not one.
-            int level = Math.Max(GuardLevel, Math.Max(curLevel1, curLevel2));
+            // Never below what the owner's fan setting asks for right now. Not what was last written: the curve does not
+            // tick while the guard holds, so that froze at the moment it engaged. Engaged from a curve near the top it
+            // stayed near max whatever the guard level said (#102); engaged from a low curve it stayed low while the CPU
+            // kept climbing, which is less air than no guard at all.
+            int[] want = ModeWants();
+            int level = Math.Max(GuardLevel, Math.Max(want[0], want[1]));
             MaxFan(false, "Guard level");
             WriteLevels(level, level, "Guard level");
+        }
+        /// <summary>The pair the current fan setting would write at today's temperatures, unstepped: Manual's levels or
+        /// the curve's target (its fallback when no temperature is known). The caller holds applySync.</summary>
+        int[] ModeWants() {
+            if (S.Fan == FanMode.Manual) return new[] { S.Fan1, S.Fan2 };
+            FanCurve curve = S.Fan == FanMode.Custom ? CustomCurve() : P.Curve;
+            double ir = curve.UseChassis && GuardChassis >= 0 ? GuardChassis : double.NaN;
+            return curve.Target(CpuTemp, GpuTemp, ir);
         }
         public void SetGuard(bool on) {
             S.Guard = on;
@@ -2040,10 +2082,13 @@ namespace Ohman {
         }
 
         // ---------- display refresh rate ----------
-        void ApplyRefreshRate(bool onBattery) {
+        // A switch the display driver refuses at the moment of a power change (rc -5 on unplug, while the same call from
+        // the button a minute later worked, #103) is asked again on the next few heartbeats instead of never.
+        int refreshTriesLeft;
+        void ApplyRefreshRate(bool onBattery, bool retry = false) {
             try {
                 int[] rates = Display.Rates();
-                if (rates.Length < 2) return;
+                if (rates.Length < 2) { refreshTriesLeft = 0; return; }
                 // 1.3.1 offered 48 Hz next to 60, and on 8D2F (#81) that mode reads 48 while the panel stays at 144.
                 // The button is gone; a rate saved from it moves to 60 once, rather than being reapplied unseen.
                 if (S.RefreshHz > 0 && S.RefreshHz < 60 && Array.IndexOf(rates, 60) >= 0) {
@@ -2055,10 +2100,13 @@ namespace Ohman {
                          : S.RefreshHz > 0 ? S.RefreshHz
                          : S.LowHzOnBattery ? Display.HighestHz()   // we lowered it, so we put it back
                          : 0;
-                if (want > 0 && Display.CurrentHz() != want) Display.SetHz(want);
+                if (want <= 0 || Display.CurrentHz() == want) { refreshTriesLeft = 0; return; }
+                if (Display.SetHz(want)) refreshTriesLeft = 0;
+                else refreshTriesLeft = retry ? refreshTriesLeft - 1 : 4;   // four more goes, one a heartbeat (about three minutes)
             } catch (Exception ex) { Log.Write("refresh rate: " + ex.Message); }
         }
         public void SetRefreshRate(int hz) {
+            refreshTriesLeft = 0;                       // the owner's own pick wins over a pending retry
             S.RefreshHz = hz;
             S.Save();
             if (Display.SetHz(hz)) Say(hz + " Hz");

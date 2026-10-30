@@ -48,7 +48,7 @@ by a person yet. See [Verifying your laptop](#verifying-your-laptop), it takes f
 
 | Model | Board ids |
 |---|---|
-| OMEN 15 (2019, 15-dc / 15-dh) | `8574`, `8600` |
+| OMEN 15 (2019, 15-dc / 15-dh) | `8574`, `8600` ✓ |
 | OMEN 17 (2019, 17-cb0) | `8603` |
 | OMEN 15 (2020) | `8A15` |
 | OMEN 15 / 17 (2021) | `8BAD` ✓ |
@@ -67,8 +67,8 @@ are written down:
 | Victus 16 (2021–2023) | `88F8`, `8A25` ✓ | from `hp-wmi` |
 | Victus 15-fb0xxx | `8A3D` | from `hp-wmi`, no quiet mode |
 | Victus 16-r0xxx | `8BC2` ✓ | OMEN bytes; `hp-wmi` lists it as OMEN despite the name |
-| Victus 16 S / R (2023–2024) | `8B2F`, `8BBE` ✓, `8BD4`, `8BD5` ✓, `8C99`, `8C9C` ✓ | from `hp-wmi`, no quiet mode |
-| Victus 15 and 16, other models | `88D9`, `88DA`, `88EE` ✓, `8A26` ✓, `8A3E`, `8A3F` ✓, `8BB1` ✓, `8C2F`, `8C30`, `8C3F`, `8D07`, `8DCD`, `8DCF` ✓, `8DD0` ✓, `8E5C` ✓, `8E5E` | from the firmware |
+| Victus 16 S / R (2023–2024) | `8B2F`, `8BBE` ✓, `8BD4`, `8BD5` ✓, `8C99` ✓, `8C9C` ✓ | from `hp-wmi`, no quiet mode |
+| Victus 15 and 16, other models | `88D9`, `88DA`, `88EE` ✓, `8A26` ✓, `8A3E`, `8A3F` ✓, `8BB1` ✓, `8C2F`, `8C30`, `8C3F`, `8D07`, `8DCD`, `8DCF` ✓, `8DD0` ✓, `8DD2` ✓, `8E5C` ✓, `8E5E` | from the firmware |
 
 "from the firmware" is the same path every unlisted OMEN takes: Ohman asks the board which firmware generation
 it is and drives it with that generation's bytes. On a v0 Victus that includes the quiet byte `0x03` for Eco:

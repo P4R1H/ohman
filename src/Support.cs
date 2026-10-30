@@ -577,9 +577,11 @@ namespace Ohman {
             sb.AppendLine();
 
             // ---- the GPU's own limits, for any report about wattage
-            sb.AppendLine("NVIDIA power limits");
+            sb.AppendLine("NVIDIA power limits (name, limit, default, min, max, enforced now, drawing now, pstate)");
             try {
-                var psi = new ProcessStartInfo("nvidia-smi", "--query-gpu=name,power.limit,power.default_limit,power.min_limit,power.max_limit --format=csv,noheader") {
+                // power.limit is [N/A] on every laptop so far; enforced.power.limit is the cap the GPU is held to right now,
+                // the number a "less wattage than Hub" report turns on (#91)
+                var psi = new ProcessStartInfo("nvidia-smi", "--query-gpu=name,power.limit,power.default_limit,power.min_limit,power.max_limit,enforced.power.limit,power.draw,pstate --format=csv,noheader") {
                     UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true
                 };
                 using (var pr = Process.Start(psi)) {
@@ -608,7 +610,7 @@ namespace Ohman {
                         || line.IndexOf("BIOS ok", StringComparison.Ordinal) >= 0 || line.IndexOf("self-test", StringComparison.Ordinal) >= 0
                         || line.IndexOf("read-only", StringComparison.Ordinal) >= 0 || line.IndexOf("no fan table", StringComparison.Ordinal) >= 0
                         || line.IndexOf("system data", StringComparison.Ordinal) >= 0 || line.IndexOf("thermal zone", StringComparison.Ordinal) >= 0
-                        || line.IndexOf("keyboard lighting", StringComparison.Ordinal) >= 0 || line.IndexOf("THERMAL GUARD", StringComparison.Ordinal) >= 0
+                        || line.IndexOf("keyboard lighting", StringComparison.Ordinal) >= 0 || line.IndexOf("thermal guard", StringComparison.OrdinalIgnoreCase) >= 0
                         || line.IndexOf("FAIL ", StringComparison.Ordinal) >= 0 || line.IndexOf("driver:", StringComparison.Ordinal) >= 0
                         || line.IndexOf("fan route", StringComparison.Ordinal) >= 0 || line.IndexOf("EC ", StringComparison.Ordinal) >= 0
                         || line.IndexOf("EC:", StringComparison.Ordinal) >= 0 || line.IndexOf("giving up", StringComparison.Ordinal) >= 0
@@ -616,7 +618,14 @@ namespace Ohman {
                         || line.IndexOf("max fan:", StringComparison.Ordinal) >= 0 || line.IndexOf("fan ceiling", StringComparison.Ordinal) >= 0 || line.IndexOf("refresh rate", StringComparison.Ordinal) >= 0
                         // why a per-key board ended up with nothing to drive: a Primax keyboard found and refused, or
                         // no keyboard interface at all. Neither line says "lighting:", so both were being dropped.
-                        || line.IndexOf("mcu keyboard", StringComparison.Ordinal) >= 0 || line.IndexOf("per-key board", StringComparison.Ordinal) >= 0)
+                        || line.IndexOf("mcu keyboard", StringComparison.Ordinal) >= 0 || line.IndexOf("per-key board", StringComparison.Ordinal) >= 0
+                        // the guard's release next to its engage (only engaged lines said nothing of how long it held, #95,
+                        // #101), the firmware hold, the GPU power probe (none says "generic profile", #91), the exit hand-off
+                        // (#100) and each start, so a report tells the guard, the firmware and the curve apart
+                        || line.IndexOf("fans held by the firmware", StringComparison.Ordinal) >= 0 || line.IndexOf("fans back with the curve", StringComparison.Ordinal) >= 0
+                        || line.IndexOf("GPU power query", StringComparison.Ordinal) >= 0 || line.IndexOf("no GPU power control", StringComparison.Ordinal) >= 0
+                        || line.IndexOf("parked fans", StringComparison.Ordinal) >= 0 || line.IndexOf("fans handed", StringComparison.Ordinal) >= 0
+                        || line.IndexOf("---- ", StringComparison.Ordinal) >= 0 || line.IndexOf("works again after", StringComparison.Ordinal) >= 0)
                         keep.Add(line);
                 }
                 int from = Math.Max(0, keep.Count - 60);    // a start writes about ten of these; keep several sessions
