@@ -186,6 +186,12 @@ h1{
 .strip img[width="1400"]{width:503px}
 @keyframes drift{from{transform:translateX(0)}to{transform:translateX(calc(-100% / 3))}}
 @media (prefers-reduced-motion:reduce){.strip-track{animation:none}.strip{overflow-x:auto}}
+/* With the script running, the strip is a real sideways scroller that the script drifts (see the end of the page). */
+.strip.live{overflow-x:auto;overflow-y:hidden;scrollbar-width:none;overscroll-behavior-x:contain;cursor:grab}
+.strip.live::-webkit-scrollbar{display:none}
+.strip.live .strip-track{animation:none;will-change:transform}
+.strip.live.drag{cursor:grabbing}
+.strip.live img{-webkit-user-drag:none;user-select:none}
 
 /* ---------- sections ---------- */
 section{margin-top:68px}
@@ -511,6 +517,91 @@ footer p{margin:0 0 8px}
                  'Eleven', 'Twelve'];
     el.textContent = n < words.length ? words[n].toLowerCase() : String(n);
   })();
+})();
+
+/* The strip of screens drifts by itself, and gives way to a hand: a sideways swipe, a trackpad scroll or a drag
+   moves it like any scroller, and the drift picks up from wherever it was left once the hand is gone. Without
+   this script (or with reduced motion) the CSS above still runs it. The position is the scroller's own scrollLeft
+   plus a sub-pixel transform, so the drift stays as smooth as the CSS animation it replaces. */
+(function () {
+  var strip = document.querySelector('.strip'), track = strip && strip.querySelector('.strip-track');
+  if (!track || !window.requestAnimationFrame) { return; }
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) { return; }
+  var imgs = track.querySelectorAll('img'), per = imgs.length / 3;
+  if (!per || per % 1) { return; }
+  strip.className += ' live';
+  var set = 0;                       // width of one of the three copies
+  var pos = 0;                       // where the drift is, in px, fractional
+  var SPEED = 0;                     // px per ms: one copy every 64 s, as the animation did
+  var IDLE = 1400;                   // ms after the last touch before the drift resumes
+  var lastHand = -1e9, held = false, hover = false, seen = true, last = 0, drag = null;
+
+  function measure() {
+    var w = imgs[per].offsetLeft - imgs[0].offsetLeft;
+    if (w <= 0) { return false; }
+    if (!set) { pos = w; strip.scrollLeft = w; }
+    set = w; SPEED = w / 64000;
+    return true;
+  }
+  // Keep the view inside the middle copy, so there is always a copy to either side to scroll into.
+  function wrap(x) {
+    var max = strip.scrollWidth - strip.clientWidth, lo = set * 0.5, hi = Math.min(set * 1.5, max - 2);
+    if (hi - lo < set) { hi = lo + set; }
+    while (x >= hi) { x -= set; }
+    while (x < lo) { x += set; }
+    return x;
+  }
+  function hand() { lastHand = performance.now(); track.style.transform = ''; }
+  function fromScroller() {
+    var x = strip.scrollLeft, w = wrap(x);
+    if (w !== x) { strip.scrollLeft = w; if (drag) { drag.from += w - x; } }
+    pos = w;
+  }
+  function frame(t) {
+    requestAnimationFrame(frame);
+    var dt = Math.min(100, t - last); last = t;
+    if (!set && !measure()) { return; }
+    if (!seen || document.hidden) { return; }
+    if (held || hover || t - lastHand < IDLE) { return; }
+    pos = wrap(pos + dt * SPEED);
+    strip.scrollLeft = pos;
+    track.style.transform = 'translate3d(' + (strip.scrollLeft - pos).toFixed(3) + 'px,0,0)';
+  }
+
+  // Scroll events while the drift is running are its own; while a hand is on it (or its momentum is), they are the hand's.
+  strip.addEventListener('scroll', function () {
+    if (held || performance.now() - lastHand < IDLE) { hand(); fromScroller(); }
+  }, { passive: true });
+  strip.addEventListener('wheel', function (e) {
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY) || e.shiftKey) { hand(); }
+  }, { passive: true });
+  strip.addEventListener('touchstart', function () { held = true; hand(); }, { passive: true });
+  var release = function () { held = false; hand(); };
+  strip.addEventListener('touchend', release, { passive: true });
+  strip.addEventListener('touchcancel', release, { passive: true });
+  strip.addEventListener('mouseenter', function () { hover = true; });
+  strip.addEventListener('mouseleave', function () { hover = false; });
+  // A mouse has no sideways swipe, so it drags.
+  strip.addEventListener('mousedown', function (e) {
+    if (e.button !== 0) { return; }
+    drag = { x: e.clientX, from: strip.scrollLeft };
+    held = true; hand(); strip.className += ' drag'; e.preventDefault();
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (!drag) { return; }
+    strip.scrollLeft = drag.from - (e.clientX - drag.x);
+    hand(); fromScroller();
+  });
+  window.addEventListener('mouseup', function () {
+    if (!drag) { return; }
+    drag = null; held = false; hand();
+    strip.className = strip.className.replace(' drag', '');
+  });
+  window.addEventListener('resize', function () { if (set) { measure(); pos = wrap(strip.scrollLeft); } });
+  if (window.IntersectionObserver) {
+    new IntersectionObserver(function (en) { seen = en[en.length - 1].isIntersecting; }).observe(strip);
+  }
+  requestAnimationFrame(function (t) { last = t; requestAnimationFrame(frame); });
 })();
 </script>
 
