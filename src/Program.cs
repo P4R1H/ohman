@@ -114,6 +114,7 @@ namespace Ohman {
             engine.Init();
             var sensors = new Sensors();
             sensors.CpuSource = delegate { return engine.Cpu; };
+            sensors.DeadZoneHint = settingsObj.DeadZone;
             sensors.Start();
 
             var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };

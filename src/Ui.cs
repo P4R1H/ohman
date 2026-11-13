@@ -1972,7 +1972,7 @@ namespace Ohman {
             if (nudge != null) {
                 txtDriverNudge.Text = nudge;
                 bool restart = S.DriverRestartPending;
-                txtDriverNudgeSub.Text = restart ? "The driver is installed and waits for a restart" : "Your firmware refuses fan levels through BIOS commands. " + Program.DisplayName + " can set them through a driver.";
+                txtDriverNudgeSub.Text = restart ? "The driver is installed and waits for a restart" : E.CpuBlind ? "Windows gives one fixed number for this CPU, so the fans hold a safe speed. The driver reads the real one." : "Your firmware refuses fan levels through BIOS commands. " + Program.DisplayName + " can set them through a driver.";
                 btnDriverNudge.Text = restart ? "Restart now" : "Install driver";
             }
             if (driverBanner.Visibility != want) { driverBanner.Visibility = want; if (cur == Page.Home) Remeasure(cur); }
@@ -2169,6 +2169,7 @@ namespace Ohman {
 
         bool sensorsSeen;
         void OnSensors(SensorSnapshot s) {
+            E.NoteCpuSource(s);
             E.CpuTemp = s.CpuTemp;
             E.CpuTempNow = s.CpuTempNow;
             if (!double.IsNaN(s.CpuTemp)) { int d = (int)Math.Round(s.CpuTemp); if (d != cpuTipFor) { cpuTipFor = d; chipCpu.ToolTip = "CPU is " + d + "\u00b0 right now"; } }

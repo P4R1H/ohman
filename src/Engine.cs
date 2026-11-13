@@ -87,8 +87,11 @@ namespace Ohman {
         public bool SyncWinPower = true;            // mirror mode into the Windows power-mode overlay
         public bool EcoCool = false;                // true: Eco uses the BIOS "cool" fan policy (0x50). Off = exactly what OGH sends for Eco (0x30).
         public int HeartbeatSec = 45;               // firmware forgets fan settings after 120 s without a call
-        public bool MaxBackWhenCool = true;         // leave max fan once the CPU has been below 60 C for two minutes
-        public int MaxStopAfterMin = 30;            // leave max fan after this many minutes (0 = never)
+        // Both off unless asked for: Max is something a person turns on, and it stays on until they turn it off.
+        // They were on by default, and an idle machine at max fan is below 60 C within a minute, so "Max" lasted
+        // about four minutes and then read as the app dropping the setting (the maintainer's own log, 2026-11-13).
+        public bool MaxBackWhenCool = false;        // leave max fan once the CPU has been below 60 C for two minutes
+        public int MaxStopAfterMin = 0;             // leave max fan after this many minutes (0 = never)
         public bool ManualLinked = true;            // the two manual sliders move together
         public long UpdateChecked = 0;              // ticks of the last successful update check
         public string CheckedFrom = "";             // the build that did that check; a different one means the cache is not ours
@@ -113,6 +116,7 @@ namespace Ohman {
         public bool McuLayoutMigrated = false;      // 1.2.3: keys first drawn in 1.2.3 took their old neighbour's colour
         public string AutostartExe = "";            // the exe the logon task was last registered for
         public int FanBeforeMax = 0;                // FanMode that Max interrupted; survives a restart
+        public int DeadZone = 0;                    // the ACPI zone reading (tenths of a kelvin) that proved to be a constant here, 0 = none
         public bool InfoDismissed = false;          // the first-on-this-board note, closed by the user
         public bool Guard = true;                   // thermal guard: force max fan when the machine runs away
         public int GuardCpu, GuardChassis;          // the guard's own limits, 0 = the profile's
@@ -139,7 +143,7 @@ namespace Ohman {
 
         public bool FirstRun;                       // no state file yet: first launch on this machine
         public int Ver;                             // version of the file this was read from; 0 = written before versioning
-        public const int FileVer = 2;
+        public const int FileVer = 3;
         public static Settings Load() {
             var s = new Settings();
             try {
@@ -161,6 +165,13 @@ namespace Ohman {
             // v1: the OMEN key defaulted to Cycle. It now opens the window (Shift+F11 cycles), so a file that never
             // saw the new default and still says Cycle is the old default, not a choice.
             if (Ver < 2 && Key == KeyAction.Cycle) { Key = KeyAction.Show; Log.Write("settings: OMEN key moved to the new default (open the window)"); }
+            // v2: max fan ended by itself by default, when cool and after 30 minutes. Both are off by default now. A
+            // file holding exactly that pair never had either one touched; anyone who changed one keeps both.
+            if (Ver < 3 && MaxBackWhenCool && MaxStopAfterMin == 30) {
+                MaxBackWhenCool = false;
+                MaxStopAfterMin = 0;
+                Log.Write("settings: max fan no longer stops by itself (the new default); both switches are on the Fans page");
+            }
             if (Ver != FileVer) { Ver = FileVer; Save(); }
         }
 
@@ -209,6 +220,7 @@ namespace Ohman {
                         case "McuLayoutMigrated": if (bool.TryParse(v, out b)) s.McuLayoutMigrated = b; break;
                         case "AutostartExe": s.AutostartExe = v.Length > 400 ? "" : v; break;
                         case "FanBeforeMax": if (TryInt(v, out n)) s.FanBeforeMax = Math.Max(0, Math.Min(3, n)); break;
+                        case "DeadZone": if (TryInt(v, out n)) s.DeadZone = n >= 2830 && n <= 3980 ? n : 0; break;
                         case "LatestVersion": s.LatestVersion = v.Length > 24 ? v.Substring(0, 24) : v; break;
                         case "WinX": if (TryInt(v, out n)) s.WinX = n; break;
                         case "WinY": if (TryInt(v, out n)) s.WinY = n; break;
@@ -334,6 +346,7 @@ namespace Ohman {
                 if (McuLayoutMigrated) sb.AppendLine("McuLayoutMigrated=True");
                 if (AutostartExe.Length > 0) sb.AppendLine("AutostartExe=" + AutostartExe);
                 sb.AppendLine("FanBeforeMax=" + FanBeforeMax);
+                if (DeadZone != 0) sb.AppendLine("DeadZone=" + DeadZone);
                 sb.AppendLine("WinX=" + WinX);
                 sb.AppendLine("WinY=" + WinY);
                 sb.AppendLine("StartHidden=" + StartHidden);
@@ -1043,6 +1056,33 @@ namespace Ohman {
         }
         public double GpuTemp = double.NaN, IrTemp = double.NaN;   // GpuTemp fed by the UI sensor loop; IrTemp read here
         public bool GpuAsleep;                            // the dGPU is in D3: GpuTemp is NaN on purpose, not unknown
+        /// <summary>No driver, and the only CPU temperature Windows offers has proved to be a constant (Sensors,
+        /// DeadZoneHint). CpuTemp is NaN then, which the curve reads as "the GPU is all there is": under a CPU-only
+        /// load that is the idle level. So while this is set the curve never asks for less than its Fallback, the
+        /// level it already uses when it can see no temperature at all.</summary>
+        public volatile bool CpuBlind;
+        /// <summary>Fed from the sensor loop with every snapshot; remembers the constant across restarts.</summary>
+        public void NoteCpuSource(SensorSnapshot s) {
+            if (s == null) return;
+            if (s.AcpiDead && S.DeadZone != s.AcpiDeciKelvin) {
+                S.DeadZone = s.AcpiDeciKelvin; S.Save();
+                Log.Write("cpu temperature: the ACPI zone has read " + s.AcpiTemp.ToString("0.0", CultureInfo.InvariantCulture) + " through a minute of load without moving; it is not the CPU and is no longer used");
+            } else if (s.AcpiMoved && S.DeadZone != 0) {
+                S.DeadZone = 0; S.Save();
+                Log.Write("cpu temperature: the ACPI zone moved after all; it is used again");
+            }
+            bool blind = s.AcpiDead && !s.CpuFromDriver;
+            if (blind == CpuBlind) return;
+            CpuBlind = blind;
+            Log.Write(blind ? "cpu temperature: none without the driver; the fan curve holds at least its fallback level" : "cpu temperature: available again");
+            Changed();
+        }
+        /// <summary>The curve target, lifted to the fallback while the CPU cannot be seen.</summary>
+        int[] TargetFor(FanCurve curve, double cpu, double gpu, double ir) {
+            int[] t = curve.Target(cpu, gpu, ir);
+            if (CpuBlind) { t[0] = Math.Max(t[0], curve.Fallback); t[1] = Math.Max(t[1], curve.Fallback); }
+            return t;
+        }
         int fanWriteFailures;
 
         /// <summary>Whether this firmware still takes fan levels. Driven by what it does, not by what it says.
@@ -1272,6 +1312,7 @@ namespace Ohman {
                 if (DriverReady || !S.DriverUse || DriverBusy) return null;
                 if (S.DriverNudgeDismissed == Program.Version) return null;
                 if (S.DriverRestartPending) return "Restart Windows to finish installing the driver";
+                if (CpuBlind) return "No CPU temperature without the driver";
                 bool fans = (P.DriverFor & DriverFor.FanLevels) != 0 || (EcFanRouteWanted && P.Ec != null);
                 return fans ? "Fan levels on this board need a driver" : null;
             }
@@ -1470,7 +1511,7 @@ namespace Ohman {
             // otherwise show the guard's last reading of the same sensor, which costs nothing (#72).
             if (curve.UseChassis) { try { IrTemp = Hw.GetTemperature(); } catch { IrTemp = double.NaN; } }
             else IrTemp = GuardChassis >= 0 ? GuardChassis : double.NaN;
-            int[] target = curve.Target(smoothCpu, smoothGpu, IrTemp);
+            int[] target = TargetFor(curve, smoothCpu, smoothGpu, IrTemp);
             int n1 = immediate ? target[0] : curve.Step(curLevel1, target[0]);
             int n2 = immediate ? target[1] : curve.Step(curLevel2, target[1]);
             // Ramp delay: fans that are off stay off until the curve has wanted them for that long. Before, the first
@@ -1835,7 +1876,7 @@ namespace Ohman {
             if (S.Fan == FanMode.Manual) return new[] { S.Fan1, S.Fan2 };
             FanCurve curve = S.Fan == FanMode.Custom ? CustomCurve() : P.Curve;
             double ir = curve.UseChassis && GuardChassis >= 0 ? GuardChassis : double.NaN;
-            return curve.Target(CpuTemp, GpuTemp, ir);
+            return TargetFor(curve, CpuTemp, GpuTemp, ir);
         }
         public void SetGuard(bool on) {
             S.Guard = on;

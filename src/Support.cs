@@ -619,6 +619,9 @@ namespace Ohman {
                         // why a per-key board ended up with nothing to drive: a Primax keyboard found and refused, or
                         // no keyboard interface at all. Neither line says "lighting:", so both were being dropped.
                         || line.IndexOf("mcu keyboard", StringComparison.Ordinal) >= 0 || line.IndexOf("per-key board", StringComparison.Ordinal) >= 0
+                        // a shortcut another program owns (#107: "ctrl+alt+b is not working", and nothing in the report
+                        // to say Windows had refused it), and which number is standing in for the CPU (#113)
+                        || line.IndexOf("hotkey ", StringComparison.Ordinal) >= 0 || line.IndexOf("cpu temperature:", StringComparison.Ordinal) >= 0
                         // the guard's release next to its engage (only engaged lines said nothing of how long it held, #95,
                         // #101), the firmware hold, the GPU power probe (none says "generic profile", #91), the exit hand-off
                         // (#100) and each start, so a report tells the guard, the firmware and the curve apart

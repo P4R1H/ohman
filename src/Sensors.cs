@@ -16,6 +16,8 @@ namespace Ohman {
         public double AcpiTemp = double.NaN;              // the hottest ACPI zone, kept beside CpuTemp when the driver supplies that
         public double CpuTempNow = double.NaN;            // the single reading behind CpuTemp, before the median; for the report
         public bool CpuFromDriver;                        // CpuTemp is the package sensor read through the driver
+        public bool AcpiDead, AcpiMoved;                  // the zone sat on one number through real work / has changed at least once
+        public int AcpiDeciKelvin;                        // the zone's raw reading in tenths of a kelvin, 0 when there is none
         public double Pl1 = double.NaN, Pl2 = double.NaN; // package power limits the CPU is holding (driver only)
         public string Throttle = "";                      // "" or why the CPU is being held back (driver only)
         public DateTime GpuRead = DateTime.MinValue;      // when the GPU numbers below were actually measured
@@ -56,6 +58,24 @@ namespace Ohman {
         public Func<CpuRegisters> CpuSource;
         int cpuPollFailures;
         bool disagreementLogged;
+        // An ACPI zone that is not the CPU. On 8C99 and 8BAA the only zone in range reads 27.9 C whatever the
+        // machine is doing (#115, #117: 28 beside a die at 50 and 62), and without the driver that number was the
+        // CPU temperature: shown on Home, fed to the curve, which then idled the fans under any load that was not
+        // also the GPU's (#113, "the fans don't work properly and the system gets very hot"). A zone is called
+        // dead only on its own evidence: it has not changed by a tenth of a degree since this process started,
+        // through a minute's worth of ticks with the CPU at 40 % or more, and the number it sits on is under 40 C,
+        // which no laptop CPU is after a minute of that. The last part matters: a chip held at its throttle point
+        // also reads one number for minutes, and calling that zone dead would take the fans off a CPU at 95.
+        // One change, ever, and it is alive again.
+        // DeadZoneHint is the constant an earlier session proved, so the next start does not spend its first
+        // busy minute believing it again.
+        public int DeadZoneHint;
+        const double ZoneBusyLoad = 40, ZoneBusySeconds = 60;
+        const int ZoneColdBelow = 3132;                   // 40 C in tenths of a kelvin
+        int zoneFirst;
+        bool zoneMoved;
+        double zoneBusy;
+        DateTime zoneTick = DateTime.MinValue;
 
         public Sensors() { }
 
@@ -161,11 +181,19 @@ namespace Ohman {
                         if (k >= 283 && k <= 398 && (double.IsNaN(hot) || k > hot)) hot = k;
                     } catch { }
                 }
-                if (!double.IsNaN(hot)) s.AcpiTemp = Math.Round(hot - 273.15, 1);
+                if (!double.IsNaN(hot)) {
+                    s.AcpiTemp = Math.Round(hot - 273.15, 1);
+                    s.AcpiDeciKelvin = (int)Math.Round(hot * 10);
+                    if (zoneFirst == 0) zoneFirst = s.AcpiDeciKelvin;
+                    else if (s.AcpiDeciKelvin != zoneFirst) zoneMoved = true;
+                    s.AcpiMoved = zoneMoved;
+                    s.AcpiDead = !zoneMoved && s.AcpiDeciKelvin < ZoneColdBelow && (zoneBusy >= ZoneBusySeconds || s.AcpiDeciKelvin == DeadZoneHint);
+                }
                 // The driver's number wins where there is one: it is the package sensor itself, not whichever
                 // zone the firmware chose to expose. The zone stays in the snapshot for the report to compare.
+                // A dead zone is no reading at all: "--" on the panel and the curve's own answer to having none.
                 s.CpuFromDriver = !double.IsNaN(die);
-                s.CpuTempNow = s.CpuFromDriver ? die : s.AcpiTemp;
+                s.CpuTempNow = s.CpuFromDriver ? die : s.AcpiDead ? double.NaN : s.AcpiTemp;
                 // Same rule as the wattage: the die and the ACPI zone are not the same numbers, and a median that
                 // ranks one against the other after a source change reports a temperature neither produced.
                 if (s.CpuFromDriver != tempFromDriver) { tempFromDriver = s.CpuFromDriver; recentCount = 0; }
@@ -175,6 +203,12 @@ namespace Ohman {
                     Log.Write("cpu temperature: the driver reads " + s.CpuTemp.ToString("0") + ", the ACPI zone " + s.AcpiTemp.ToString("0") + "; the driver's number is used");
                 }
                 try { if (cpuUtil != null) s.CpuLoad = Math.Min(100, cpuUtil.NextValue()); } catch { }
+                // The load just read covers the time since the last tick; count it against the zone while the zone
+                // has still never moved. Capped, so one long tray-rate gap is not most of the minute by itself.
+                DateTime tickAt = DateTime.UtcNow;
+                if (!zoneMoved && zoneFirst != 0 && zoneTick != DateTime.MinValue && s.CpuLoad >= ZoneBusyLoad)
+                    zoneBusy += Math.Min(10, (tickAt - zoneTick).TotalSeconds);
+                zoneTick = tickAt;
                 try {
                     if (cpuFreq != null) {
                         double base_ = cpuFreq.NextValue();

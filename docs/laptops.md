@@ -32,7 +32,7 @@ by a person yet. See [Verifying your laptop](#verifying-your-laptop), it takes f
 | Model | Board ids |
 |---|---|
 | OMEN Transcend 14 (2024) | `8C58` ✓ |
-| OMEN Transcend 14 (2025) | `8E41` |
+| OMEN Transcend 14 (2025) | `8E41` ✓ |
 | OMEN Transcend 16 (2023–2025) | `8BB3` ✓, `8C3B`, `8C4D` |
 
 ### OMEN 16 and OMEN MAX
@@ -49,12 +49,12 @@ by a person yet. See [Verifying your laptop](#verifying-your-laptop), it takes f
 | Model | Board ids |
 |---|---|
 | OMEN 15 (2019, 15-dc / 15-dh) | `8574`, `8600` ✓ |
-| OMEN 17 (2019, 17-cb0) | `8603` |
+| OMEN 17 (2019, 17-cb0) | `8603` ✓ |
 | OMEN 15 (2020) | `8A15` |
 | OMEN 15 / 17 (2021) | `8BAD` ✓ |
 | OMEN 17 (17-db1xxx) | `8E10` ✓ |
 | HyperX OMEN 15-gb0xxx (2026) | `8EEC` ✓ |
-| OMEN 15 / 17, 2018–2021 generations | `84DA`, `84DB`, `84DC`, `8572`, `8573`, `8575`, `8601`, `8602`, `8604`, `8605`, `8606`, `8607`, `860A`, `8746`, `8747`, `8748` ✓, `8749`, `874A`, `8786`, `8787` ✓, `8788`, `878A`, `878B`, `878C`, `87B5`, `886B`, `886C`, `88C8`, `88CB`, `88D1`, `88D2` ✓, `88F4`, `88F5`, `88F6`, `88F7`, `88FD`, `88FE`, `88FF`, `8900`, `8901`, `8902`, `8912` ✓, `8917`, `8918`, `8949`, `894A`, `89EB` |
+| OMEN 15 / 17, 2018–2021 generations | `84DA`, `84DB`, `84DC`, `8572`, `8573`, `8575`, `8601`, `8602`, `8604`, `8605`, `8606`, `8607`, `860A`, `8746`, `8747`, `8748` ✓, `8749`, `874A`, `8786`, `8787` ✓, `8788`, `878A`, `878B`, `878C`, `87B5`, `886B`, `886C`, `88C8`, `88CB`, `88D1` ✓, `88D2` ✓, `88F4`, `88F5`, `88F6`, `88F7`, `88FD`, `88FE` ✓, `88FF`, `8900`, `8901`, `8902`, `8912` ✓, `8917`, `8918`, `8949`, `894A`, `89EB` |
 
 ### Victus
 
@@ -67,8 +67,8 @@ are written down:
 | Victus 16 (2021–2023) | `88F8`, `8A25` ✓ | from `hp-wmi` |
 | Victus 15-fb0xxx | `8A3D` | from `hp-wmi`, no quiet mode |
 | Victus 16-r0xxx | `8BC2` ✓ | OMEN bytes; `hp-wmi` lists it as OMEN despite the name |
-| Victus 16 S / R (2023–2024) | `8B2F`, `8BBE` ✓, `8BD4`, `8BD5` ✓, `8C99` ✓, `8C9C` ✓ | from `hp-wmi`, no quiet mode |
-| Victus 15 and 16, other models | `88D9`, `88DA`, `88EE` ✓, `8A26` ✓, `8A3E`, `8A3F` ✓, `8BB1` ✓, `8C2F`, `8C30`, `8C3F`, `8D07`, `8DCD`, `8DCF` ✓, `8DD0` ✓, `8DD2` ✓, `8E5C` ✓, `8E5E` | from the firmware |
+| Victus 16 S / R (2023–2024) | `8B2F`, `8BBE` ✓, `8BD4` ✓, `8BD5` ✓, `8C99` ✓, `8C9C` ✓ | from `hp-wmi`, no quiet mode |
+| Victus 15 and 16, other models | `88D9`, `88DA`, `88EB` ✓, `88EE` ✓, `8A26` ✓, `8A3E`, `8A3F` ✓, `8BB1` ✓, `8C2F`, `8C30`, `8C3F`, `8D07`, `8DCD` ✓, `8DCF` ✓, `8DD0` ✓, `8DD2` ✓, `8E5C` ✓, `8E5E` | from the firmware |
 
 "from the firmware" is the same path every unlisted OMEN takes: Ohman asks the board which firmware generation
 it is and drives it with that generation's bytes. On a v0 Victus that includes the quiet byte `0x03` for Eco:
