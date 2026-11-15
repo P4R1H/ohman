@@ -1906,7 +1906,12 @@ namespace Ohman {
                 if (c >= 0 && c < GuardChassisSafe) chassisScaleKnown = true;
                 bool chassisUsable = P.Verified || chassisScaleKnown;
                 bool hot = (cpuKnown && t >= GuardCpuHot) || (chassisUsable && c >= GuardChassisHot);
-                bool stalled = cpuKnown && t >= P.Guard.StallCpu && f[0] >= 0 && f[1] >= 0 && (f[0] + f[1]) < P.Guard.StallLevelSum;
+                // Stalled means fans that are ours to drive and are not turning. While the firmware has them (FansByBios:
+                // the display is off, or Auto on battery) a zero is its own decision, the same one it makes with Ohman
+                // closed, and several firmwares idle at 0 rpm well past StallCpu. Owner of an 8E41, display off, CPU at
+                // 87 and 89 with the firmware still holding 0/0: the guard called it a stall and went to max fan, the
+                // second time for two hours and fourteen minutes (#109). The CPU and chassis limits still stand there.
+                bool stalled = !FansByBios && cpuKnown && t >= P.Guard.StallCpu && f[0] >= 0 && f[1] >= 0 && (f[0] + f[1]) < P.Guard.StallLevelSum;
                 // Two ticks, not one: a single sample landing inside a spike used to force maximum fan on an idle
                 // laptop, three times in one evening. Sensors hands over a median now, so this is the second
                 // layer rather than the only one. Twenty seconds costs nothing, since the chips throttle

@@ -151,7 +151,7 @@ namespace Ohman {
         int[] guardLevels = new int[0];                         // what each entry of the fans dropdown means, 0 = max
         DispatcherTimer guardDebounce;
         int lastChassis = -1, cpuTipFor = -1, chassisTipFor = -1;
-        TextBlock txtGuardSub, txtMaxCoolSub, txtKeyCmdHint;
+        TextBlock txtGuardSub, txtGuardRelease, txtMaxCoolSub, txtKeyCmdHint;
         Button btnClose;
         Border toast;
         TextBlock txtToast;
@@ -428,6 +428,7 @@ namespace Ohman {
             tgGuard = F<ToggleButton>("TgGuard");
             tgUpdateAuto = F<ToggleButton>("TgUpdateAuto");
             txtGuardSub = F<TextBlock>("TxtGuardSub");
+            txtGuardRelease = F<TextBlock>("TxtGuardRelease");
             txtMaxCoolSub = F<TextBlock>("TxtMaxCoolSub");
             txtKeyCmdHint = F<TextBlock>("TxtKeyCmdHint");
             txtUpdate = F<TextBlock>("TxtUpdate");
@@ -2532,6 +2533,10 @@ namespace Ohman {
                 chipFans.Index = Array.IndexOf(guardLevels, E.GuardLevel);
                 chipHold.Index = Array.IndexOf(holdChoices, E.GuardHoldSeconds);
             });
+            // The sentence reads as "max for 60 s", and an owner set it expecting the fans back after that long (#115).
+            // The time only starts once both readings are under the release points, which sit below the limits.
+            txtGuardRelease.Text = "Lets go once under " + E.GuardCpuSafe + "° and " + E.GuardChassisSafe + "°";
+            txtGuardRelease.Visibility = guardLine.Visibility;
         }
         IntPtr Hook(IntPtr h, int msg, IntPtr wp, IntPtr lp, ref bool handled) {
             if (msg == WM_HOTKEY) {

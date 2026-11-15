@@ -703,6 +703,7 @@
                   <TextBlock Text="Thermal guard" Style="{StaticResource Row}"/>
                   <TextBlock x:Name="TxtGuardSub" Style="{StaticResource RowSub}"/>
                   <WrapPanel x:Name="GuardLine" Margin="0,4,0,0"/>
+                  <TextBlock x:Name="TxtGuardRelease" Style="{StaticResource RowSub}" Margin="0,6,0,0"/>
                 </StackPanel>
                 <Button x:Name="BtnGuard" Grid.Column="1" Style="{StaticResource IconBtn}" Width="24" Height="24" Margin="0,0,10,0" ToolTip="Change the rule"/>
                 <ToggleButton x:Name="TgGuard" Grid.Column="2" Style="{StaticResource Switch}"/>

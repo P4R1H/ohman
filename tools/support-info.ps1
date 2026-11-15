@@ -6,6 +6,21 @@ $ErrorActionPreference = 'Continue'
 $out = Join-Path $PSScriptRoot 'support-info.txt'
 $lines = New-Object System.Collections.Generic.List[string]
 function L($s) { $lines.Add($s); $s }
+# Where Ohman is. Beside tools\ when this runs from the release zip, but four reports in a row came from a copy of
+# the source (no Ohman.exe in it) or from the script moved next to the exe, and each arrived without the keyboard
+# section and without Ohman's log (#109, #110, #120, #122). So: beside tools\, then this folder, then the running
+# process, then the places people unzip to.
+function FindOhman {
+    foreach ($c in @((Join-Path (Split-Path $PSScriptRoot -Parent) 'Ohman.exe'), (Join-Path $PSScriptRoot 'Ohman.exe'))) { if (Test-Path $c) { return $c } }
+    $p = Get-Process Ohman -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($p -and $p.Path) { return $p.Path }
+    foreach ($d in @("$env:USERPROFILE\Downloads", "$env:USERPROFILE\Desktop", "$env:USERPROFILE\Documents", "$env:LOCALAPPDATA\Ohman")) {
+        $f = Get-ChildItem $d -Filter Ohman.exe -Recurse -Depth 2 -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if ($f) { return $f.FullName }
+    }
+    $null
+}
+$ohmanExe = FindOhman
 # Exception text carries the script's own path, which lives under C:\Users\<name>, and the OGH log lines are
 # third-party text we did not write. This file is meant to be pasted into a public issue, so nothing goes in
 # it without the user profile and machine name taken out first.
@@ -141,9 +156,9 @@ L ""; L "Keyboard HID lighting (what the keyboard itself reports; read-only):"
 # On a per-key board the firmware's colour table is inert and this is the interface that matters, so it is the
 # single most useful thing an owner of one can send us.
 try {
-    $exe = Join-Path (Split-Path $PSScriptRoot -Parent) 'Ohman.exe'
-    if (Test-Path $exe) { & $exe --lamps 2>&1 | ForEach-Object { L ("  " + $_) } }
-    else { L "  (Ohman.exe not found beside tools\; run this from the folder you unzipped)" }
+    $exe = $ohmanExe
+    if ($exe) { & $exe --lamps 2>&1 | ForEach-Object { L ("  " + $_) } }
+    else { L "  (Ohman.exe not found; open Ohman once and run this again)" }
 } catch { L ("  lamp query failed: " + (Scrub $_.Exception.Message)) }
 
 L ""; L "OGH platform file (which per-model JSON OGH loaded, if any):"
@@ -224,8 +239,8 @@ L ""; L "Ohman's own log (what it decided about this board, and why):"
 # If they have run Ohman at all, this says which profile it picked, which commands failed and what the
 # thermal zone reads. It is the single most useful thing in a bug report and people rarely think to send it.
 try {
-    $cand = @((Join-Path (Split-Path $PSScriptRoot -Parent) 'ohman.log'), (Join-Path $env:LOCALAPPDATA 'Ohman\ohman.log'))
-    $log = $cand | Where-Object { Test-Path $_ } | Select-Object -First 1
+    $cand = @($(if ($ohmanExe) { Join-Path (Split-Path $ohmanExe) 'ohman.log' }), (Join-Path (Split-Path $PSScriptRoot -Parent) 'ohman.log'), (Join-Path $PSScriptRoot 'ohman.log'), (Join-Path $env:LOCALAPPDATA 'Ohman\ohman.log'))
+    $log = $cand | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
     if (-not $log) { L "  (Ohman has not been run yet, or its log is elsewhere)" }
     else {
         $keep = Get-Content $log -Tail 400 | Where-Object {

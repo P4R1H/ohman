@@ -622,6 +622,9 @@ namespace Ohman {
                         // a shortcut another program owns (#107: "ctrl+alt+b is not working", and nothing in the report
                         // to say Windows had refused it), and which number is standing in for the CPU (#113)
                         || line.IndexOf("hotkey ", StringComparison.Ordinal) >= 0 || line.IndexOf("cpu temperature:", StringComparison.Ordinal) >= 0
+                        // "display off" was kept (it says "fans handed") and "display on" was not, so a report could not say
+                        // whether the display was still off when something happened an hour later (#109)
+                        || line.IndexOf("display on", StringComparison.Ordinal) >= 0 || line.IndexOf("display off", StringComparison.Ordinal) >= 0
                         // the guard's release next to its engage (only engaged lines said nothing of how long it held, #95,
                         // #101), the firmware hold, the GPU power probe (none says "generic profile", #91), the exit hand-off
                         // (#100) and each start, so a report tells the guard, the firmware and the curve apart
