@@ -22,7 +22,7 @@ firmware interface, without any ads, services, or accounts.
 | **Max fan** | Full speed with a way back: it returns to Auto once the chips are below 60° for two minutes, or after 15, 30 or 60 minutes. |
 | **Power gain** | OGH's "Smart Performance Gain": +0 to +15 W on the CPU+GPU budget NVIDIA Dynamic Boost draws from. |
 | **GPU power** | Base · Boost · Max, or follow the mode. |
-| **Graphics** | Hybrid, Discrete (the MUX) or iGPU only, whichever the firmware offers, with the restart it needs. |
+| **Graphics** | Hybrid, Optimus, Discrete (the MUX) or iGPU only, whichever the firmware offers, with the restart it needs. |
 | **Lighting** | The keyboard drawn as it actually lights. Select a key, a row, a zone or the whole board, then pick a hue and a shade; or Breathe, Cycle, Wave, or hand it to Windows Dynamic Lighting. One zone, four zones or per key, whichever your keyboard has. |
 | **Display** | Refresh rate, and the lowest rate on battery if you want it. |
 | **Benchmark** | Ctrl+Alt+R in a game: it warms up, then measures average FPS, 1% and 0.1% lows and stutter, with temperatures, power and fans beside them. Every run is kept and makes a card to share. [How it's measured](docs/benchmark.md). |

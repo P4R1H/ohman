@@ -1046,7 +1046,7 @@ namespace Ohman {
                 gfxMenu.DropDownItems.Add(it);
             }
             var gfxModes = new List<int>();
-            foreach (int mode in new[] { 0, 1, 3 }) if (E.GpuModeOffered(mode)) gfxModes.Add(mode);
+            foreach (int mode in Engine.GpuModeOrder) if (E.GpuModeOffered(mode)) gfxModes.Add(mode);
             if (gfxModes.Count >= 2) {
                 gfxMenu.DropDownItems.Add(new WF.ToolStripSeparator());
                 foreach (int mode in gfxModes) {
@@ -1797,13 +1797,25 @@ namespace Ohman {
         /// <summary>Graphics modes the firmware offers, as a segment; a change is written at once and needs a restart to take effect.</summary>
         void BuildGraphicsModes() {
             if (!E.BiosOk && !E.Hw.IsDemo) return;
-            int[] order = { 0, 1, 3 };                                       // Hybrid, Discrete (the MUX), iGPU only
             var names = new List<string>();
             var tags = new List<object>();
-            foreach (int mode in order) if (E.GpuModeOffered(mode)) { names.Add(Engine.GpuModeNames[mode]); tags.Add(mode); }
+            foreach (int mode in Engine.GpuModeOrder) if (E.GpuModeOffered(mode)) { names.Add(Engine.GpuModeNames[mode]); tags.Add(mode); }
             if (names.Count < 2) return;
             gfxSeg = new Seg(names.ToArray(), null, tags.ToArray(), Seg.Kind.Row);
-            F<Border>("GfxSegHost").Child = gfxSeg;
+            var host = F<Border>("GfxSegHost");
+            host.Child = gfxSeg;
+            // Four choices (a firmware offering Hybrid and Optimus both) do not fit beside the label: it was squeezed
+            // to "Graphi". They go on their own line under it, left-aligned with the text.
+            if (names.Count >= 4) {
+                var g = host.Parent as Grid;
+                if (g != null && g.RowDefinitions.Count == 0) {
+                    g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                    g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                    Grid.SetRow(host, 1); Grid.SetColumn(host, 0); Grid.SetColumnSpan(host, 2);
+                    host.HorizontalAlignment = HorizontalAlignment.Left;
+                    host.Margin = new Thickness(0, 10, 0, 0);
+                }
+            }
             gfxRow.Visibility = Visibility.Visible;
             gfxSeg.Picked += delegate(int i) { SwitchGraphics((int)gfxSeg.Tags[i]); };
         }
@@ -2122,6 +2134,7 @@ namespace Ohman {
                 tgLightPage.IsChecked = !S.HideLight;
                 txtLightPageSub.Text = !S.HideLight && E.Light == null ? "Back when Ohman next starts" : "Turn off for a white-only backlight. Fn still switches it";
                 tgGuard.IsChecked = S.Guard;
+                GuardText();          // the limits, the release points and whether the chassis counts all change after start
                 tgUpdateAuto.IsChecked = S.UpdateOnLaunch;
                 int hzNow = Display.CurrentHz();
                 if (hzSeg != null) for (int i = 0; i < hzSeg.Count; i++) if ((int)hzSeg.Tags[i] == hzNow) hzSeg.Select(i, IsVisible && cur == Page.Settings);
@@ -2253,9 +2266,16 @@ namespace Ohman {
                 case KeyAction.Run: RunKeyCommand(); break;
             }
         }
+        /// <summary>The mode flash's second line. Fans are remembered per mode, so a mode whose own fan setting is not
+        /// Auto says so: a Max picked once in Performance came back with every switch to Performance, and its owner
+        /// read that as the mode itself sending the fans to max (#98).</summary>
+        string ModeDetail(int idx) {
+            FanMode f = E.S.Modes[Math.Max(0, Math.Min(2, idx))].Fan;
+            return ModeSubs[idx] + (f == FanMode.Max ? " · max fan" : f == FanMode.Manual ? " · manual fans" : "");
+        }
         void CycleWithFlash() {
             int next = (E.ModeIndex + 1) % 3;
-            Flash(Engine.ModeNames[next] + " mode", ModeSubs[next], next);
+            Flash(Engine.ModeNames[next] + " mode", ModeDetail(next), next);
             ApplyModeAsync(next);
         }
         void ToggleMaxWithFlash() {
@@ -2535,14 +2555,16 @@ namespace Ohman {
             });
             // The sentence reads as "max for 60 s", and an owner set it expecting the fans back after that long (#115).
             // The time only starts once both readings are under the release points, which sit below the limits.
-            txtGuardRelease.Text = "Lets go once under " + E.GuardCpuSafe + "° and " + E.GuardChassisSafe + "°";
+            // Each number named: an owner who had lowered the chassis limit could not tell that the 32° was the chassis point
+            // their sensor barely reaches at idle (#127). A chassis limit not armed yet does not hold anything, so it is left out.
+            txtGuardRelease.Text = "Lets go once the CPU is under " + E.GuardCpuSafe + "°" + (E.GuardChassisArmed ? " and the chassis under " + E.GuardChassisSafe + "°" : "");
             txtGuardRelease.Visibility = guardLine.Visibility;
         }
         IntPtr Hook(IntPtr h, int msg, IntPtr wp, IntPtr lp, ref bool handled) {
             if (msg == WM_HOTKEY) {
                 int id = wp.ToInt32() - 1;
                 if (id >= 0 && id < HotkeyTable.Count && PassAltGr(id)) { handled = true; return IntPtr.Zero; }
-                if (id >= 0 && id <= 2) { Flash(Engine.ModeNames[id] + " mode", ModeSubs[id], id); ApplyModeAsync(id); }
+                if (id >= 0 && id <= 2) { Flash(Engine.ModeNames[id] + " mode", ModeDetail(id), id); ApplyModeAsync(id); }
                 else if (id == (int)HotkeyAction.MaxFan) ToggleMaxWithFlash();
                 else if (id == (int)HotkeyAction.Cycle) CycleWithFlash();
                 else if (id == (int)HotkeyAction.Benchmark) ToggleBench();
@@ -2599,7 +2621,7 @@ namespace Ohman {
             Morph(false);
             if (Program.BenchSelfTest && E.Hw.IsDemo) BenchSelfTest();
             if (Program.JustUpdated) ShowToast("Updated to " + Program.Version, false);
-            if (Program.FlashTest) Flash("Performance mode", ModeSubs[2], 2);
+            if (Program.FlashTest) Flash("Performance mode", ModeDetail(2), 2);
             if (screenshotPath == null) return;
             var started = DateTime.Now;
             var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(Program.FlashTest ? 600 : 500) };

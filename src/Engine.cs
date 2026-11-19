@@ -406,6 +406,10 @@ namespace Ohman {
         public int GpuMode = -1;                            // graphics mode the firmware reports (0 Hybrid, 1 Discrete, 2 Optimus, 3 iGPU only), -1 unknown
         public int GpuModePending = -1;                     // mode written this session, live after a restart
         public static readonly string[] GpuModeNames = { "Hybrid", "Discrete", "Optimus", "iGPU only" };
+        /// <summary>The order the choices are shown in. Optimus (2, OGH's GraphicsSwitcherMode, bit 8 of the offered set)
+        /// was left out when only Hybrid boards had been seen. An OMEN 16 (8D3F) offers iGPU only, Discrete and Advanced
+        /// Optimus, no Hybrid, so the automatic mode OGH gave it was the one choice missing (#128).</summary>
+        public static readonly int[] GpuModeOrder = { 0, 2, 1, 3 };
         /// <summary>Modes the firmware offers (system-design byte 7): 1 iGPU only, 2 Hybrid, 4 Discrete, 8 Advanced Optimus.</summary>
         bool graphicsReadable;
         public bool GpuModeOffered(int mode) {
@@ -1842,6 +1846,9 @@ namespace Ohman {
         public int GuardCpuSafe { get { return GuardCpuHot - (P.Guard.CpuHot - P.Guard.CpuSafe); } }
         public int GuardChassisSafe { get { return GuardChassisHot - (P.Guard.ChassisHot - P.Guard.ChassisSafe); } }
         public int GuardHoldSeconds { get { return S.GuardHold > 0 ? S.GuardHold : P.Guard.SafeSeconds; } }
+        /// <summary>Whether the chassis limit counts yet. On a board nobody has verified, the sensor has to read cool once
+        /// before its scale is trusted; until then the CPU and the stall test carry the guard alone.</summary>
+        public bool GuardChassisArmed { get { return P.Verified || chassisScaleKnown; } }
         public int GuardLevel { get { return S.GuardLevel; } }
         public void SetGuardLimits(int cpu, int chassis, int level, int hold) {
             S.GuardCpu = cpu == P.Guard.CpuHot ? 0 : cpu;
@@ -1904,7 +1911,7 @@ namespace Ohman {
                 // On a board nobody has verified, the chassis sensor may not mean what the profile's thresholds assume.
                 // Wait until it has read cool once; until then the CPU and the stall test carry the guard on their own.
                 if (c >= 0 && c < GuardChassisSafe) chassisScaleKnown = true;
-                bool chassisUsable = P.Verified || chassisScaleKnown;
+                bool chassisUsable = GuardChassisArmed;
                 bool hot = (cpuKnown && t >= GuardCpuHot) || (chassisUsable && c >= GuardChassisHot);
                 // Stalled means fans that are ours to drive and are not turning. While the firmware has them (FansByBios:
                 // the display is off, or Auto on battery) a zero is its own decision, the same one it makes with Ohman
@@ -2285,6 +2292,7 @@ namespace Ohman {
             // HasControl, not Present: Present only counts HP's virtual device, and a Darfon per-key keyboard can be
             // listed with no virtual device beside it, which left Windows repainting over us.
             if (!mcu && WinLighting.HasControl) { S.TookWinLighting = true; S.Save(); WinLighting.SetControl(false); }   // take the keyboard first or Windows overwrites us
+            { var pk = Light as PerKeyLighting; if (pk != null) pk.Retake(); }                                 // the keyboard may have gone back to its own lighting since (#109)
             TryLight(delegate {
                 if (S.Light == 1) Light.SetColors(Scaled(LightColors));
                 Light.SetBacklight(S.Light == 1, FirmwareLevel());                                  // brightness is in the colours; the level byte is the Fn key's
@@ -2326,7 +2334,12 @@ namespace Ohman {
         public void SetLightLevel(int level) {
             S.LightLevel = Math.Max(0, Math.Min(100, level));
             S.Save();
-            lock (applySync) { if (S.Light == 1 && Light != null && S.LightEffect == 0 && !LightUntouched) TryLight(delegate { Light.SetColors(Scaled(LightColors)); }, "Keyboard brightness"); }
+            lock (applySync) {
+                if (S.Light == 1 && Light != null && S.LightEffect == 0 && !LightUntouched) {
+                    { var pk = Light as PerKeyLighting; if (pk != null) pk.Retake(); }   // as in ApplyLightCore (#109)
+                    TryLight(delegate { Light.SetColors(Scaled(LightColors)); }, "Keyboard brightness");
+                }
+            }
             Changed();
         }
 
@@ -2394,6 +2407,15 @@ namespace Ohman {
             try { sb.AppendLine("max fan: " + Hw.GetMaxFan()); } catch (Exception ex) { sb.AppendLine("max fan: " + ex.Message); }
             try { sb.AppendLine("gpu power: " + Hw.GetGpuPower()); } catch (Exception ex) { sb.AppendLine("gpu power: " + ex.Message); }
             sb.AppendLine("settings: mode=" + ModeName + " (BIOS 0x" + ModeByte.ToString("X2") + (OnBattery ? ", DC" : ", AC") + ") fan=" + S.Fan + " " + S.Fan1 + "/" + S.Fan2 + " tdp=" + CurrentTdp + "W gpu=" + EffectiveGpu + (S.GpuAuto ? "(auto)" : "") + " key=" + KeyId + "/" + KeyData + "→" + S.Key + " ecoCool=" + S.EcoCool);
+            // Fans remembered per mode: a Max picked once in Performance comes back with Performance (#98).
+            sb.AppendLine("per mode: eco " + S.Modes[0].Fan + " · balanced " + S.Modes[1].Fan + " · performance " + S.Modes[2].Fan);
+            // The limits the owner set, not only the profile's: three reports of the guard holding long after a game
+            // (#101, #115, #127) could not say whether a lowered limit was the reason.
+            // "chassis" as the Settings panel says it; the same 0x23 reading the Home page and the engage line call ambient.
+            sb.AppendLine("guard: " + (S.Guard ? "on" : "off") + "  engages at cpu " + GuardCpuHot + " or chassis " + GuardChassisHot
+                + (S.GuardCpu > 0 || S.GuardChassis > 0 ? " (set by the owner)" : "") + ", lets go under cpu " + GuardCpuSafe + " and chassis " + GuardChassisSafe
+                + (GuardChassisArmed ? "" : " (chassis not armed yet: the cpu alone decides)")
+                + " for " + GuardHoldSeconds + " s, holds " + (GuardLevel > 0 ? "level " + GuardLevel : "max") + (GuardActive ? "  ENGAGED" : ""));
             sb.AppendLine("graphics: " + (GpuMode >= 0 && GpuMode < 4 ? GpuModeNames[GpuMode] : "unknown") + " (offered mask 0x" + Info.GpuModes.ToString("X2") + ")" + (GpuModePending >= 0 ? " -> " + GpuModeNames[GpuModePending] + " after restart" : ""));
             sb.AppendLine("lighting: " + (Light == null ? (LightHidden != null ? "hidden in Settings (" + LightHidden + ")" : "none") : Light.Describe + " mode=" + S.Light + " level=" + S.LightLevel + " colours=" + S.LightColors + " windowsControl=" + WinLighting.HasControl));
             // Which top the fan page divides by and where it came from. Two identical boards showing different

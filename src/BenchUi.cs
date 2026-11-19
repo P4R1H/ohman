@@ -387,8 +387,11 @@ namespace Ohman {
             Height = double.NaN;
             Measure(new Size(398, double.PositiveInfinity));
             double natural = DesiredSize.Height, cap = Math.Max(360, avail);   // 360: the floor Morph uses for the window
-            if (natural <= cap) return natural;
-            Height = cap - 44;                                                  // too tall for this screen: the board scrolls, the buttons stay
+            // Held at its own height, not left to stretch: the window grows into place over a few frames, and a page
+            // sized by the window meanwhile gave the board less than it needs, so its scrollbar flashed on the way in.
+            // Pinned, it lays out once at full size and the clipping host reveals it, the way the other pages arrive.
+            if (natural <= cap) { Height = Math.Max(0, natural - Margin.Top - Margin.Bottom); return natural; }
+            Height = cap - Margin.Top - Margin.Bottom;                          // too tall for this screen: the board scrolls, the buttons stay
             return cap;
         }
         /// <summary>The page's shape changed (another state, Runs opened or closed): the window should follow.</summary>

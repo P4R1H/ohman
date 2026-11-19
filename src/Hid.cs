@@ -374,6 +374,12 @@ namespace Ohman {
         /// host mode on our last colours after Ohman quit or was uninstalled, and OMEN Gaming Hub could not change
         /// it back. The next write takes it again.</summary>
         public void Release() { if (!held) return; lamps.TakeOver(false); held = false; }
+        /// <summary>Take it again on the next paint even though we believe we hold it. Nothing tells us when the
+        /// keyboard goes back to its own animations (Windows hands a LampArray back to autonomous mode when Dynamic
+        /// Lighting lets go of it), and from then on every colour we sent was ignored. On a 2025 Transcend 14 colours
+        /// and effects only arrived after switching to Windows and back, which is the one path that sent the control
+        /// report again (#109). One small feature report per change the owner makes; effect frames do not pay it.</summary>
+        public void Retake() { held = false; }
         public void Dispose() { Release(); try { lamps.Dispose(); } catch { } }
 
         public LightKind Kind { get { return LightKind.PerKey; } }

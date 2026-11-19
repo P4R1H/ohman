@@ -40,8 +40,8 @@ by a person yet. See [Verifying your laptop](#verifying-your-laptop), it takes f
 | Model | Board ids |
 |---|---|
 | OMEN 16 (2021–2022) | `8A42`, `8A43`, `8A44`, `8A4C` ✓, `8A4D` |
-| OMEN 16 (2023–2025) | `8BA9` ✓, `8BAA`, `8BAB` ✓, `8BCA` ✓, `8BCD` ✓, `8C76` ✓, `8C77`, `8C78`, `8D24`, `8D26`, `8D2F` ✓, `8E35` ✓ |
-| OMEN MAX 16 (2025) | `8D41`, `8D87` ✓, `8D88` |
+| OMEN 16 (2023–2025) | `8BA9` ✓, `8BAA`, `8BAB` ✓, `8BCA` ✓, `8BCD` ✓, `8C76` ✓, `8C77`, `8C78`, `8D24`, `8D26`, `8D2F` ✓, `8E35` ✓, `8E71` ✓ |
+| OMEN MAX 16 (2025) | `8D41` ✓, `8D87` ✓, `8D88` |
 | Other boards `hp-wmi` lists as OMEN | `8DD6` |
 
 ### OMEN 15 and OMEN 17
@@ -66,7 +66,7 @@ are written down:
 | Model | Board ids | Mode bytes |
 |---|---|---|
 | Victus 16 (2021–2023) | `88F8`, `8A25` ✓ | from `hp-wmi` |
-| Victus 15-fb0xxx | `8A3D` | from `hp-wmi`, no quiet mode |
+| Victus 15-fb0xxx | `8A3D` ✓ | from `hp-wmi`, no quiet mode |
 | Victus 16-r0xxx | `8BC2` ✓ | OMEN bytes; `hp-wmi` lists it as OMEN despite the name |
 | Victus 16 S / R (2023–2024) | `8B2F`, `8BBE` ✓, `8BD4` ✓, `8BD5` ✓, `8C99` ✓, `8C9C` ✓ | from `hp-wmi`, no quiet mode |
 | Victus 15 and 16, other models | `88D9`, `88DA`, `88EB` ✓, `88EE` ✓, `8A26` ✓, `8A3E`, `8A3F` ✓, `8BB1` ✓, `8C2F`, `8C30`, `8C3F`, `8D07`, `8DCD` ✓, `8DCF` ✓, `8DD0` ✓, `8DD2` ✓, `8E5C` ✓, `8E5E` | from the firmware |
