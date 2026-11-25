@@ -496,7 +496,7 @@ namespace Ohman {
             }
             Flip(G<ToggleButton>("tgEcoBattery"), "settings: Eco on battery", delegate { return E.S.EcoOnBattery; });
             if (X<Control>("SyncPowerRow").IsVisible) Flip(G<ToggleButton>("tgSyncPower"), "settings: sync the power profile", delegate { return E.S.SyncWinPower; });
-            else Check(Host.Find("powerprofilesctl") == null, "settings: no power-profile row without power-profiles-daemon");
+            else Check(Host.Find("powerprofilesctl") == null && Host.TunedAdm == null, "settings: no power-profile row without tuned or power-profiles-daemon");
 
             // thermal guard
             var tgGuard = G<ToggleButton>("tgGuard");

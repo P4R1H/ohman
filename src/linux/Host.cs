@@ -4,6 +4,7 @@
 // The UI reads the flags to decide which rows exist; the engine calls the methods and never asks which system
 // it is on.
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 
@@ -23,8 +24,8 @@ namespace Ohman {
         public static bool CanSelfUpdate { get { return false; } }
         /// <summary>The display's refresh rate can be listed and set: an X11 session with xrandr.</summary>
         public static bool HasRefreshRate { get { return Display.Available; } }
-        /// <summary>power-profiles-daemon is there to follow Ohman's mode.</summary>
-        public static bool HasPowerModeSync { get { return Find("powerprofilesctl") != null; } }
+        /// <summary>tuned or power-profiles-daemon is there to follow Ohman's mode.</summary>
+        public static bool HasPowerModeSync { get { return TunedAdm != null || Find("powerprofilesctl") != null; } }
         /// <summary>The benchmark's frame capture: MangoHud, which the owner loads into the game. True when it is
         /// installed, or a game with its control socket is already running. When it is false the Benchmark page
         /// still opens, and says what is missing.</summary>
@@ -41,9 +42,42 @@ namespace Ohman {
         public static void SetVendorTasks(bool disable) { }
 
         // ---------- the system's own power mode ----------
-        /// <summary>0 eco, 1 balanced, 2 performance, as power-profiles-daemon names them. A machine without the
-        /// daemon (TLP, tuned, nothing) is left alone, and so is one whose firmware offers no "performance".</summary>
+        /// <summary>tuned's own names for the three modes, tried in this order. Which of them a release ships, and
+        /// which of those an admin kept, differs, so the first one `tuned-adm list` offers is used. The set is the
+        /// one Victus Hub asks for; its author picked it on a Victus 16-s running Fedora.</summary>
+        static readonly string[][] TunedModes = new string[][] {
+            new string[] { "powersave", "balanced-battery" },                                    // eco
+            new string[] { "balanced", "desktop" },                                             // balanced
+            new string[] { "throughput-performance", "accelerator-performance", "latency-performance" },   // performance
+        };
+
+        /// <summary>tuned-adm's full path, or null. It lives in /usr/sbin, which is not on every desktop
+        /// session's PATH, so the two places it is packaged into are looked at before PATH is.</summary>
+        public static string TunedAdm {
+            get {
+                try {
+                    if (File.Exists("/usr/sbin/tuned-adm")) return "/usr/sbin/tuned-adm";
+                    if (File.Exists("/usr/bin/tuned-adm")) return "/usr/bin/tuned-adm";
+                } catch { }
+                return Find("tuned-adm");
+            }
+        }
+
+        /// <summary>What follows the mode on this machine, as the support report says it.</summary>
+        public static string PowerModeSync {
+            get {
+                bool tuned = TunedAdm != null, ppd = Find("powerprofilesctl") != null;
+                return tuned && ppd ? "tuned and power-profiles-daemon" : tuned ? "tuned" : ppd ? "power-profiles-daemon" : "none (no tuned-adm, no powerprofilesctl)";
+            }
+        }
+
+        /// <summary>0 eco, 1 balanced, 2 performance. tuned is asked first: it is what moves the CPU here
+        /// (governor, EPP), where the BIOS mode Ohman sets by itself moves only the GPU and the fans, and
+        /// Fedora ships it with no power-profiles-daemon at all. A machine with neither (TLP, nothing) is
+        /// left alone, and so is one whose firmware offers no "performance".</summary>
         public static void SetPowerMode(int modeIndex) {
+            string tuned = TunedAdm;
+            if (tuned != null && SetTunedProfile(tuned, modeIndex)) return;
             string tool = Find("powerprofilesctl");
             if (tool == null) return;
             string name = modeIndex == 0 ? "power-saver" : modeIndex == 2 ? "performance" : "balanced";
@@ -52,6 +86,57 @@ namespace Ohman {
                 int rc = Run(tool, "set " + name, 4000, out err);
                 if (rc != 0) Log.Write("powerprofilesctl set " + name + ": rc " + rc + (err.Length > 0 ? " (" + err.Trim() + ")" : ""));
             } catch (Exception ex) { Log.Write("power profile: " + ex.Message); }
+        }
+
+        /// <summary>One tuned switch. False when this tuned offers none of the mode's profiles, so the caller can
+        /// fall back to power-profiles-daemon. A profile that was picked and then refused by the daemon is logged
+        /// and counts as done: the mode is the owner's choice, not something to retry on another daemon.</summary>
+        static bool SetTunedProfile(string tuned, int modeIndex) {
+            try {
+                string list;
+                int rc = Run(tuned, "list", 4000, out list);
+                if (rc == 0) {
+                    string[] want = TunedModes[Math.Max(0, Math.Min(2, modeIndex))];
+                    string name = TunedOffered(list, want);
+                    if (name == null) { Log.Write("tuned offers none of " + string.Join("/", want) + "; the mode is left to it"); return false; }
+                    string err;
+                    rc = Run(tuned, "profile " + name, 4000, out err);
+                    if (rc != 0) Log.Write("tuned-adm profile " + name + ": rc " + rc + (err.Length > 0 ? " (" + err.Trim() + ")" : ""));
+                    return true;
+                }
+                Log.Write("tuned-adm list: rc " + rc);
+            } catch (Exception ex) { Log.Write("tuned profile: " + ex.Message); }
+            return false;
+        }
+
+        /// <summary>The first of Ohman's candidates that this tuned offers. `tuned-adm list` prints one profile
+        /// per line as "- name   - what it is", under a header and a "Current active profile" line of its own,
+        /// so a line names a profile when it starts with the dash.</summary>
+        static string TunedOffered(string list, string[] candidates) {
+            var offered = new List<string>();
+            foreach (string line in list.Split('\n')) {
+                string t = line.TrimStart();
+                if (t.Length > 1 && t[0] == '-') {
+                    t = t.Substring(1).TrimStart();
+                    int e = 0;
+                    while (e < t.Length && !char.IsWhiteSpace(t[e])) e++;
+                    if (e > 0) offered.Add(t.Substring(0, e));
+                }
+            }
+            foreach (string c in candidates) if (offered.Contains(c)) return c;
+            return null;
+        }
+
+        /// <summary>The mode a profile name stands for, or -1 when it is not one of ours: tuned's names
+        /// (TunedModes) and the three power-profiles-daemon spells. Anything else -- a profile an admin made,
+        /// "virtual-guest" and its like -- is the caller's to leave alone.</summary>
+        public static int ProfileIndexFor(string profile) {
+            if (string.IsNullOrEmpty(profile)) return -1;
+            profile = profile.Trim();
+            for (int i = 0; i < TunedModes.Length; i++) if (Array.IndexOf(TunedModes[i], profile) >= 0) return i;
+            if (profile == "power-saver") return 0;
+            if (profile == "performance") return 2;
+            return -1;
         }
 
         // ---------- small things the other Linux classes share ----------
