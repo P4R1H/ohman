@@ -82,6 +82,7 @@ namespace Ohman {
         public const uint OP_PLATFORM_INFO = 0x01;              // legacy models: out128 [0] bit 0 = lighting supported
         public const uint OP_COLOR_GET = 0x02, OP_COLOR_SET = 0x03, OP_LIGHT_GET = 0x04, OP_LIGHT_SET = 0x05;
         public const int COLOR_OFFSET = 25;                     // zone i = bytes 25+3i .. 27+3i (R, G, B)
+        public const int ZONE_SLOTS = 8;                        // slots the table has room for; a one-zone keyboard lights from all of them
         public const int ON_FLAG = 0x80;
         // keyboard type byte (OGH NbKeyboardLightingType): 0 none, 1/2 four zones (with/without numpad), 3 per-key RGB, 4/5 one zone
         public readonly int KbdType;
@@ -98,6 +99,18 @@ namespace Ohman {
 
         BiosLighting(int kbdType, LightKind k, int z) { KbdType = kbdType; kind = k; zones = z; }
 
+        /// <summary>A read with a four-byte zero payload -- the shape every other mailbox query here sends, and
+        /// what OGH sends. Some firmware fails the whole WMI method when a read comes in empty: a Victus 16-s
+        /// (8BD4) answered both lighting probes with an I/O error that way, the keyboard-type query never
+        /// happened, and its single-zone keyboard read as "4 zones"; its real answer, type 4, arrives as soon as
+        /// one byte of payload is sent, which is also what the kernel's own multicolor patch sends for this
+        /// query. The empty form is still tried, because it is what every board before this one was asked with,
+        /// and one of them may insist on it. A refusal is tried the other way too, for the same reason.</summary>
+        static byte[] Read(uint command, uint commandType, int outSize) {
+            try { return Bios.Call(command, commandType, new byte[] { 0, 0, 0, 0 }, outSize); }
+            catch { return Bios.Call(command, commandType, new byte[0], outSize); }
+        }
+
         /// <summary>Asks the firmware what keyboard this is. Read-only. Null when there is nothing to control.</summary>
         public static BiosLighting Detect() {
             // There are two independent questions here and we used to ask only one of them.
@@ -108,10 +121,13 @@ namespace Ohman {
             // Standard / WithNumPad / TenKeyLess / PerKeyRgb -- and both projects fall back to 0 ("standard") when
             // the call fails. We were treating 0x2B as the capability and bailing out on type 0, so every board
             // reporting a standard layout lost its keyboard page before we ever asked whether it had a backlight.
+            // Both probes are read-only but still send the four zero bytes every other call here sends: an
+            // empty read is a shape some firmware fails outright, which made the type query above one that never
+            // happened (8BD4). See Read.
             bool declared = false;
             int sup0 = -1, sup1 = -1;                      // the whole first two bytes, for WhiteOnly below
             try {
-                var d = Bios.Call(CMD, OP_PLATFORM_INFO, new byte[0], 128);
+                var d = Read(CMD, OP_PLATFORM_INFO, 128);
                 if (d.Length > 0) { declared = (d[0] & 1) != 0; sup0 = d[0]; }
                 if (d.Length > 1) sup1 = d[1];
             }
@@ -119,7 +135,7 @@ namespace Ohman {
 
             int type = 0;                                  // what both reference implementations assume on failure
             bool typeAnswered = false;                     // 0 the firmware said, not 0 because it refused (8574)
-            try { var d = Bios.Call(Bios.CMD_DEFAULT, OP_KBD_TYPE, new byte[0], 4); if (d.Length > 0) { type = (sbyte)d[0]; typeAnswered = true; } }
+            try { var d = Read(Bios.CMD_DEFAULT, OP_KBD_TYPE, 4); if (d.Length > 0) { type = (sbyte)d[0]; typeAnswered = true; } }
             catch (Exception ex) { Log.Write("keyboard type query: " + ex.Message + "; assuming standard layout"); }
             if (type < 0) type = 0;                        // -1 arrives as 0xFF and means the same thing as 0 here
 
@@ -191,7 +207,13 @@ namespace Ohman {
             var d = Table();                                     // read-modify-write, exactly as OGH does; bytes 0..24 are left alone
             var buf = new byte[128];
             Array.Copy(d, buf, Math.Min(d.Length, 128));
-            for (int i = 0; i < zones && i < c.Length; i++) { buf[COLOR_OFFSET + 3 * i] = c[i].R; buf[COLOR_OFFSET + 3 * i + 1] = c[i].G; buf[COLOR_OFFSET + 3 * i + 2] = c[i].B; }
+            if (zones == 1 && c.Length > 0) {
+                // The kernel's multicolor patch writes the colour into every slot the table has when there is
+                // one zone, not only the first, and that is the write this board was proved with. Copying it
+                // also clears what our earlier four-zone writes left in slots 4..7.
+                for (int i = 0; i < ZONE_SLOTS; i++) { buf[COLOR_OFFSET + 3 * i] = c[0].R; buf[COLOR_OFFSET + 3 * i + 1] = c[0].G; buf[COLOR_OFFSET + 3 * i + 2] = c[0].B; }
+            } else
+                for (int i = 0; i < zones && i < c.Length; i++) { buf[COLOR_OFFSET + 3 * i] = c[i].R; buf[COLOR_OFFSET + 3 * i + 1] = c[i].G; buf[COLOR_OFFSET + 3 * i + 2] = c[i].B; }
             Bios.Call(CMD, OP_COLOR_SET, buf, 4);
         }
 
