@@ -138,7 +138,7 @@ namespace Ohman {
         /// its firmware refused, and the report itself arrives with one Ctrl+V from the clipboard.</summary>
         static string Summary(Engine e) {
             var sb = new StringBuilder();
-            sb.AppendLine("(filled in by Ohman " + Program.Version + " - the full report is on your clipboard, paste it in the box below)");
+            sb.AppendLine("(filled in by Ohman " + Program.Version + " - the full report is on your clipboard, paste it in the support-info box below)");
             sb.AppendLine();
             sb.AppendLine("Board " + e.Board + ", " + (e.Supported ? (e.Generic ? "driven from the firmware's own answers" : "verified profile") : "NOT DRIVEN - read-only") + (e.Desktop ? " (desktop)" : ""));
             if (e.P != null && e.Supported)      // an unsupported board's profile is a placeholder; its bytes are never sent
@@ -148,8 +148,6 @@ namespace Ohman {
             sb.AppendLine("Fans: " + (e.FanCount > 0 ? "" + e.FanCount : "not reported") + "   Lighting: " + (e.Light == null ? (e.LightHidden != null ? "hidden in Settings" : "none detected") : e.Light.Describe));
             sb.AppendLine("Power gain: " + (e.Supported && e.P != null && e.P.HasPowerGain ? "yes" : "no") + "   GPU power: " + (e.Supported && e.P != null && e.P.HasGpuPower ? "yes" : "no"));
             if (e.LastError.Length > 0) sb.AppendLine("Last BIOS error: " + Scrub(e.LastError));
-            sb.AppendLine();
-            sb.AppendLine("What went wrong:");
             return sb.ToString();
         }
 
@@ -168,7 +166,10 @@ namespace Ohman {
                 + "&title=" + Uri.EscapeDataString("Support: " + (model.Length > 0 ? model : "board " + e.Board) + " (board " + e.Board + ")")
                 + "&model=" + Uri.EscapeDataString(model)
                 + "&board=" + Uri.EscapeDataString(e.Board)
-                + "&wrong=" + Uri.EscapeDataString(Summary(e));
+                // Its own box, not "What is wrong". That one is required, and arriving with this text already in it
+                // counted as filled: of ten reports in one week seven were submitted with nothing after "What went
+                // wrong:" (#131 to #139), and each needed a reply only to ask. Left empty, the form itself asks.
+                + "&summary=" + Uri.EscapeDataString(Summary(e));
             // Column padding is a quarter of the report and escapes to %20 three times over, so squeeze it for
             // the URL only. The clipboard and the file keep the aligned version, which is the readable one.
             // Escaping never shrinks a string, so if the raw report already overflows the budget the squeezed

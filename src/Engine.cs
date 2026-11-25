@@ -594,6 +594,7 @@ namespace Ohman {
             InitLight(true);
             ApplyRefreshRate(OnBattery);
             NoteFanMode(S.Fan);
+            curveWaitUntil = DateTime.UtcNow.AddSeconds(FirstReadingWaitSec);
             ApplyAll(false);
             StartKeyWatcher();
             heartbeat = new System.Threading.Timer(delegate { Heartbeat(); }, null, S.HeartbeatSec * 1000, S.HeartbeatSec * 1000);
@@ -945,6 +946,7 @@ namespace Ohman {
         }
 
         int ceilingTicks, ceilingHighWater;
+        int sessionFanHigh;                        // the fastest reading this run, whoever was driving the fans
         const int CeilingSettleTicks = 8;          // readings spent asking for the top before the answer is believed
         // The high-water mark is the fastest reading seen, so it is a lower bound and the two directions are not
         // the same claim. Seeing the fans go past the ceiling proves the ceiling is too low, whatever the margin.
@@ -994,6 +996,7 @@ namespace Ohman {
                 }
             }
             if (seen == 0) return;
+            if (seen > sessionFanHigh && seen < 100) sessionFanHigh = seen;
             // Only while asking for everything. Any lower and a low reading says nothing about the limit. A max flag
             // not yet seen to work counts for nothing: on firmware that ignores it, these readings are the curve's.
             bool maxAsking = (GuardActive || S.Fan == FanMode.Max) && maxProven;
@@ -1011,6 +1014,12 @@ namespace Ohman {
             if (++ceilingTicks < CeilingSettleTicks) return;
             ceilingTicks = 0;
             int real = ceilingHighWater;
+            // A ceiling is the fastest these fans go, and "never went past" has to mean never. The high-water mark only
+            // covers the stretch that is asking for the top right now. An 8C40 read 49/48 at midday and seven hours
+            // later, in the same run, sat at 40 under max fan: the learner
+            // wrote "these fans never went past 40" and the next start capped every curve there, on a machine already
+            // reaching 99 C (#142). A speed seen earlier this run is a speed they reach; it can only raise the answer.
+            if (real < P.Curve.Ceiling && sessionFanHigh > real) real = Math.Min(sessionFanHigh, P.Curve.Ceiling);
             int gap = real - P.Curve.Ceiling;
             if (gap < CeilingOver && gap > -CeilingShort) {
                 // The fans reach this session's ceiling. A lower one learned earlier in the same session is still
@@ -1254,27 +1263,59 @@ namespace Ohman {
                         if (pair == "percent") { P.Ec.UsePercent = true; Log.Write("driver: fan levels go to the percent pair (measured by the fan test)"); }
                         else if (pair == "rpm") P.Ec.UsePercent = false;
                     } catch { }
-                    int[] rpm = null;
-                    double die = double.NaN;
-                    try { rpm = Hw.GetFanLevels(); } catch { }
-                    // The coolest of three light polls. One reading caught the start-up spike on 8A4F (#93): 82 against an EC
-                    // reading of 49 with the ACPI zone at 50, and the map was rejected for the whole session. The floor is the
-                    // die's own temperature; the spikes are what reading it does to it (research.md, reading the die).
-                    try {
-                        if (Cpu != null)
-                            for (int i = 0; i < 3; i++) {
-                                if (i > 0) Thread.Sleep(150);
-                                double t = Cpu.Poll(false).DieTemp;
-                                if (!double.IsNaN(t) && (double.IsNaN(die) || t < die)) die = t;
-                            }
-                    } catch { }
-                    ecVerified = ec.Verify(rpm, die, out EcProof);
+                    ecVerified = VerifyEc(ec, out EcProof);
+                    ecVerifyTriesLeft = ecVerified ? 0 : EcVerifyRetries;
                     Log.Write("driver: the EC map " + (ecVerified ? "fits this board: " : "does NOT fit this board: ") + EcProof);
                     Ec = ec;
                 }
             }
             Route = ChooseRoute();
             Log.Write("driver: PawnIO " + DriverVersion + " · cpu=" + (Cpu != null ? Cpu.Describe : "unavailable") + " · ec=" + (Ec == null ? "no map for this board" : ecVerified ? P.Ec.Name : "map rejected") + " · fan route " + Route);
+        }
+        /// <summary>Ask the controller whether it follows the map, against the two readings of this machine we already
+        /// have: the firmware's fan speeds and the CPU's own temperature. Reads only.</summary>
+        bool VerifyEc(EmbeddedController ec, out string proof) {
+            int[] rpm = null;
+            double die = double.NaN;
+            try { rpm = Hw.GetFanLevels(); } catch { }
+            // The coolest of three light polls. One reading caught the start-up spike on 8A4F (#93): 82 against an EC
+            // reading of 49 with the ACPI zone at 50, and the map was rejected for the whole session. The floor is the
+            // die's own temperature; the spikes are what reading it does to it (research.md, reading the die).
+            try {
+                if (Cpu != null)
+                    for (int i = 0; i < 3; i++) {
+                        if (i > 0) Thread.Sleep(150);
+                        double t = Cpu.Poll(false).DieTemp;
+                        if (!double.IsNaN(t) && (double.IsNaN(die) || t < die)) die = t;
+                    }
+            } catch { }
+            return ec.Verify(rpm, die, out proof);
+        }
+        /// <summary>A map rejected at start is asked again on the next few heartbeats, where the fans depend on it.
+        ///
+        /// The verdict used to stand for the whole session, and it is taken at the worst moment there is: logon, with
+        /// the die 30 to 40 degrees above a controller sensor that follows it slowly. The coolest of three polls was
+        /// not enough on 8A4F: the die held 68 and 76 through all three while the controller read 39 and 37, the map
+        /// was rejected, and on a board whose firmware refuses fan levels that is a session with no fan control at
+        /// all, "restarting Ohman only helps intermittently" (#93). The same board fits on every start taken at rest,
+        /// and an 8C40 fitted on two starts and read a stray control byte on the third (#142). Every question Verify
+        /// asks is a read, so asking again costs nothing; only a board that needs this route is asked.</summary>
+        const int EcVerifyRetries = 8;
+        int ecVerifyTriesLeft;
+        void RetryEcVerify() {
+            if (ecVerifyTriesLeft <= 0 || Ec == null || ecVerified || !EcFanRouteWanted || Ec.Resting) return;
+            ecVerifyTriesLeft--;
+            string proof;
+            if (!VerifyEc(Ec, out proof)) {
+                if (ecVerifyTriesLeft == 0) Log.Write("driver: the EC map still does not fit after " + EcVerifyRetries + " more checks: " + proof);
+                return;
+            }
+            ecVerified = true;
+            ecVerifyTriesLeft = 0;
+            EcProof = proof;
+            Log.Write("driver: the EC map fits this board after all (the check at start caught it mid-burst): " + proof);
+            if (ChooseRoute() == FanRoute.Ec) { Say("Fan levels now go through the driver"); lastFanWrite = DateTime.MinValue; }
+            Changed();
         }
         /// <summary>Where the fan test records which register pair moved the fans: "rpm" or "percent".</summary>
         public static string EcPairPath { get { return System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Log.Path), "ecpair.txt"); } }
@@ -1507,6 +1548,22 @@ namespace Ohman {
             if ((S.Fan != FanMode.Auto && S.Fan != FanMode.Custom) || GuardActive || ReadOnly) return;
             if (ScreenOff) return;                 // the firmware's own curve has the fans until the display is back (OnDisplay)
             if (fanWriteFailures >= 3 && (DateTime.Now - lastFanWrite).TotalSeconds < 60) return;   // back off; retry once a minute
+            // Before the first temperature is in, the curve has nothing but its blind fallback, and the sensors take
+            // a few seconds longer to answer than the first apply takes to get here. So every start wrote the fallback
+            // (35, 40 on a rescaled curve) and then walked the fans back down a step every five seconds: "the fans
+            // ramp up to a very high speed when launching Ohman before they return to normal" (#137), "the fans shot
+            // up for 10 secs and came back down" (#135), and an idle 8E41's own log, 40/40 with cpu ? and then 38, 35,
+            // 32, 29, 26 (#109). The fallback is for a machine that has no temperature, not one that has not been
+            // asked yet: wait for the first reading, a few seconds. No level has gone out, so the firmware's own curve
+            // still has the fans (user-defined state is only armed by a level write, research.md section 4). A
+            // board that turns out to have none (CpuBlind) or a reading that never comes gets the fallback as before.
+            // The window is set once, at Init, and is over for good when it passes: a session that started in Max or
+            // Manual and comes to the curve later, with a sensor that has just dropped out, must not find it open.
+            if (!tempEverSeen) {
+                if (!double.IsNaN(CpuTemp) || !double.IsNaN(GpuTemp)) tempEverSeen = true;
+                else if (!CpuBlind && curLevel1 < 0 && curLevel2 < 0 && DateTime.UtcNow < curveWaitUntil) { firstWritePending = true; return; }
+            }
+            if (firstWritePending) { firstWritePending = false; immediate = true; }   // the first write goes straight to the target, as the apply it stood in for would have
             if (immediate) { smoothCpu = CpuTemp; smoothGpu = GpuTemp; cpuGone = gpuGone = 0; }
             else { smoothCpu = Smooth(CpuTemp, smoothCpu, ref cpuGone); smoothGpu = Smooth(GpuTemp, smoothGpu, ref gpuGone); }
             FanCurve curve = S.Fan == FanMode.Custom ? CustomCurve() : P.Curve;
@@ -1539,6 +1596,9 @@ namespace Ohman {
             if (changed && ok) Log.Write("curve " + n1 + "/" + n2 + " (target " + target[0] + ", cpu " + Fmt(smoothCpu) + " gpu " + Fmt(smoothGpu) + " ir " + Fmt(IrTemp) + ")");
         }
         DateTime lastFanWrite = DateTime.MinValue;
+        const int FirstReadingWaitSec = 12;         // two fan ticks: the sensors answer about three seconds after the first apply
+        bool tempEverSeen, firstWritePending;       // a temperature has arrived this session; the first curve write is waiting for one
+        DateTime curveWaitUntil = DateTime.MinValue;   // UTC, set at Init: how long the first curve write may wait for a reading
         DateTime spinUpSince = DateTime.MinValue;   // when the curve first asked for fans while they were off (ramp delay)
         public static readonly int[] CurveTemps = { 30, 40, 50, 60, 70, 80, 90 };
         /// <summary>The mode's own curve as a FanCurve: the same six points for CPU and GPU, the vendor's chassis table and bounds.</summary>
@@ -1815,6 +1875,7 @@ namespace Ohman {
                     // Read-only: no mode to pin, and Try would log the skip on every heartbeat forever (8574, #97).
                     if (!ReadOnly) Try(delegate { Hw.SetMode(ModeByte, FansByBios); }, "Set mode");   // fans are handled by FanTick; this only pins mode and power
                     ApplyPowerCore();
+                    RetryEcVerify();
                     RetryGpuProbe();
                     if (gpuWriteFailed && !GpuAsleep && GpuRetryDue) ApplyGpuCore(false);   // the current level, once the GPU can take it
                     LastHeartbeat = DateTime.Now;

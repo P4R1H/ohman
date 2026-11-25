@@ -30,6 +30,12 @@ body:
     validations:
       required: true
   - type: textarea
+    id: summary
+    attributes:
+      label: What Ohman found
+      description: Filled in for you when you use Report Issue in Ohman. Leave it as it is.
+      render: text
+  - type: textarea
     id: supportinfo
     attributes:
       label: tools\support-info.txt

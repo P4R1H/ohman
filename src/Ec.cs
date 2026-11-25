@@ -92,7 +92,7 @@ namespace Ohman {
         const byte DataPort = 0x62, CommandPort = 0x66;
         const byte CmdRead = 0x80, CmdWrite = 0x81;
         const byte Obf = 0x01, Ibf = 0x02;              // status bits: output buffer full, input buffer full
-        const int WaitPolls = 400;                     // bounded: ~20 ms of polling, then 1 ms sleeps, never more than ~400 ms
+        const int WaitMs = 400;                        // bounded: twenty quick polls, then 1 ms sleeps, never more than 400 ms on the clock
         const int MutexWaitMs = 250;
         const int TimeoutsBeforeRest = 5;
         static readonly TimeSpan Rest = TimeSpan.FromMinutes(10);
@@ -132,14 +132,20 @@ namespace Ohman {
 
         // ---------- the handshake ----------
         bool Status(out byte s) { return ports.In(CommandPort, out s) == 0; }
+        /// <summary>Bounded by the clock, not by a count of polls. It was 400 polls with Sleep(1) after the first
+        /// twenty, written as "never more than ~400 ms", and Sleep(1) is one scheduler tick: 15.6 ms unless some
+        /// program has raised the timer resolution. A wait that ran out therefore held the EC mutex and the engine's
+        /// fan lock for about six seconds (measured: 5.9 s each), which is what each "EC did not answer" on 8A4F cost
+        /// (#93), with every mode change and fan tick queued behind it.</summary>
         bool WaitFor(byte bit, bool set) {
             byte s;
-            for (int i = 0; i < WaitPolls; i++) {
+            long start = System.Diagnostics.Stopwatch.GetTimestamp();
+            for (int i = 0; ; i++) {
                 if (!Status(out s)) return false;
                 if (((s & bit) != 0) == set) return true;
+                if ((System.Diagnostics.Stopwatch.GetTimestamp() - start) * 1000 / System.Diagnostics.Stopwatch.Frequency >= WaitMs) return false;
                 if (i >= 20) Thread.Sleep(1);
             }
-            return false;
         }
         /// <summary>A byte left in the output buffer by an earlier, interrupted transaction would be handed to us
         /// as the answer to this one. Take it out first.</summary>
@@ -147,7 +153,7 @@ namespace Ohman {
             byte s, junk;
             if (Status(out s) && (s & Obf) != 0) ports.In(DataPort, out junk);
         }
-        bool ReadRaw(byte reg, out byte value) {
+        bool ReadOnce(byte reg, out byte value) {
             value = 0;
             Drain();
             if (!WaitFor(Ibf, false) || ports.Out(CommandPort, CmdRead) != 0) return false;
@@ -155,11 +161,42 @@ namespace Ohman {
             if (!WaitFor(Obf, true)) return false;
             return ports.In(DataPort, out value) == 0;
         }
-        bool WriteRaw(byte reg, byte value) {
+        bool WriteOnce(byte reg, byte value) {
             if (!WaitFor(Ibf, false) || ports.Out(CommandPort, CmdWrite) != 0) return false;
             if (!WaitFor(Ibf, false) || ports.Out(DataPort, reg) != 0) return false;
             if (!WaitFor(Ibf, false) || ports.Out(DataPort, value) != 0) return false;
             return WaitFor(Ibf, false);
+        }
+        /// <summary>One transaction, asked again when it does not complete.
+        ///
+        /// The shared mutex keeps the other tools out; it does not keep Windows out. The ACPI driver talks to this
+        /// same controller on these same two ports whenever the firmware has something to say (a battery reading, a
+        /// thermal event), and when its transaction lands inside ours it takes the answer byte we were waiting for.
+        /// From here that is a read that never completes. Every transaction got one attempt, so on a board driven
+        /// through the EC that surfaced as "EC did not answer (read 0x62)" every minute or few, each one a fan tick
+        /// thrown away and a failure counted towards abandoning the route (8A4F, #93). A second ask a few
+        /// milliseconds later lands in the clear, which is what the other EC tools do.
+        ///
+        /// The budget is per hold of the lock, not per register, and only a hold that worked refills it: a
+        /// controller that is really not answering costs two extra waits, once, then fails as fast as it did
+        /// before, and still earns its rest.</summary>
+        const int RetriesPerHold = 2;
+        int retriesLeft = RetriesPerHold;              // refilled by a hold that worked, so a silent controller pays for them once
+        bool ReadRaw(byte reg, out byte value) {
+            for (;;) {
+                if (ReadOnce(reg, out value)) return true;
+                if (retriesLeft <= 0) return false;
+                retriesLeft--;
+                Thread.Sleep(5);
+            }
+        }
+        bool WriteRaw(byte reg, byte value) {
+            for (;;) {
+                if (WriteOnce(reg, value)) return true;
+                if (retriesLeft <= 0) return false;
+                retriesLeft--;
+                Thread.Sleep(5);
+            }
         }
 
         /// <summary>Run one or more transactions under the lock. False when the lock is busy, the controller is
@@ -174,7 +211,7 @@ namespace Ohman {
                         if (!held) { LastError = "EC busy (another program holds it)"; return false; }
                     }
                     bool ok = body();
-                    if (ok) { timeouts = 0; LastError = ""; }
+                    if (ok) { timeouts = 0; LastError = ""; retriesLeft = RetriesPerHold; }
                     else {
                         timeouts++;
                         if (LastError.Length == 0) LastError = "EC did not answer (" + what + ")";
@@ -233,25 +270,68 @@ namespace Ohman {
             Claim();
             byte l1 = Map.Encode(level1, ceiling), l2 = Map.Encode(level2, ceiling);
             byte r1 = Map.UsePercent ? Map.FanSetPct1 : Map.FanSet1, r2 = Map.UsePercent ? Map.FanSetPct2 : Map.FanSet2;
+            // Is the hold from the last tick still there? The writes below are skipped when the same value went out
+            // inside five seconds, which is a memory of what Ohman sent and not of what the controller holds: the
+            // firmware takes these registers back when it likes. Whenever the manual register is not showing our
+            // value (taken back, the first tick, or a read that did not answer), nothing is skipped this tick.
+            byte had;
+            if (!ReadByte(Map.Manual, out had) || had != Map.ManualOn) Forget();
             if (!WriteByte(Map.Manual, Map.ManualOn)) return false;
             if (!WriteByte(r1, l1) || !WriteByte(r2, l2)) return false;
             if (!WriteByte(Map.Countdown, Map.CountdownHold)) return false;
             byte check;
+            bool answered, reasserted;
+            if (ManualHeld(out check, out answered, out reasserted)) {
+                // The levels above went out while manual was off, and whatever took the register back may have put
+                // its own numbers in theirs. Send them for real, not from the memory of having sent them.
+                if (reasserted) { Forget(); if (!WriteByte(r1, l1) || !WriteByte(r2, l2) || !WriteByte(Map.Countdown, Map.CountdownHold)) return false; }
+                return true;
+            }
+            if (answered) LastError = "manual register reads 0x" + check.ToString("X2") + " after writing 0x" + Map.ManualOn.ToString("X2") + "; this EC does not follow the map";
+            return false;
+        }
+
+        /// <summary>Is the manual register holding what HoldFans wrote? A readback that disagrees is asked again, and
+        /// then the register is written again, before the map is blamed for it.
+        ///
+        /// One read was the whole verdict. On 8A4F it came back 0x07 and 0x90, values nothing writes there: the byte
+        /// of a transaction Windows' own ACPI driver had in flight (see ReadRaw). It also came back 0x00 with the
+        /// fans plainly following the map, because the write above is skipped when the same value went out inside
+        /// five seconds, so a register the firmware had just taken back was "written" from memory and then read as
+        /// not held (#93). Each of those logged a failure and threw the tick away; three in a row abandon the route.</summary>
+        bool ManualHeld(out byte check, out bool answered, out bool reasserted) {
+            answered = false;
+            reasserted = false;
             if (!ReadByte(Map.Manual, out check)) return false;
-            if (check != Map.ManualOn) { LastError = "manual register reads 0x" + check.ToString("X2") + " after writing 0x" + Map.ManualOn.ToString("X2") + "; this EC does not follow the map"; return false; }
-            return true;
+            answered = true;
+            if (check == Map.ManualOn) return true;
+            if (!ReadByte(Map.Manual, out check)) { answered = false; return false; }
+            if (check == Map.ManualOn) return true;
+            lastWritten.Remove(Map.Manual);                    // really not held: send it, not the memory of having sent it
+            if (!WriteByte(Map.Manual, Map.ManualOn) || !ReadByte(Map.Manual, out check)) { answered = false; return false; }
+            reasserted = check == Map.ManualOn;
+            return reasserted;
         }
 
         /// <summary>What the controller looked like before Ohman touched it, taken once on the way in.
         ///
         /// 0x62 is not Ohman's register. The firmware's own mailbox relay reads it to decide whether a fan level
         /// arriving on 0x2E gets passed to the fans, so whatever is in it belongs to the firmware and handing the
-        /// fans back means putting that value back, not writing the zero that looks like "off" from this side.</summary>
+        /// fans back means putting that value back, not writing the zero that looks like "off" from this side.
+        ///
+        /// Taken once, before the first write, and only from two reads that agree. It was one read, and one read
+        /// of this register is exactly what came back 0x07 and 0x90 on 8A4F (#93): a stray byte recorded here is
+        /// written into the fan-control register when Ohman quits. A read that failed was also tried again on
+        /// the next call, by which time the register held Ohman's own 0x06 and that became "what was found".
+        /// When it cannot be read it stays unknown, and ReleaseFans leaves the register to the countdown.</summary>
         int entryManual = -1, entryCountdown = -1;
+        bool claimTried;
         void Claim() {
-            if (entryManual >= 0) return;
-            byte v;
-            if (ReadByte(Map.Manual, out v)) entryManual = v;
+            if (claimTried) return;
+            claimTried = true;
+            byte a, b, v;
+            for (int i = 0; i < 2 && entryManual < 0; i++)
+                if (ReadByte(Map.Manual, out a) && ReadByte(Map.Manual, out b) && a == b) entryManual = a;
             if (ReadByte(Map.Countdown, out v)) entryCountdown = v;
         }
 
@@ -275,10 +355,17 @@ namespace Ohman {
             // writing a guessed 0x00 here is precisely the bug: it is the value that tells the firmware relay to
             // stop passing fan levels on, and picking it as a fallback would reintroduce it on the one path where
             // the EC is least well understood.
+            // The countdown goes back only together with the manual register. Zero in it means "no timeout", so
+            // restoring a zero while 0x62 still holds Ohman's 0x06 would leave the fans in manual with nobody
+            // driving them and nothing to end it. With the entry state unknown the last hold Ohman wrote stays,
+            // and the controller takes the fans back by itself when it runs out.
             bool ok = true;
-            if (entryManual >= 0) ok &= WriteByte(Map.Manual, (byte)entryManual);
-            if (entryCountdown >= 0) ok &= WriteByte(Map.Countdown, (byte)entryCountdown);
+            if (entryManual >= 0) {
+                ok &= WriteByte(Map.Manual, (byte)entryManual);
+                if (entryCountdown >= 0) ok &= WriteByte(Map.Countdown, (byte)entryCountdown);
+            }
             entryManual = entryCountdown = -1;
+            claimTried = false;
             return ok;
         }
 
