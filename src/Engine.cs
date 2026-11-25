@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Management;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -139,7 +138,7 @@ namespace Ohman {
         public bool BenchPill = true;               // the small overlay over the game during a run
         public readonly Dictionary<string, string> GameSettings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);   // per game (exe name, lower case): the settings line the owner typed
 
-        static readonly string File_ = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Program.FileStem + ".state");
+        static readonly string File_ = AppPaths.StateFile;
 
         public bool FirstRun;                       // no state file yet: first launch on this machine
         public int Ver;                             // version of the file this was read from; 0 = written before versioning
@@ -440,9 +439,9 @@ namespace Ohman {
         /// life of the process is exactly the kind of cost this app measures and removes.</summary>
         public Version DriverVersion;
         public bool DriverInstalled { get { return Hw.IsDemo ? DriverReady : DriverVersion != null; } }
-        public bool DriverOutdated { get { return DriverVersion != null && DriverVersion < PawnIo.MinVersion; } }
+        public bool DriverOutdated { get { return DriverVersion != null && DriverVersion < Driver.MinVersion; } }
 
-        ManagementEventWatcher watcher;
+        BiosEvents watcher;
         System.Threading.Timer heartbeat;
         DateTime lastKey = DateTime.MinValue;
         readonly object applySync = new object();
@@ -450,6 +449,27 @@ namespace Ohman {
         int modeBeforeBattery = 1;
 
         public Engine(IHardware hw, Settings s) { Hw = hw; S = s; }
+
+        // ---------- the scripted run ----------
+        // src\Scenario.cs drives an engine through a fixed script on simulated hardware and writes down every
+        // call it makes, so the Windows and the Linux build can be shown to make the same ones. For that the
+        // run has to be the same run every time: no timers firing when they please, no wall clock deciding an
+        // outcome, nothing read from the machine it happens to be on. Scripted is that switch. It is set only
+        // by the scenario, before Init, and an engine that never sets it behaves exactly as it always has:
+        // Now is the wall clock, and Simulated is Hw.IsDemo.
+        public bool Scripted;
+        /// <summary>The scripted run's clock; the scenario moves it forward between steps.</summary>
+        public DateTime ScriptedNow = new DateTime(2026, 1, 1, 12, 0, 0);
+        DateTime Now { get { return Scripted ? ScriptedNow : DateTime.Now; } }
+        /// <summary>Simulated hardware that is to be left alone by the parts that only make sense on a real
+        /// laptop (the guard, the exit hand-off, the display hand-off). A scripted run wants those exercised.</summary>
+        bool Simulated { get { return Hw.IsDemo && !Scripted; } }
+        /// <summary>One turn of a timer's work, by hand: 'f' the fan tick, 'g' the guard, 'h' the heartbeat.
+        /// The scripted run calls these in the order and at the clock times it chooses.</summary>
+        public void ScriptedTick(char which) {
+            if (!Scripted) return;
+            if (which == 'f') FanTick(); else if (which == 'g') GuardTick(); else if (which == 'h') Heartbeat();
+        }
 
         public int ModeIndex { get { return Math.Max(0, Math.Min(2, S.ModeIndex)); } }
         public byte ModeByte { get { return ModeBytes[ModeIndex]; } }
@@ -473,7 +493,7 @@ namespace Ohman {
             // newer than anything we could actually offer and the update badge never clears. If the running build
             // is not the one that did the check, the cache is stale by definition and the day's wait is skipped.
             bool otherBuild = S.CheckedFrom != Program.Version;
-            if (!force && !otherBuild && S.UpdateChecked != 0 && (DateTime.Now - LastUpdateCheck).TotalHours < 24) return;
+            if (!force && !otherBuild && S.UpdateChecked != 0 && (Now - LastUpdateCheck).TotalHours < 24) return;
             Release rel = Update.Latest();
             string tag = rel == null ? null : rel.Tag;
             // Only a check that actually reached GitHub may claim the cache for this build. Stamping it on a
@@ -481,7 +501,7 @@ namespace Ohman {
             // the day's wait with it: this runs at start, when the network is not always up yet, so a check
             // that never answered must not push the next automatic one a day out. UpdateChecked is "ticks of
             // the last successful update check" for the same reason.
-            if (tag != null) { S.LatestVersion = tag; S.CheckedFrom = Program.Version; S.UpdateChecked = DateTime.Now.Ticks; }
+            if (tag != null) { S.LatestVersion = tag; S.CheckedFrom = Program.Version; S.UpdateChecked = Now.Ticks; }
             S.Save();
             if (force) Say(tag == null ? "Update check failed" : Update.Newer(tag, Program.Version) ? "Version " + tag + " is available" : "Ohman is up to date");
             Changed();
@@ -519,7 +539,7 @@ namespace Ohman {
         /// and which can run while another Ohman is already doing all four.</summary>
         public void Init(bool apply) {
             RefreshStaged();        // a build downloaded in an earlier session is still there to be offered
-            try { OnBattery = System.Windows.Forms.SystemInformation.PowerStatus.PowerLineStatus == System.Windows.Forms.PowerLineStatus.Offline; } catch { }
+            if (!Scripted) { try { OnBattery = Power.OnBattery(); } catch { } }
             Board = Platforms.ReadBoard();
             Model = Platforms.ReadModel();
             Desktop = !Hw.IsDemo && Platforms.IsDesktop();
@@ -595,6 +615,7 @@ namespace Ohman {
             ApplyRefreshRate(OnBattery);
             NoteFanMode(S.Fan);
             ApplyAll(false);
+            if (Scripted) return;               // no key watcher and no timers: the script turns them by hand (ScriptedTick)
             StartKeyWatcher();
             heartbeat = new System.Threading.Timer(delegate { Heartbeat(); }, null, S.HeartbeatSec * 1000, S.HeartbeatSec * 1000);
             guard = new System.Threading.Timer(delegate { GuardTick(); }, null, 10000, 10000);
@@ -605,29 +626,29 @@ namespace Ohman {
         // ---------- max fan: a session with a length, and two ways to end by itself ----------
         DateTime maxSince = DateTime.MinValue, maxCoolSince = DateTime.MinValue;
         string maxStopReason = "";
-        public int MaxMinutes { get { return maxSince == DateTime.MinValue ? 0 : (int)(DateTime.Now - maxSince).TotalMinutes; } }
+        public int MaxMinutes { get { return maxSince == DateTime.MinValue ? 0 : (int)(Now - maxSince).TotalMinutes; } }
         public TimeSpan MaxLeft {
             get {
                 if (S.MaxStopAfterMin <= 0 || maxSince == DateTime.MinValue) return TimeSpan.Zero;
-                var left = TimeSpan.FromMinutes(S.MaxStopAfterMin) - (DateTime.Now - maxSince);
+                var left = TimeSpan.FromMinutes(S.MaxStopAfterMin) - (Now - maxSince);
                 return left > TimeSpan.Zero ? left : TimeSpan.Zero;
             }
         }
         /// <summary>The max-fan session starts wherever the fans actually go to maximum: an explicit choice, a mode whose
         /// remembered setting is Max, or a restored setting at startup. Otherwise "stop after" would never fire for those.</summary>
         void NoteFanMode(FanMode mode) {
-            if (mode == FanMode.Max) { if (maxSince == DateTime.MinValue) { maxSince = DateTime.Now; maxCoolSince = DateTime.MinValue; } }
+            if (mode == FanMode.Max) { if (maxSince == DateTime.MinValue) { maxSince = Now; maxCoolSince = DateTime.MinValue; } }
             else { maxSince = DateTime.MinValue; maxCoolSince = DateTime.MinValue; }
         }
         /// <summary>True when the max-fan session has run its course: the chips are cool again, or the timer expired.</summary>
         bool MaxShouldStop() {
             if (maxSince == DateTime.MinValue) return false;
-            if (S.MaxStopAfterMin > 0 && (DateTime.Now - maxSince).TotalMinutes >= S.MaxStopAfterMin) { maxStopReason = S.MaxStopAfterMin + " min elapsed"; return true; }
+            if (S.MaxStopAfterMin > 0 && (Now - maxSince).TotalMinutes >= S.MaxStopAfterMin) { maxStopReason = S.MaxStopAfterMin + " min elapsed"; return true; }
             if (!S.MaxBackWhenCool) { maxCoolSince = DateTime.MinValue; return false; }
             double t = double.IsNaN(CpuTemp) ? GpuTemp : double.IsNaN(GpuTemp) ? CpuTemp : Math.Max(CpuTemp, GpuTemp);
             if (double.IsNaN(t) || t >= P.Guard.MaxFanCoolBelow) { maxCoolSince = DateTime.MinValue; return false; }
-            if (maxCoolSince == DateTime.MinValue) { maxCoolSince = DateTime.Now; return false; }
-            if ((DateTime.Now - maxCoolSince).TotalSeconds < P.Guard.MaxFanCoolSeconds) return false;
+            if (maxCoolSince == DateTime.MinValue) { maxCoolSince = Now; return false; }
+            if ((Now - maxCoolSince).TotalSeconds < P.Guard.MaxFanCoolSeconds) return false;
             maxStopReason = "below " + P.Guard.MaxFanCoolBelow + "° for " + (P.Guard.MaxFanCoolSeconds / 60) + " minutes";
             return true;
         }
@@ -642,9 +663,9 @@ namespace Ohman {
                     if (stopping || GuardActive) return;
                     switch (S.Fan) {
                         case FanMode.Auto: case FanMode.Custom: AutoTick(false); break;
-                        case FanMode.Manual: if ((DateTime.Now - lastFanWrite).TotalSeconds >= 30) { WriteLevels(S.Fan1, S.Fan2, "Fan level"); lastFanWrite = DateTime.Now; } break;
+                        case FanMode.Manual: if ((Now - lastFanWrite).TotalSeconds >= 30) { WriteLevels(S.Fan1, S.Fan2, "Fan level"); lastFanWrite = Now; } break;
                         case FanMode.Max:
-                            if ((DateTime.Now - lastFanWrite).TotalSeconds >= 30) { MaxFan(true, "Max fan"); lastFanWrite = DateTime.Now; }
+                            if ((Now - lastFanWrite).TotalSeconds >= 30) { MaxFan(true, "Max fan"); lastFanWrite = Now; }
                             if (MaxShouldStop()) { Log.Write("max fan: " + maxStopReason + ", back to auto"); leaveMax = true; }
                             break;
                     }
@@ -769,7 +790,7 @@ namespace Ohman {
                 }
             } catch (Exception ex) { Log.Write("release lighting: " + ex.Message); }
             ReleasePerKey();
-            if (!BiosOk || Hw.IsDemo || ReadOnly) return;
+            if (!BiosOk || Simulated || ReadOnly) return;
             try {
                 // Max fan is a flag the firmware holds until something clears it, and once we have exited nothing
                 // will. This used to return early when Max was on or the guard was engaged - "already at maximum,
@@ -823,7 +844,7 @@ namespace Ohman {
             try { if (fanTimer != null) fanTimer.Dispose(); } catch { }
             try { if (heartbeat != null) heartbeat.Dispose(); } catch { }
             try { if (guard != null) guard.Dispose(); } catch { }
-            try { if (watcher != null) { watcher.Stop(); watcher.Dispose(); } } catch { }
+            try { if (watcher != null) watcher.Dispose(); } catch { }
             ReleasePerKey();
             try {
                 var disp = Light as IDisposable;
@@ -897,7 +918,7 @@ namespace Ohman {
                 ApplyPowerCore();
                 ApplyGpuCore();
                 if (S.SyncWinPower) SetWinPowerOverlay(ModeIndex);
-                LastHeartbeat = DateTime.Now;
+                LastHeartbeat = Now;
                 ApplyLightCore();
             }
             if (announce) Say("Applied " + ModeName + " · +" + S.TdpOffset + " W");
@@ -964,11 +985,11 @@ namespace Ohman {
         /// <summary>The last fan levels anything read, if no older than maxAgeSec: the benchmark samples these rather than
         /// making firmware calls of its own inside the time it measures.</summary>
         public int[] RecentFanLevels(double maxAgeSec) {
-            lock (ceilingSync) return recentFans != null && (DateTime.Now - recentFansAt).TotalSeconds <= maxAgeSec ? (int[])recentFans.Clone() : null;
+            lock (ceilingSync) return recentFans != null && (Now - recentFansAt).TotalSeconds <= maxAgeSec ? (int[])recentFans.Clone() : null;
         }
         public void NoteFanLevels(int[] f) {
             if (f == null || f.Length < 2) return;
-            lock (ceilingSync) { recentFans = new[] { f[0], f[1] }; recentFansAt = DateTime.Now; }
+            lock (ceilingSync) { recentFans = new[] { f[0], f[1] }; recentFansAt = Now; }
             if (P == null || P.Curve == null) return;
             // The UI sensor poll and the guard timer both land here, and the counters below are a sequence, not
             // one value: interleaved they lose increments and reset each other mid-test.
@@ -979,7 +1000,7 @@ namespace Ohman {
             if (seen < 0 || seen > 255) return;
             lastFanSeen = seen;
             NoteFirmwareHold(f);
-            if (maxAskedAt != DateTime.MinValue && (DateTime.Now - maxAskedAt).TotalSeconds >= 15) {
+            if (maxAskedAt != DateTime.MinValue && (Now - maxAskedAt).TotalSeconds >= 15) {
                 maxAskedAt = DateTime.MinValue;
                 // Near the top counts as working too: that is where max puts the fans, and it is the only verdict
                 // available when the ask came before any reading.
@@ -1051,8 +1072,8 @@ namespace Ohman {
                 if (FirmwareHolding) { FirmwareHolding = false; Log.Write("fans back with the curve: reading " + f[0] + "/" + f[1] + ", written " + curLevel1 + "/" + curLevel2); }
                 return;
             }
-            if (holdSince == DateTime.MinValue) { holdSince = DateTime.Now; return; }
-            if (FirmwareHolding || (DateTime.Now - holdSince).TotalSeconds < HoldSeconds) return;
+            if (holdSince == DateTime.MinValue) { holdSince = Now; return; }
+            if (FirmwareHolding || (Now - holdSince).TotalSeconds < HoldSeconds) return;
             FirmwareHolding = true;
             Log.Write("fans held by the firmware: written " + curLevel1 + "/" + curLevel2 + ", reading " + f[0] + "/" + f[1]
                 + " for " + HoldSeconds + " s with max fan off; level writes are accepted and ignored");
@@ -1204,7 +1225,7 @@ namespace Ohman {
             CloseDriver();
             DriverWhy = "";
             EcProof = "";
-            DriverVersion = Hw.IsDemo ? null : PawnIo.InstalledVersion();
+            DriverVersion = Hw.IsDemo ? null : Driver.InstalledVersion();
             if (Hw.IsDemo) {
                 // A simulated board that asks for the driver simulates not having it, so the preview shows the
                 // row its owner would see rather than the one this machine happens to be in. Nothing here needs
@@ -1219,19 +1240,19 @@ namespace Ohman {
             }
             if (!S.DriverUse) { DriverWhy = "switched off"; return; }
             if (DriverVersion == null) { DriverWhy = "not installed"; return; }
-            if (DriverOutdated) { DriverWhy = "PawnIO " + DriverVersion + " is older than " + PawnIo.MinVersion + "; update it"; return; }
+            if (DriverOutdated) { DriverWhy = Driver.Name + " " + DriverVersion + " is older than " + Driver.MinVersion + "; update it"; return; }
             string why;
             bool deviceAbsent;
             Cpu = CpuRegisters.Open(out why, out deviceAbsent);
             if (Cpu == null) {
-                string svc = PawnIo.ServiceState();
+                string svc = Driver.ServiceState();
                 DriverWhy = why ?? "unavailable";
                 Log.Write("driver: CPU registers unavailable: " + DriverWhy + " · service " + svc);
                 // "Restart to finish" is only true while the service is registered and not yet started. Once it is
                 // running the restart has happened and something else is wrong; if it is not registered at all the
                 // install never took. Either way the row must offer Troubleshoot, not another restart.
                 if (S.DriverRestartPending && svc != "stopped" && svc != "starting") { S.DriverRestartPending = false; S.Save(); }
-                if (!S.DriverRestartPending && svc != "running") DriverWhy += " · the PawnIO service is " + svc;
+                if (!S.DriverRestartPending && svc != "running") DriverWhy += " · the " + Driver.Name + " service is " + svc;
                 // Only a device that cannot be opened means the driver itself is not there. A module the driver
                 // rejected (a CPU it has no support for) says nothing about the EC, which is its own module and
                 // on the boards that need it the whole reason the driver was installed.
@@ -1239,13 +1260,13 @@ namespace Ohman {
             }
             else if (S.DriverRestartPending) { S.DriverRestartPending = false; S.Save(); }
             if (P.Ec != null) {
-                PawnIoModule m = PawnIo.Open("LpcACPIEC", out why);
+                IEcPorts m = Driver.OpenEc(out why);
                 if (m == null) Log.Write("driver: EC module unavailable: " + why);
                 else {
                     // Nothing is written until the controller has recognised its own registers here, checked
                     // against two readings of this machine we already have: the firmware's fan speeds and the
                     // CPU's own temperature.
-                    var ec = new EmbeddedController(new PawnIoEcPorts(m), P.Ec);
+                    var ec = new EmbeddedController(m, P.Ec);
                     // Which register pair drives the fans is only knowable by driving them, which drivertest's fan
                     // test does in its own process. It leaves the answer in a file of its own rather than in the
                     // settings, which the running instance owns and would write over on exit.
@@ -1274,7 +1295,7 @@ namespace Ohman {
                 }
             }
             Route = ChooseRoute();
-            Log.Write("driver: PawnIO " + DriverVersion + " · cpu=" + (Cpu != null ? Cpu.Describe : "unavailable") + " · ec=" + (Ec == null ? "no map for this board" : ecVerified ? P.Ec.Name : "map rejected") + " · fan route " + Route);
+            Log.Write("driver: " + Driver.Name + " " + DriverVersion + " · cpu=" + (Cpu != null ? Cpu.Describe : "unavailable") + " · ec=" + (Ec == null ? "no map for this board" : ecVerified ? P.Ec.Name : "map rejected") + " · fan route " + Route);
         }
         /// <summary>Where the fan test records which register pair moved the fans: "rpm" or "percent".</summary>
         public static string EcPairPath { get { return System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Log.Path), "ecpair.txt"); } }
@@ -1333,7 +1354,7 @@ namespace Ohman {
             Changed();
             try {
                 string error;
-                DriverInstallResult r = PawnIo.Install(delegate(string step) { DriverProgress = step; Changed(); }, out error);
+                DriverInstallResult r = Driver.Install(delegate(string step) { DriverProgress = step; Changed(); }, out error);
                 switch (r) {
                     case DriverInstallResult.Installed:
                         S.DriverInstalledByOhman = true;
@@ -1380,7 +1401,7 @@ namespace Ohman {
                     CloseDriver();
                 }
                 string error;
-                bool ok = PawnIo.Uninstall(out error);
+                bool ok = Driver.Uninstall(out error);
                 if (ok) { S.DriverInstalledByOhman = false; S.DriverRestartPending = false; S.Save(); }
                 // Either way, re-read the machine. InitDriver refreshes the version the row reads, and skipping it
                 // on the path that succeeded left the row offering to troubleshoot a removal that had worked.
@@ -1450,7 +1471,7 @@ namespace Ohman {
             // Not from a stall: stopped fans that take a while to answer max are the firmware recovering, not ignoring
             // the flag. lastFanSeen -1 (asked before the first reading, e.g. Max restored at start) watches too, but
             // can only prove the flag, never condemn it.
-            else if (!maxProven && maxAskedAt == DateTime.MinValue && !guardStalled && lastFanSeen != 0) { maxAskedAt = DateTime.Now; maxAskedFrom = lastFanSeen; }
+            else if (!maxProven && maxAskedAt == DateTime.MinValue && !guardStalled && lastFanSeen != 0) { maxAskedAt = Now; maxAskedFrom = lastFanSeen; }
         }
         bool maxFlagOn;                            // the firmware holds the max-fan flag (sent by us, or found set at start)
         bool topRefused;                           // a level above the learned ceiling was refused this session
@@ -1506,7 +1527,7 @@ namespace Ohman {
         void AutoTick(bool immediate) {
             if ((S.Fan != FanMode.Auto && S.Fan != FanMode.Custom) || GuardActive || ReadOnly) return;
             if (ScreenOff) return;                 // the firmware's own curve has the fans until the display is back (OnDisplay)
-            if (fanWriteFailures >= 3 && (DateTime.Now - lastFanWrite).TotalSeconds < 60) return;   // back off; retry once a minute
+            if (fanWriteFailures >= 3 && (Now - lastFanWrite).TotalSeconds < 60) return;   // back off; retry once a minute
             if (immediate) { smoothCpu = CpuTemp; smoothGpu = GpuTemp; cpuGone = gpuGone = 0; }
             else { smoothCpu = Smooth(CpuTemp, smoothCpu, ref cpuGone); smoothGpu = Smooth(GpuTemp, smoothGpu, ref gpuGone); }
             FanCurve curve = S.Fan == FanMode.Custom ? CustomCurve() : P.Curve;
@@ -1524,18 +1545,18 @@ namespace Ohman {
             // delayed: it returns before this runs.
             if (immediate || curLevel1 != 0 || curLevel2 != 0 || (n1 <= 0 && n2 <= 0)) spinUpSince = DateTime.MinValue;
             else {
-                if (spinUpSince == DateTime.MinValue) spinUpSince = DateTime.Now;
+                if (spinUpSince == DateTime.MinValue) spinUpSince = Now;
                 // +1: the tick is 5 s and lands a few ms either side, so 10 s means the second tick, not the third
-                if ((DateTime.Now - spinUpSince).TotalSeconds + 1 < S.Cur.CurveRamp) n1 = n2 = 0;
+                if ((Now - spinUpSince).TotalSeconds + 1 < S.Cur.CurveRamp) n1 = n2 = 0;
             }
             bool changed = n1 != curLevel1 || n2 != curLevel2;
-            bool refresh = (DateTime.Now - lastFanWrite).TotalSeconds >= 30;     // keep-alive even when steady
+            bool refresh = (Now - lastFanWrite).TotalSeconds >= 30;     // keep-alive even when steady
             // a change smaller than the deadband is not worth a write, unless it is on its way up or we are refreshing
             if (changed && !immediate && !refresh && curLevel1 > 0 && n1 <= curLevel1 && n2 <= curLevel2
                 && Math.Abs(n1 - curLevel1) < Deadband && Math.Abs(n2 - curLevel2) < Deadband) changed = false;
             if (!changed && !refresh) return;
             bool ok = WriteLevels(n1, n2, "Fan curve");
-            lastFanWrite = DateTime.Now;
+            lastFanWrite = Now;
             if (changed && ok) Log.Write("curve " + n1 + "/" + n2 + " (target " + target[0] + ", cpu " + Fmt(smoothCpu) + " gpu " + Fmt(smoothGpu) + " ir " + Fmt(IrTemp) + ")");
         }
         DateTime lastFanWrite = DateTime.MinValue;
@@ -1569,13 +1590,13 @@ namespace Ohman {
             if (gpu) S.Cur.GpuCurveLevels = lv;
             else S.Cur.CurveLevels = lv;
             S.Save();
-            if (S.Fan == FanMode.Custom && !GuardActive) lock (applySync) { AutoTick(true); lastFanWrite = DateTime.Now; }
+            if (S.Fan == FanMode.Custom && !GuardActive) lock (applySync) { AutoTick(true); lastFanWrite = Now; }
             Changed();
         }
         public void SetCurveFloor(int level) {
             S.Cur.CurveFloor = level <= P.Curve.Floor ? 0 : P.Curve.Clamp(level);
             S.Save();
-            if (S.Fan == FanMode.Custom && !GuardActive) lock (applySync) { AutoTick(true); lastFanWrite = DateTime.Now; }
+            if (S.Fan == FanMode.Custom && !GuardActive) lock (applySync) { AutoTick(true); lastFanWrite = Now; }
             Changed();
         }
         public void SetCurveRamp(int seconds) { S.Cur.CurveRamp = Math.Max(1, Math.Min(10, seconds)); S.Save(); Changed(); }
@@ -1594,7 +1615,7 @@ namespace Ohman {
             if (!linked) S.Cur.GpuCurveLevels = (int[])S.Cur.CurveLevels.Clone();     // unlinking starts the GPU curve where the shared one is
             S.Cur.CurveLinked = linked;
             S.Save();
-            if (S.Fan == FanMode.Custom && !GuardActive) lock (applySync) { AutoTick(true); lastFanWrite = DateTime.Now; }
+            if (S.Fan == FanMode.Custom && !GuardActive) lock (applySync) { AutoTick(true); lastFanWrite = Now; }
             Changed();
         }
         static string Fmt(double v) { return double.IsNaN(v) ? "?" : v.ToString("0"); }
@@ -1646,8 +1667,8 @@ namespace Ohman {
         // always fails as a call from going out every 45 s for the whole session.
         DateTime gpuRetryAt = DateTime.MinValue;
         int gpuRetryGap;
-        bool GpuRetryDue { get { return DateTime.Now >= gpuRetryAt; } }
-        void GpuRetryFailed() { gpuRetryGap = gpuRetryGap == 0 ? 45 : Math.Min(900, gpuRetryGap * 2); gpuRetryAt = DateTime.Now.AddSeconds(gpuRetryGap); }
+        bool GpuRetryDue { get { return Now >= gpuRetryAt; } }
+        void GpuRetryFailed() { gpuRetryGap = gpuRetryGap == 0 ? 45 : Math.Min(900, gpuRetryGap * 2); gpuRetryAt = Now.AddSeconds(gpuRetryGap); }
         void GpuRetryReset() { gpuRetryGap = 0; gpuRetryAt = DateTime.MinValue; }
         /// <summary>Under applySync (the heartbeat). The first answer turns GPU power on exactly as if the start had seen it.</summary>
         void RetryGpuProbe() {
@@ -1689,7 +1710,7 @@ namespace Ohman {
                 // the mode's own profile comes with it: fans, power gain and GPU power are remembered per mode
                 ClearMaxFirst();
                 if (Try(delegate { Hw.SetMode(ModeByte, FansByBios); }, "Set mode")) { if (announce) Say(ModeName + " mode"); }
-                if (!GuardActive) { ApplyFanCore(); lastFanWrite = DateTime.Now; }
+                if (!GuardActive) { ApplyFanCore(); lastFanWrite = Now; }
                 ApplyPowerCore();
                 ApplyGpuCore();
                 if (S.SyncWinPower) SetWinPowerOverlay(index);
@@ -1720,7 +1741,7 @@ namespace Ohman {
             // The same with the screen off, where Auto and Curve hand the fans to the firmware (OnDisplay).
             bool sent = OnBattery || ScreenOff;
             if (sent) lock (applySync) Try(delegate { Hw.SetMode(ModeByte, FansByBios); }, "Set mode");
-            lock (applySync) { ApplyFanCore(sent); lastFanWrite = DateTime.Now; }
+            lock (applySync) { ApplyFanCore(sent); lastFanWrite = Now; }
             if (announce) Say(mode == FanMode.Max ? "Max fan" : mode == FanMode.Manual ? "Fans " + Rpm(S.Fan1) + " / " + Rpm(S.Fan2) : mode == FanMode.Custom ? "Fans on your curve" : "Fans auto");
             Changed();
         }
@@ -1817,7 +1838,7 @@ namespace Ohman {
                     ApplyPowerCore();
                     RetryGpuProbe();
                     if (gpuWriteFailed && !GpuAsleep && GpuRetryDue) ApplyGpuCore(false);   // the current level, once the GPU can take it
-                    LastHeartbeat = DateTime.Now;
+                    LastHeartbeat = Now;
                 }
                 if (S.SuppressOgh && !Hw.IsDemo && Supported) KillOgh();
             } catch (Exception ex) { Log.Write("heartbeat: " + ex.Message); }
@@ -1888,13 +1909,13 @@ namespace Ohman {
         public void SetGuard(bool on) {
             S.Guard = on;
             S.Save();
-            if (!on && GuardActive) { GuardActive = false; guardSafeSince = DateTime.MinValue; guardStalled = false; guardIgnoredTicks = guardHotTicks = guardWarmTicks = 0; curLevel1 = curLevel2 = -1; lock (applySync) { ApplyFanCore(); lastFanWrite = DateTime.Now; } Log.Write("thermal guard switched off while engaged; fans back to " + S.Fan); }
+            if (!on && GuardActive) { GuardActive = false; guardSafeSince = DateTime.MinValue; guardStalled = false; guardIgnoredTicks = guardHotTicks = guardWarmTicks = 0; curLevel1 = curLevel2 = -1; lock (applySync) { ApplyFanCore(); lastFanWrite = Now; } Log.Write("thermal guard switched off while engaged; fans back to " + S.Fan); }
             Changed();
         }
         void GuardTick() {
-            if (!BiosOk || Hw.IsDemo || ReadOnly || stopping) return;      // read-only boards: nothing to force, the firmware's own limits apply
+            if (!BiosOk || Simulated || ReadOnly || stopping) return;      // read-only boards: nothing to force, the firmware's own limits apply
             if (!S.Guard) {
-                if (GuardActive) { GuardActive = false; guardSafeSince = DateTime.MinValue; guardStalled = false; guardIgnoredTicks = guardHotTicks = guardWarmTicks = 0; curLevel1 = curLevel2 = -1; lock (applySync) { if (!stopping) { ApplyFanCore(); lastFanWrite = DateTime.Now; } } Changed(); }
+                if (GuardActive) { GuardActive = false; guardSafeSince = DateTime.MinValue; guardStalled = false; guardIgnoredTicks = guardHotTicks = guardWarmTicks = 0; curLevel1 = curLevel2 = -1; lock (applySync) { if (!stopping) { ApplyFanCore(); lastFanWrite = Now; } } Changed(); }
                 // Still read the fans. This is the only tick that runs with the window closed, and somebody
                 // running Ohman in the tray with the guard switched off has to be able to learn a ceiling too.
                 try { int[] idle; lock (applySync) idle = Hw.GetFanLevels(); NoteFanLevels(idle); } catch { }
@@ -1955,15 +1976,15 @@ namespace Ohman {
                     if (safe) guardWarmTicks = 0; else guardWarmTicks++;
                     if (guardWarmTicks >= 2) { guardSafeSince = DateTime.MinValue; lock (applySync) { if (!stopping) GuardFans(); } }
                     else if (!safe) { lock (applySync) { if (!stopping) GuardFans(); } }
-                    else if (guardSafeSince == DateTime.MinValue) guardSafeSince = DateTime.Now;
-                    else if ((DateTime.Now - guardSafeSince).TotalSeconds >= GuardHoldSeconds) {
+                    else if (guardSafeSince == DateTime.MinValue) guardSafeSince = Now;
+                    else if ((Now - guardSafeSince).TotalSeconds >= GuardHoldSeconds) {
                         GuardActive = false;
                         guardStalled = false;
                         guardIgnoredTicks = 0;
                         Log.Write("thermal guard released; fan mode back to " + S.Fan);
                         Fire(Toast, "Thermal guard released", false);
                         curLevel1 = curLevel2 = -1;         // unknown after max fan; the curve starts again from its floor
-                        lock (applySync) { if (!stopping) { ApplyFanCore(); lastFanWrite = DateTime.Now; } }   // the current mode's own fan setting, nothing saved
+                        lock (applySync) { if (!stopping) { ApplyFanCore(); lastFanWrite = Now; } }   // the current mode's own fan setting, nothing saved
                         Changed();
                     }
                 }
@@ -2006,14 +2027,14 @@ namespace Ohman {
         public void OnDisplay(bool on) {
             if (ScreenOff == !on) return;
             ScreenOff = !on;
-            if (!BiosOk || Hw.IsDemo || ReadOnly) return;
+            if (!BiosOk || Simulated || ReadOnly) return;
             if (S.Fan != FanMode.Auto && S.Fan != FanMode.Custom) { Log.Write("display " + (on ? "on" : "off") + ": fans stay on " + S.Fan); return; }
             lock (applySync) {
                 if (stopping) return;          // a display event queued behind the exit hand-off must not take the fans back
                 ClearMaxFirst();
                 Try(delegate { Hw.SetMode(ModeByte, FansByBios); }, "Set mode");
                 if (GuardActive) GuardFans();
-                else if (on) { curLevel1 = curLevel2 = -1; AutoTick(true); lastFanWrite = DateTime.Now; }   // -1: write even if the target matches the last pair
+                else if (on) { curLevel1 = curLevel2 = -1; AutoTick(true); lastFanWrite = Now; }   // -1: write even if the target matches the last pair
                 else ScreenOffHandoff(false);  // the mode just went out; an EC-held pair still has to be let go
             }
             Log.Write(on ? "display on: " + S.Fan + " curve back in charge of the fans" : "display off: fans handed to the firmware's own curve until it is back");
@@ -2032,44 +2053,13 @@ namespace Ohman {
         }
 
         // ---------- OGH suppression ----------
-        // OGH's key handler (OmenCommandCenterBackground) is launched at logon by HP's "OmenInstallMonitor" scheduled
-        // tasks (its own startup task is disabled). Taking over the key = stop both processes now and disable those
-        // tasks so they do not come back at the next logon. Turning the switch off re-enables the tasks.
-        public void KillOgh() {
-            foreach (string name in new string[] { "OmenCommandCenterBackground", "OmenInstallMonitor" }) {
-                try {
-                    foreach (var p in Process.GetProcessesByName(name)) {
-                        using (p) { try { p.Kill(); Log.Write("stopped " + name + " (pid " + p.Id + ")"); } catch (Exception ex) { Log.Write("kill " + name + ": " + ex.Message); } }
-                    }
-                } catch { }
-            }
-        }
+        // The vendor's app fights for the OMEN key and the fans where it exists. What stopping it takes is the
+        // operating system's business: Host (src\win\Host.cs; on Linux there is no such app and these do nothing).
+        public void KillOgh() { Host.StopVendorApp(); }
 
         public void SetOghTasks(bool disable) {
             if (Hw.IsDemo) return;
-            try {
-                var psi = new ProcessStartInfo("schtasks.exe", "/Query /FO CSV /NH") { CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true };
-                string csv = "";
-                var outLines = new System.Text.StringBuilder();
-                using (var q = new Process()) {
-                    q.StartInfo = psi;
-                    q.OutputDataReceived += delegate(object s, DataReceivedEventArgs e) { if (e.Data != null) lock (outLines) outLines.Append(e.Data).Append("\n"); };
-                    q.Start();
-                    q.BeginOutputReadLine();
-                    if (q.WaitForExit(5000)) { q.WaitForExit(); csv = outLines.ToString(); }
-                    else { try { q.Kill(); } catch { } q.WaitForExit(2000); if (!q.HasExited) Log.Write("could not stop schtasks query"); Log.Write("schtasks query timed out"); }
-                }
-                int n = 0;
-                foreach (string line in csv.Split('\n')) {
-                    if (!line.StartsWith("\"\\OmenInstallMonitor", StringComparison.OrdinalIgnoreCase)) continue;
-                    string task = line.Split('"')[1];
-                    using (var c = Process.Start(new ProcessStartInfo("schtasks.exe", "/Change /TN \"" + task + "\" " + (disable ? "/DISABLE" : "/ENABLE")) { CreateNoWindow = true, UseShellExecute = false })) {
-                        if (c.WaitForExit(5000)) { if (c.ExitCode == 0) n++; else Log.Write("schtasks " + task + " rc=" + c.ExitCode); }
-                        else { try { c.Kill(); } catch { } c.WaitForExit(2000); if (!c.HasExited) Log.Write("could not stop " + task); Log.Write("schtasks " + task + " timed out"); }
-                    }
-                }
-                Log.Write((disable ? "disabled " : "re-enabled ") + n + " OmenInstallMonitor task(s)");
-            } catch (Exception ex) { Log.Write("OGH tasks: " + ex.Message); }
+            Host.SetVendorTasks(disable);
         }
 
         public void SetOghSuppression(bool on) {
@@ -2084,20 +2074,15 @@ namespace Ohman {
         // ---------- OMEN key ----------
         void StartKeyWatcher() {
             try {
-                var w = new ManagementEventWatcher(new ManagementScope("root\\wmi"), new WqlEventQuery("SELECT * FROM hpqBEvnt"));
-                w.EventArrived += OnBiosEvent;
-                w.Start();
-                watcher = w;
+                watcher = BiosEvents.Start(OnBiosEvent);
                 Log.Write("hpqBEvnt watcher started");
             } catch (Exception ex) { Log.Write("hpqBEvnt watcher failed: " + ex.Message); }
         }
 
-        void OnBiosEvent(object s, EventArrivedEventArgs e) {
-            uint id = 0, data = 0;
-            try { id = Convert.ToUInt32(e.NewEvent["EventID"]); data = Convert.ToUInt32(e.NewEvent["EventData"]); } catch { return; }
+        void OnBiosEvent(uint id, uint data) {
             LastEventId = id;
             LastEventData = data;
-            LastEventTime = DateTime.Now;
+            LastEventTime = Now;
             Log.Write("hpqBEvnt id=" + id + " data=" + data);
             var any = AnyKeyEvent; if (any != null) { try { any(id, data); } catch { } }
             if (Learning) {
@@ -2117,8 +2102,8 @@ namespace Ohman {
                 return;
             }
             if (id != KeyId || data != KeyData) return;
-            if ((DateTime.Now - lastKey).TotalMilliseconds < 400) return;   // the key fires twice per press
-            lastKey = DateTime.Now;
+            if ((Now - lastKey).TotalMilliseconds < 400) return;   // the key fires twice per press
+            lastKey = Now;
             if (S.SuppressOgh && !Hw.IsDemo && Supported) KillOgh();
             if (S.Key == KeyAction.Off) return;
             var h = KeyPressed; if (h != null) { try { h(S.Key); } catch { } }
@@ -2139,6 +2124,7 @@ namespace Ohman {
         // the button a minute later worked, #103) is asked again on the next few heartbeats instead of never.
         int refreshTriesLeft;
         void ApplyRefreshRate(bool onBattery, bool retry = false) {
+            if (Scripted) return;                       // the display is the machine's, not the simulated laptop's
             try {
                 int[] rates = Display.Rates();
                 if (rates.Length < 2) { refreshTriesLeft = 0; return; }
@@ -2291,7 +2277,7 @@ namespace Ohman {
             // Windows feature on behind their back.
             // HasControl, not Present: Present only counts HP's virtual device, and a Darfon per-key keyboard can be
             // listed with no virtual device beside it, which left Windows repainting over us.
-            if (!mcu && WinLighting.HasControl) { S.TookWinLighting = true; S.Save(); WinLighting.SetControl(false); }   // take the keyboard first or Windows overwrites us
+            if (!mcu && !Scripted && WinLighting.HasControl) { S.TookWinLighting = true; S.Save(); WinLighting.SetControl(false); }   // take the keyboard first or Windows overwrites us
             { var pk = Light as PerKeyLighting; if (pk != null) pk.Retake(); }                                 // the keyboard may have gone back to its own lighting since (#109)
             TryLight(delegate {
                 if (S.Light == 1) Light.SetColors(Scaled(LightColors));
@@ -2382,23 +2368,15 @@ namespace Ohman {
         }
 
                 // ---------- Windows power-mode overlay ----------
-        static readonly Guid OverlayEfficiency = new Guid("961cc777-2547-4f9d-8174-7d86181b8a7a");
-        static readonly Guid OverlayBalanced = Guid.Empty;
-        static readonly Guid OverlayPerformance = new Guid("ded574b5-45a0-4f42-8737-46345c09c238");
-        [DllImport("powrprof.dll")] static extern uint PowerSetActiveOverlayScheme(ref Guid overlay);
-        public void SetWinPowerOverlay(int modeIndex) {
-            try {
-                Guid g = modeIndex == 0 ? OverlayEfficiency : modeIndex == 2 ? OverlayPerformance : OverlayBalanced;
-                uint rc = PowerSetActiveOverlayScheme(ref g);
-                if (rc != 0) Log.Write("PowerSetActiveOverlayScheme rc=" + rc);
-            } catch (Exception ex) { Log.Write("power overlay: " + ex.Message); }
-        }
+        /// <summary>The operating system's own power mode, made to follow ours: the Windows power-mode overlay,
+        /// or power-profiles-daemon on Linux.</summary>
+        public void SetWinPowerOverlay(int modeIndex) { Host.SetPowerMode(modeIndex); }
 
         // ---------- diagnostics ----------
         public string Diagnostics() {
             var sb = new StringBuilder();
-            sb.AppendLine(Program.AppName + " diagnostics " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
-            sb.AppendLine("hardware: " + (Hw.IsDemo ? "DEMO (simulated)" : "BIOS via root\\wmi hpqBIntM"));
+            sb.AppendLine(Program.AppName + " diagnostics " + Now.ToString("yyyy-MM-dd HH:mm:ss"));
+            sb.AppendLine("hardware: " + (Hw.IsDemo ? "DEMO (simulated)" : "BIOS via " + Mailbox.Describe));
             sb.AppendLine("platform: " + Model + " board " + Board + " -> " + (Supported ? P.Name + (Generic ? (Platforms.Reported(Board) ? " [generic, verified by its owner]" : " [generic, unverified]") : "") : "UNSUPPORTED (read-only)"));
             sb.AppendLine("bios ok: " + BiosOk + (LastError.Length > 0 ? "  last error: " + LastError : ""));
             sb.AppendLine("fans: " + FanCount + "   system data: " + Info.Hex + "   policy v" + Info.ThermalPolicy + "  swFan=" + Info.SwFanControl + "  PL4=" + Info.DefaultPl4 + "W  baseTdp=" + Info.DefaultConcurrentTdp + "W");
@@ -2423,7 +2401,7 @@ namespace Ohman {
             sb.AppendLine("fan ceiling: " + (P.Curve != null ? P.Curve.Ceiling : -1) + "  (profile/table " + pristineCeiling + ", learned " + (S.FanCeilingSeen > 0 ? "" + S.FanCeilingSeen : "none")
                 + ", max flag " + (S.MaxIgnored ? "ignored" : maxProven ? "proven" : "not tested this run") + ", fastest seen " + ceilingHighWater + ")");
             sb.AppendLine("fan drive: written " + curLevel1 + "/" + curLevel2 + "  cpu " + Fmt(CpuTemp) + " (last single reading " + Fmt(CpuTempNow) + ")  gpu " + Fmt(GpuTemp) + "  ir " + Fmt(IrTemp) + "  guard=" + GuardActive + "  writeFailures=" + fanWriteFailures + " refusals=" + fanRefusals + (refusedBefore ? " (refused in an earlier session)" : "") + "  route=" + Route + (ScreenOff ? "  screen off: firmware curve" : "") + (FirmwareHolding ? "  HELD BY FIRMWARE" : ""));
-            sb.AppendLine("driver: " + (DriverReady ? "PawnIO " + (Hw.IsDemo ? "simulated" : "" + DriverVersion) + " · cpu " + (Cpu != null ? Cpu.Describe : "none")
+            sb.AppendLine("driver: " + (DriverReady ? Driver.Name + " " + (Hw.IsDemo ? "simulated" : "" + DriverVersion) + " · cpu " + (Cpu != null ? Cpu.Describe : "none")
                 + " · ec " + (Ec == null ? "none" : (ecVerified ? Ec.Map.Name : "map rejected") + (Ec.Resting ? " (resting)" : "") + " · " + EcProof) : "none (" + DriverWhy + ")"));
             sb.AppendLine("last heartbeat: " + (LastHeartbeat == DateTime.MinValue ? "never" : LastHeartbeat.ToString("HH:mm:ss")) + "   last key event: " + (LastEventTime == DateTime.MinValue ? "none" : LastEventId + "/" + LastEventData + " at " + LastEventTime.ToString("HH:mm:ss")));
             return sb.ToString();

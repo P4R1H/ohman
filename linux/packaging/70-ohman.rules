@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Ohman: let members of the group "ohman" talk to the per-key keyboard controllers.
+#
+# Per-key lighting is sent to the keyboard as HID reports through /dev/hidraw*. Those nodes are root-only
+# by default. The window runs as the logged-in user, so the nodes of the keyboards listed here are given to
+# root:ohman, mode 0660. Nothing else on the machine is touched: not other keyboards, not mice, not the
+# input devices (the firmware's hotkeys are read by the root helper, which needs no rule).
+#
+# To add a keyboard: copy a line and change the vendor (and, to be narrower, the "*" after it to a product).
+# The match is on the name of the HID device, which the kernel writes as BUS:VENDOR:PRODUCT.instance in
+# UPPERCASE hex with four digits each, so ids here must be uppercase too. "*" in front stands for the bus
+# (0003 USB, 0018 I2C), so the rule holds whichever way the board wires its keyboard.
+# `ls -l /sys/class/hidraw/*/device` shows the ids on a given laptop.
+#
+# Primax is listed by product: the two keyboards Ohman has a protocol for. The other three are whole
+# vendors because that is how Ohman finds those keyboards: any device of these makers that answers as a
+# lighting controller. On a laptop they make the keyboard and little else, but an external device from one
+# of them gets the same group. Only members of "ohman" gain anything by it.
+#
+# After editing: sudo udevadm control --reload && sudo udevadm trigger --subsystem-match=hidraw
+
+ACTION=="remove", GOTO="ohman_end"
+SUBSYSTEM!="hidraw", GOTO="ohman_end"
+
+# Primax: OMEN 17 (4E9A) and OMEN 16 (4E9B), 2021-2024
+KERNELS=="*:0461:4E9A.*", GROUP="ohman", MODE="0660"
+KERNELS=="*:0461:4E9B.*", GROUP="ohman", MODE="0660"
+# Darfon: per-key keyboards (OMEN MAX 16 is 0D62:54BF)
+KERNELS=="*:0D62:*.*", GROUP="ohman", MODE="0660"
+# Chicony: per-key keyboards
+KERNELS=="*:04F2:*.*", GROUP="ohman", MODE="0660"
+# ITE: per-key keyboards
+KERNELS=="*:048D:*.*", GROUP="ohman", MODE="0660"
+
+LABEL="ohman_end"

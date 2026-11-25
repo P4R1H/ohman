@@ -57,6 +57,33 @@ signed by Intel Corporation. A file that fails any of these is deleted, and the 
 
 While a run is active PresentMon runs in a job object that ends it with Ohman, however Ohman ends.
 
+## Linux: MangoHud
+
+Linux has no PresentMon. Frame times there come from [MangoHud](https://github.com/flightlessmango/MangoHud),
+which sits inside the game and is put there by the game's launch option. Ohman loads nothing into a game: it
+asks a MangoHud that is already running to log, over MangoHud's own control socket, and reads that log.
+
+Start the game with (Steam: Properties, Launch options; Lutris and Heroic have the same field):
+
+    MANGOHUD_CONFIG=read_cfg,control=mangohud-%p,log_interval=0 mangohud %command%
+
+`control=` opens the socket Ohman talks to, `log_interval=0` makes the log one row a frame, `read_cfg` keeps
+your own MangoHud.conf. The page shows this line and copies it when no such game is found.
+
+What differs from Windows:
+
+- The game is the program with MangoHud that is drawing, not whatever window is in front. The window in front
+  only decides whether the run is paused, and only X11 (and XWayland) windows can be seen: on Wayland, with a
+  native Wayland window in front, the run is not paused.
+- MangoHud logs the time between presents and nothing about the display, so frame generation is not detected
+  and a frame cap is judged on present times alone. The present mode is stored as "Other".
+- The log MangoHud writes for a run (in its `output_folder`, your home directory by default) is removed again
+  when the run ends. A log you were already recording is read and left alone.
+- Runs are kept in `~/.local/share/ohman/bench/runs`, cards in Pictures/Ohman, exports in Documents/Ohman.
+
+None of this has been run against a real game yet: it was written from MangoHud's source and tried against an
+emulation of its socket and log (`linux/test/fake-mangohud.py`).
+
 ## What is kept
 
 | | |

@@ -210,15 +210,11 @@ namespace Ohman {
         public readonly string Path;
         public string Info = "";                   // what the device said about itself, for the log
 
-        SafeFileHandle handle;
-        FileStream fs;
+        Stream fs;                                 // whole reports, report id first: Hid.OpenStream
         Task<int> pending;                         // at most one read outstanding; a late reply is not left to a later read
         byte[] pendingBuf;
         Mutex mutex;
         bool mutexFailed, mutexBusyLogged;
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        static extern SafeFileHandle CreateFile(string path, uint access, uint share, IntPtr sec, uint disp, uint flags, IntPtr template);
 
         McuKeyboard(string path, McuBoard board) { Path = path; Board = board; }
 
@@ -259,9 +255,9 @@ namespace Ohman {
         bool Open() { return OpenPath(Path); }
         bool OpenPath(string path) {
             // read/write, shared (OGH opens it the same way), overlapped so every wait has a timeout
-            handle = CreateFile(path, 0xC0000000, 3, IntPtr.Zero, 3, 0x40000000, IntPtr.Zero);
-            if (handle.IsInvalid) { Log.Write("mcu keyboard: cannot open (error " + Marshal.GetLastWin32Error() + ")"); handle = null; return false; }
-            fs = new FileStream(handle, FileAccess.ReadWrite, ReportLen, true);
+            int error;
+            fs = Hid.OpenStream(path, ReportLen, out error);
+            if (fs == null) { Log.Write("mcu keyboard: cannot open (error " + error + ")"); return false; }
             return true;
         }
 
@@ -368,7 +364,6 @@ namespace Ohman {
         void Close() {
             pending = null;
             if (fs != null) { try { fs.Dispose(); } catch { } fs = null; }
-            if (handle != null) { try { handle.Dispose(); } catch { } handle = null; }
         }
 
         public void Dispose() {

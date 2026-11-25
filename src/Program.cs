@@ -26,19 +26,13 @@ using System.Windows;
 [assembly: System.Reflection.AssemblyDescription("Fan, thermal and keyboard lighting control for HP OMEN and Victus laptops.")]
 
 namespace Ohman {
-    public static class Program {
-        // To rename the app: change AppName here and the /out: names in build.cmd. Everything else follows
-        // (window title, tray, scheduled task, single-instance names, log/state file names).
-        public const string AppName = "Ohman";                 // internal id: file names, mutex, scheduled task
-        public static string DisplayName = AppName;           // what the UI shows; override with Name=... in ohman.state
-        public const string Version = Meta.Version;           // bump it in src\Meta.cs, not here
-        public static string FileStem { get { return AppName.ToLowerInvariant(); } }
+    public static partial class Program {
+        // The app's name and version are shared with every platform and live in src\App.cs.
         public static EventWaitHandle ShowEvent, ExitEvent;   // named events: another instance can ask us to show or exit
         public static bool JustUpdated;                       // --updated: this build was started by the one it replaced
         public static bool FlashTest;                         // --flash: show the key OSD at start (preview/screenshot aid)
         public static bool KeyboardTest;                      // --keyboard: open the keyboard page at start (screenshot aid)
         public static string StartPage = "";                  // --page home|fans|keyboard|settings|update|driver
-        public static bool FanProbe;                          // --fantest with --driver: also find which EC register drives the fans
         public static string BenchPose;                       // --bench-state first|ready|waiting|warming|measuring|paused|result|runs (simulated build, screenshot aid)
         public static bool BenchSelfTest;                     // --bench-selftest: simulated build only, one 30 s run with simulated frames, then exit
 
@@ -65,6 +59,7 @@ namespace Ohman {
             // Before the single-instance guard, like --lamps: with Ohman already running, anything after it
             // just signals the live window and exits, which made this silently do nothing.
             foreach (string a0 in args) if (a0.ToLowerInvariant() == "--support") return WriteSupport(args);
+            foreach (string a0 in args) if (a0.ToLowerInvariant() == "--scenario") return WriteScenario(args);
             foreach (string a0 in args) if (a0.ToLowerInvariant() == "--fantest") FanProbe = true;
             foreach (string a0 in args) if (a0.ToLowerInvariant() == "--driver") return WriteDriverReport(args);
             for (int i = 0; i + 1 < args.Length; i++)
@@ -184,6 +179,23 @@ namespace Ohman {
         /// before the single-instance guard and have to work beside a live Ohman.</summary>
         static int WriteSupport(string[] args) { return WriteReport(args, "support-info.txt", Support.Report, "the firmware was not asked anything"); }
         static int WriteDriverReport(string[] args) { return WriteReport(args, "driver-check.txt", Support.DriverReport, "the driver and the firmware were not asked anything"); }
+
+        /// <summary>--scenario [file]: the scripted run on simulated hardware (src\Scenario.cs), every hardware call
+        /// the engine makes written down. ohman-probe --scenario prints the same text on Linux, and
+        /// linux\test\parity.sh compares the two. With a file name it is written there (UTF-8, no console).</summary>
+        static int WriteScenario(string[] args) {
+            string file = null;
+            for (int i = 0; i + 1 < args.Length; i++) if (args[i].ToLowerInvariant() == "--scenario" && !args[i + 1].StartsWith("--")) file = args[i + 1];
+            string text = Scenario.Run();
+            if (file != null) {
+                try { System.IO.File.WriteAllText(file, text, new System.Text.UTF8Encoding(false)); return 0; }
+                catch (Exception ex) { Log.Write("scenario: could not save: " + ex.Message); return 1; }
+            }
+            bool ownConsole = OpenConsole();
+            Console.Write(text);
+            HoldConsole(ownConsole);
+            return 0;
+        }
 
         static int WriteReport(string[] args, string fileName, Func<Engine, string> build, string notElevated) {
             bool ownConsole = OpenConsole();

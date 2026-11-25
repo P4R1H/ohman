@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Ohman
+GenericName=Laptop control
+Comment=Modes, fans, power and keyboard lighting for HP OMEN and Victus laptops
+Exec=ohman
+Icon=ohman
+Terminal=false
+Categories=System;Settings;HardwareSettings;
+Keywords=omen;victus;hp;fan;fans;rgb;keyboard;lighting;performance;
+StartupNotify=true
+StartupWMClass=ohman

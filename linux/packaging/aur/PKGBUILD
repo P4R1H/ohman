@@ -1,0 +1,52 @@
+# Maintainer: Ohman contributors <https://github.com/P4R1H/Ohman>
+#
+# DRAFT, not submitted to the AUR and not built on Arch yet. It repackages the release tarball: the same
+# binaries install.sh installs, put where a package puts them (/usr/lib instead of /etc), with the group
+# made by sysusers and the module handed to DKMS by the dkms package's own pacman hook.
+#
+# Before submitting: set pkgver, run updpkgsums, makepkg -si on a real Arch install, namcap the result.
+
+pkgname=ohman-bin
+pkgver=1.3.5
+pkgrel=1
+pkgdesc="Modes, fans, power and keyboard lighting for HP OMEN and Victus laptops"
+arch=('x86_64')
+url="https://github.com/P4R1H/Ohman"
+license=('GPL-3.0-or-later')
+depends=('dkms' 'glibc' 'gcc-libs' 'fontconfig' 'libx11' 'libice' 'libsm')
+optdepends=('linux-headers: build the module for the stock kernel'
+            'linux-lts-headers: build the module for the LTS kernel'
+            'nvidia-utils: GPU temperature and power readings')
+provides=('ohman')
+conflicts=('ohman')
+install=ohman.install
+# The programs are self-contained .NET single files: stripping them cuts the program off the end.
+options=('!strip' '!debug')
+source=("$url/releases/download/v$pkgver/ohman-$pkgver-linux-x64.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+    cd "ohman-$pkgver-linux-x64"
+    local modver
+    modver=$(sed -n 's/^PACKAGE_VERSION="\(.*\)"$/\1/p' driver/dkms.conf)
+
+    install -d "$pkgdir/opt/ohman" "$pkgdir/usr/bin"
+    cp -r bin/. "$pkgdir/opt/ohman/"
+    install -m 644 VERSION "$pkgdir/opt/ohman/VERSION"
+    ln -s /opt/ohman/ohman "$pkgdir/usr/bin/ohman"
+    ln -s /opt/ohman/ohman-probe "$pkgdir/usr/bin/ohman-probe"
+
+    # Arch does not lock the kernel down under Secure Boot, so there is no signing hook here. Whoever signs
+    # their own kernel and modules (sbctl and the like) has DKMS set up for it already.
+    install -d "$pkgdir/usr/src/ohman-wmi-$modver"
+    install -m 644 driver/* "$pkgdir/usr/src/ohman-wmi-$modver/"
+
+    install -Dm 644 packaging/ohman-helper.service "$pkgdir/usr/lib/systemd/system/ohman-helper.service"
+    install -Dm 644 packaging/70-ohman.rules       "$pkgdir/usr/lib/udev/rules.d/70-ohman.rules"
+    install -Dm 644 packaging/ohman.sysusers       "$pkgdir/usr/lib/sysusers.d/ohman.conf"
+    install -Dm 644 packaging/modules-load.conf    "$pkgdir/usr/lib/modules-load.d/ohman-wmi.conf"
+    install -Dm 644 packaging/ohman.desktop        "$pkgdir/usr/share/applications/ohman.desktop"
+    install -Dm 644 packaging/ohman.png            "$pkgdir/usr/share/icons/hicolor/256x256/apps/ohman.png"
+    install -Dm 644 docs/linux.md                  "$pkgdir/usr/share/doc/ohman/linux.md"
+    install -Dm 644 fonts/OFL.txt                  "$pkgdir/usr/share/licenses/$pkgname/OFL.txt"
+}

@@ -54,6 +54,25 @@ build.cmd
 
 `preview\Ohman.exe` is the same UI on simulated hardware and needs no administrator rights.
 
+## Linux
+
+**Not verified on real hardware under Linux yet.** It is the same engine and the same firmware commands as
+the Windows build, reaching the firmware through a small kernel module and a root helper that nobody has
+run on an OMEN or a Victus so far. Testers wanted.
+
+```
+curl -fsSL https://github.com/P4R1H/Ohman/releases/latest/download/ohman-install.sh | sudo bash
+```
+
+Or download `ohman-<version>-linux-x64.tar.gz` from [Releases](../../releases/latest), unpack it, and run
+`./install.sh --check` to see what it would do, then `sudo ./install.sh`. Debian, Ubuntu, Fedora, Arch and
+openSUSE; x86-64, systemd. It builds the module with DKMS, handles Secure Boot signing with a key that never
+leaves your machine, and leaves the kernel's own `hp-wmi` driver alone. `sudo /opt/ohman/uninstall.sh`
+removes all of it.
+
+What gets installed and why, the Secure Boot steps, what differs from Windows and what to do when
+something does not work: [docs/linux.md](docs/linux.md).
+
 ## Your laptop
 
 **Every OMEN and Victus laptop is supported.** Ohman asks the firmware what generation it is and drives it

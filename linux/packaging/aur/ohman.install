@@ -1,0 +1,16 @@
+post_install() {
+    echo "Ohman: add yourself to the group and start the helper:"
+    echo "    sudo usermod -aG ohman \$USER      (then log out and back in)"
+    echo "    sudo systemctl enable --now ohman-helper"
+    echo "The kernel module needs the headers of your kernel (linux-headers, linux-lts-headers ...)."
+    echo "It loads at the next boot, or now: sudo modprobe ohman-wmi"
+}
+
+post_upgrade() {
+    systemctl try-restart ohman-helper.service 2>/dev/null || true
+}
+
+pre_remove() {
+    systemctl disable --now ohman-helper.service 2>/dev/null || true
+    modprobe -r ohman-wmi 2>/dev/null || true
+}

@@ -1,0 +1,3 @@
+# For distribution packages (installed as /usr/lib/sysusers.d/ohman.conf). install.sh uses groupadd instead.
+# Members of this group may talk to ohman-helper and to the per-key keyboard controllers.
+g ohman -

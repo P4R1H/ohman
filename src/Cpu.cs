@@ -1,5 +1,7 @@
 ﻿// SPDX-License-Identifier: GPL-3.0-or-later
-// Ohman: the CPU's own registers, through the driver.
+// Ohman: the CPU's own registers, through the driver. Shared: what the registers mean. How they are reached
+// is a CpuPort, which the Driver class of each operating system hands out (src\win\Driver.cs: PawnIO;
+// src\linux\Driver.cs: /dev/cpu/N/msr through the root helper).
 //
 // The ACPI zone Windows exposes is whatever the firmware put there: sometimes the package sensor, sometimes a
 // skin sensor, on a few boards a constant 28. The CPU itself knows, and says so in a register only ring 0 can
@@ -14,9 +16,7 @@
 // Reads, and on Intel one write: MSR_PKG_POWER_LIMIT, which the stock signed IntelMSR module allow-lists
 // (is_allowed_msr_write: MSR_PKG_POWER_LIMIT among six), to set the limit OGH itself sets per mode.
 using System;
-using System.Runtime.InteropServices;
 using System.Threading;
-using Microsoft.Win32;
 
 namespace Ohman {
 
@@ -31,15 +31,31 @@ namespace Ohman {
         public string Throttle = "";                // "" or why the CPU is being held back right now
     }
 
+    /// <summary>How the registers are reached on this operating system. True means the read or write happened.</summary>
+    public abstract class CpuPort : IDisposable {
+        public abstract bool ReadMsr(uint msr, out ulong value);
+        /// <summary>Only ever asked for the package power limit; each implementation refuses anything else.</summary>
+        public abstract bool WriteMsr(uint msr, ulong value);
+        /// <summary>AMD's SMN bus, where the die temperature lives. False where it cannot be reached.</summary>
+        public virtual bool ReadSmn(uint address, out uint value) { value = 0; return false; }
+        /// <summary>Two per-core counters read from the same core, one straight after the other. False when the
+        /// pair could not be had from one core: an unpinned pair can difference one core's counter against
+        /// another's for a ratio that looks entirely plausible, and no reading beats a wrong one.</summary>
+        public abstract bool ReadPair(uint first, uint second, out ulong a, out ulong b);
+        /// <summary>Why the last write was refused, in the words the settings row shows.</summary>
+        public virtual string WriteRefusal { get { return "the driver refused the write"; } }
+        public virtual void Dispose() { }
+    }
+
     /// <summary>The CPU's registers behind an interface, so the preview build can pretend to have them.</summary>
     public abstract class CpuRegisters : IDisposable {
         readonly object sync = new object();
-        protected readonly PawnIoModule Module;
+        protected readonly CpuPort Port;
         ulong lastEnergy;
         DateTime lastEnergyAt = DateTime.MinValue;
         protected double EnergyUnit;                // joules per count, read once from the CPU
 
-        protected CpuRegisters(PawnIoModule module) { Module = module; }
+        protected CpuRegisters(CpuPort port) { Port = port; }
 
         public abstract string Describe { get; }
         protected abstract CpuTelemetry PollCore();
@@ -62,7 +78,7 @@ namespace Ohman {
         }
         bool light;
 
-        public virtual void Dispose() { if (Module != null) Module.Dispose(); }
+        public virtual void Dispose() { if (Port != null) Port.Dispose(); }
 
         // Architectural on both vendors. APERF counts cycles the core actually ran, MPERF counts them at the
         // base clock, so their ratio over an interval is the average multiplier for that interval. Windows'
@@ -73,29 +89,14 @@ namespace Ohman {
         bool haveClock;
         protected double BaseMhz;                   // max non-turbo, set by the subclass
 
-        [DllImport("kernel32.dll")] static extern IntPtr SetThreadAffinityMask(IntPtr thread, IntPtr mask);
-        [DllImport("kernel32.dll")] static extern IntPtr GetCurrentThread();
-
         /// <summary>The average clock since the last call. Both counters are per core, so a thread that moved
         /// cores between calls would difference one core's counter against another's and produce nonsense; the
-        /// reads are pinned to core 0 for that reason, and the result is that core's clock rather than a package
-        /// average, which is the same thing the Windows counter approximates.</summary>
+        /// reads are pinned to core 0 for that reason (CpuPort.ReadPair), and the result is that core's clock
+        /// rather than a package average, which is the same thing the Windows counter approximates.</summary>
         protected double Clock() {
             if (BaseMhz <= 0 || light) return double.NaN;
-            ulong a = 0, m = 0;      // && short-circuits, so the second may never be written
-            bool ok;
-            IntPtr prev = IntPtr.Zero;
-            Thread.BeginThreadAffinity();
-            try {
-                prev = SetThreadAffinityMask(GetCurrentThread(), (IntPtr)1);
-                // Zero means the mask was refused, and an unpinned pair can difference one core's counter
-                // against another's for a ratio that looks entirely plausible. No reading beats a wrong one.
-                ok = prev != IntPtr.Zero && Msr(IA32_APERF, out a) && Msr(IA32_MPERF, out m);
-            } finally {
-                if (prev != IntPtr.Zero) SetThreadAffinityMask(GetCurrentThread(), prev);
-                Thread.EndThreadAffinity();
-            }
-            if (!ok) return double.NaN;
+            ulong a, m;
+            if (!Port.ReadPair(IA32_APERF, IA32_MPERF, out a, out m)) return double.NaN;
             double mhz = double.NaN;
             if (haveClock) {
                 ulong da = a - lastAperf, dm = m - lastMperf;
@@ -109,24 +110,17 @@ namespace Ohman {
 
         /// <summary>The nominal clock the kernel recorded at boot, which is the base clock on every machine we
         /// have seen. Only a fallback: Intel states it exactly in a register.</summary>
-        protected static double NominalMhz() {
-            try {
-                using (RegistryKey k = Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0"))
-                    if (k != null) { object v = k.GetValue("~MHz"); if (v is int) return (int)v; }
-            } catch { }
-            return 0;
-        }
+        protected static double NominalMhz() { return Driver.NominalMhz(); }
 
         /// <summary>Set the package limits OGH sets for this mode. Null when they are in place, else why not.
         /// The first value read is kept and put back by RestorePackageLimits.</summary>
         public virtual string SetPackageLimits(int pl1, int pl2) { return "not on this CPU"; }
         public virtual void RestorePackageLimits() { }
-        protected bool WriteMsr(uint msr, ulong v) { return Module != null && Module.Call("ioctl_write_msr", new ulong[] { msr, v }, null); }
+        protected bool WriteMsr(uint msr, ulong v) { return Port != null && Port.WriteMsr(msr, v); }
 
         protected bool Msr(uint msr, out ulong v) {
-            var o = new ulong[1];
-            bool ok = Module.Call("ioctl_read_msr", new ulong[] { msr }, o);
-            v = ok ? o[0] : 0;
+            bool ok = Port.ReadMsr(msr, out v);
+            if (!ok) v = 0;
             return ok;
         }
 
@@ -146,13 +140,7 @@ namespace Ohman {
         }
 
         /// <summary>The vendor the kernel recorded at boot; no CPUID instruction needed from here.</summary>
-        public static string Vendor() {
-            try {
-                using (RegistryKey k = Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0"))
-                    if (k != null) return (k.GetValue("VendorIdentifier") as string ?? "").Trim();
-            } catch { }
-            return "";
-        }
+        public static string Vendor() { return Driver.CpuVendor(); }
         /// <summary>Cached: the settings row asks on every refresh and a CPU does not change under us.</summary>
         static int isIntel;
         public static bool IsIntel {
@@ -168,11 +156,11 @@ namespace Ohman {
             string vendor = Vendor();
             deviceAbsent = false;
             if (IsIntel) {
-                PawnIoModule m = PawnIo.Open("IntelMSR", out why, out deviceAbsent);
+                CpuPort m = Driver.OpenCpu("IntelMSR", out why, out deviceAbsent);
                 return m == null ? null : new IntelCpu(m);
             }
             if (vendor.IndexOf("AMD", StringComparison.OrdinalIgnoreCase) >= 0) {
-                PawnIoModule m = PawnIo.Open("AMDFamily17", out why, out deviceAbsent);
+                CpuPort m = Driver.OpenCpu("AMDFamily17", out why, out deviceAbsent);
                 return m == null ? null : new AmdCpu(m);
             }
             why = "unknown CPU vendor '" + vendor + "'";
@@ -187,7 +175,7 @@ namespace Ohman {
         int tjMax;
         bool baseTried;
         double powerUnit;
-        public IntelCpu(PawnIoModule module) : base(module) { }
+        public IntelCpu(CpuPort port) : base(port) { }
         ulong firstLimit;
         bool firstKnown;
         readonly object limitSync = new object();
@@ -209,7 +197,7 @@ namespace Ohman {
                 // Time windows and clamp bits stay as the firmware set them; only the two limits and their enables move.
                 ulong nv = (v & ~LimitBits) | u1 | (1ul << 15) | (u2 << 32) | (1ul << 47);
                 if (nv == v) return null;
-                if (!WriteMsr(MSR_PKG_POWER_LIMIT, nv)) return "the driver refused the write";
+                if (!WriteMsr(MSR_PKG_POWER_LIMIT, nv)) return Port.WriteRefusal;
                 ulong back;
                 if (!Msr(MSR_PKG_POWER_LIMIT, out back) || (back & LimitBits) != (nv & LimitBits)) return "written, but 0x610 did not keep it";
                 return null;
@@ -267,21 +255,10 @@ namespace Ohman {
         const uint THM_TCON_CUR_TMP = 0x00059800;
         const uint MSR_PWR_UNIT = 0xC0010299, MSR_PKG_ENERGY_STAT = 0xC001029B;
         bool baseTried;
-        readonly Mutex pci;                 // the SMN goes through PCI config space, which every tool serialises on this name
-        public AmdCpu(PawnIoModule module) : base(module) { try { pci = new Mutex(false, @"Global\Access_PCI"); } catch { } }
+        public AmdCpu(CpuPort port) : base(port) { }
         public override string Describe { get { return "AMD SMN + MSR"; } }
 
-        bool Smn(uint addr, out uint v) {
-            v = 0;
-            bool held = false;
-            try {
-                if (pci != null) { try { held = pci.WaitOne(250); } catch (AbandonedMutexException) { held = true; } }
-                var o = new ulong[1];
-                if (!Module.Call("ioctl_read_smn", new ulong[] { addr }, o)) return false;
-                v = (uint)o[0];
-                return true;
-            } finally { if (held) { try { pci.ReleaseMutex(); } catch { } } }
-        }
+        bool Smn(uint addr, out uint v) { return Port.ReadSmn(addr, out v); }
 
         protected override CpuTelemetry PollCore() {
             var t = new CpuTelemetry();
@@ -300,7 +277,6 @@ namespace Ohman {
             t.Mhz = Clock();
             return t;
         }
-        public override void Dispose() { base.Dispose(); try { if (pci != null) pci.Close(); } catch { } }
     }
 
     /// <summary>Simulated registers for the preview build.</summary>

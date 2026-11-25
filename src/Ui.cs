@@ -2460,7 +2460,7 @@ namespace Ohman {
             if (key == Key.Escape) { StopListening(); return; }
             if (key == Key.Back) { E.SetHotkey(action, Hotkey.None); StopListening(); return; }
             Hotkey h;
-            if (!Hotkey.FromKey(key, Keyboard.Modifiers, out h)) { ShowHeldModifiers(); return; }   // a modifier on its own: show it, keep waiting
+            if (!KeyNames.FromKey(key, Keyboard.Modifiers, out h)) { ShowHeldModifiers(); return; }   // a modifier on its own: show it, keep waiting
             if (!h.Valid) { ShowToast("Hold Ctrl, Alt, Shift or Win with it, or use an F-key", true); return; }
             string[] before = E.SnapshotHotkeys();
             E.SetHotkey(action, h);

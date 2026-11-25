@@ -1,5 +1,6 @@
 ﻿// SPDX-License-Identifier: GPL-3.0-or-later
-// Ohman: the support report: everything needed to add or fix a laptop, gathered in one go.
+// Ohman, Windows only: the support report: everything needed to add or fix a laptop, gathered in one go.
+// src\linux\Support.cs is the same class for Linux, with the firmware sections worded and ordered the same.
 //
 // This exists because the first day of reports was mostly people being asked for one more thing. Every question
 // that came up (which commands does this firmware answer, which thermal-policy version, does the keyboard

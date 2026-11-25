@@ -4,3 +4,12 @@
 *.exe binary
 *.ttf binary
 *.webp binary
+
+# Everything a Linux shell, systemd, udev or the kernel build reads has to keep LF, also in a Windows checkout.
+linux/*.sh text eol=lf
+linux/packaging/** text eol=lf
+linux/packaging/*.png binary
+linux/driver/** text eol=lf
+linux/test/** text eol=lf
+linux/app-ui-test/*.sh text eol=lf
+.github/workflows/linux.yml text eol=lf

@@ -21,6 +21,63 @@ profile was built:
   written until `EmbeddedController.Verify` has recognised the registers on the machine itself. That check is
   what `tools\drivertest.cmd` prints, so a contributed `drivertest.txt` is the evidence for it.
 
+## Windows and Linux: one core
+
+The engine, the profiles, the firmware commands, the lighting protocols and the benchmark's arithmetic are one
+copy of the code, compiled for both systems. Only the thin layer that reaches the hardware, and the window,
+differ.
+
+- `src\*.cs` listed in `linux\Core.props` is **shared**. Windows builds it with `build.cmd`, Linux with
+  `dotnet build`. Keep it C# 5, and keep WPF, WinForms, WMI (`System.Management`), the registry and P/Invoke
+  out of it.
+- `src\win\` is Windows only and `src\linux\` is Linux only. A class that exists in one exists in the other
+  with the same name and the same members: `Mailbox`, `Dmi`, `BiosEvents`, `EcLock`, `Power`, `KeyNames`,
+  `AppPaths`, `Host`, `Driver`, `Hid`, `Display`, `Sensors`, `Support`, `WinLighting`, the system half of
+  `Update`, and for the benchmark `FrameCapture`, `Machine`, `Cues` and the system half of `Games`. When shared
+  code needs something from the operating system, it goes through one of these, or a new pair.
+- Whether a feature exists on a system is asked of `Host` (`Host.HasVendorApp`, `Host.CanInstallDriver`,
+  `Host.HasRefreshRate`, ...), never decided with `#if` or by sniffing the platform.
+- A fix to the engine or a new board in `src\Platform.cs` is made once and reaches both.
+
+**Two windows, kept as mirrors.** The WPF window (`src\Ui.cs`, `Ui.xaml`, `BenchUi.cs`, `Controls.cs`,
+`Curve.cs`, `KeyboardView.cs`, `Theme.cs`, `Program.cs`) is Windows only. The Linux window is `linux\app\`
+(Avalonia): the same files with the same class names, the same methods in the same order and the same
+comments, each with a header listing its differences from the WPF original. A change to one window is ported
+to the other by reading its diff and applying it to the file of the same name. No logic belongs in either
+window that the other would need too: that goes in the shared core.
+
+After touching a shared file, build both and run the checks:
+
+```
+build.cmd preview
+wsl -d Ubuntu -- bash -c "cd linux/probe && ~/.dotnet/dotnet build"
+bash linux/test/parity.sh
+```
+
+`linux\test\parity.sh` runs one scripted scenario (`src\Scenario.cs`: every mode, max fan, manual levels, a
+curve climb, the thermal guard, lighting, the benchmark's statistics) on simulated hardware on both systems
+and compares every hardware call the engine made. The two transcripts must be identical. A change that is
+meant to alter what the engine sends changes both transcripts the same way; one that changes only one of them
+is a bug.
+
+When the change was not meant to alter Windows at all (a seam moved, a Linux back end added), prove it:
+`bash linux/test/windows-baseline.sh <an Ohman.exe from before the change>` rebuilds the preview and compares
+its engine log and reports with the old build's on simulated hardware for thirteen boards. It must print PASS.
+Neither check reaches the elevated, real-hardware path, so a change to `src\win\` still wants the real
+`Ohman.exe` run once on a laptop before it ships.
+
+Other Linux checks, none of which need a laptop: `ohman-probe selftest`, `ohman-probe bench-selftest`,
+`ohman-probe helper-test` against `ohman-helper --demo` (the whole socket path on simulated hardware), and
+`linux\app-ui-test\run.sh` (the real window driven without a screen: every page clicked through).
+`ohman --demo --page fans --screenshot out.png` renders a page to a picture the same way
+`preview\Ohman.exe --demo --page fans --screenshot out.png` does, at the same size, so the two windows can be
+laid side by side.
+
+On Linux the firmware is reached through `linux\driver\ohman-wmi.c`, a small kernel module that passes
+mailbox calls and embedded-controller bytes through, and `ohman-helper` (`linux\helper\`), the root service
+the window talks to. Neither knows what a command means; that stays in the shared core.
+[docs/linux.md](docs/linux.md) describes the installed pieces.
+
 ## Code
 
 - C# 5 only: the project builds with the compiler that ships inside Windows (`build.cmd`), no SDK.

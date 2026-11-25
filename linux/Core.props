@@ -1,0 +1,31 @@
+<Project>
+  <!--
+    The shared core, as the Linux build sees it. One list, used by every Linux project.
+
+    src\*.cs listed here is compiled on BOTH platforms: Windows builds the same files with build.cmd. So they
+    stay C# 5, and they must not use WPF, WinForms, WMI (System.Management) or anything else Windows-only.
+    What differs by operating system lives in src\win (Windows, in build.cmd) and src\linux (here), as classes
+    with the same name and the same members.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Ohman</RootNamespace>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- CA1416: the shared files still hold Windows-only calls behind run-time checks; SYSLIB0003: code access security;
+         SYSLIB0014: the shared update check uses HttpWebRequest, because it also has to build as C# 5 on .NET Framework;
+         CS0649: fields the shared files fill from object initialisers for some boards only (Windows builds at /warn:1) -->
+    <NoWarn>$(NoWarn);CA1416;SYSLIB0003;SYSLIB0014;CS0649</NoWarn>
+    <Src>$(MSBuildThisFileDirectory)../src/</Src>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(Src)Meta.cs;$(Src)App.cs;$(Src)Choice.cs;$(Src)Platform.cs;$(Src)Hardware.cs;$(Src)Ec.cs;$(Src)Cpu.cs" />
+    <Compile Include="$(Src)Lighting.cs;$(Src)Hid.cs;$(Src)McuKeyboard.cs;$(Src)Keyboard.cs;$(Src)Hotkeys.cs;$(Src)Sensors.cs;$(Src)Update.cs;$(Src)Engine.cs;$(Src)Scenario.cs;$(Src)Bench.cs" />
+    <Compile Include="$(Src)linux/*.cs" />
+    <!-- Game names for the benchmark (third_party\CapFrameX, MIT), under the name build.cmd gives it on Windows. -->
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)../third_party/CapFrameX/games.txt" LogicalName="Ohman.games.txt" />
+  </ItemGroup>
+</Project>

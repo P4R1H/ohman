@@ -1,5 +1,6 @@
 ﻿// SPDX-License-Identifier: GPL-3.0-or-later
-// Ohman: the kernel driver, which is PawnIO (https://pawnio.eu) and not ours.
+// Ohman, Windows only: the kernel driver, which is PawnIO (https://pawnio.eu) and not ours. The shared engine
+// reaches it through the Driver class at the end of this file; src\linux\Driver.cs is the same class for Linux.
 //
 // The WMI mailbox is all the firmware offers from user mode. Two things live behind it that the mailbox does
 // not reach: the embedded controller's own registers (ports 0x62/0x66) and the CPU's model-specific registers.
@@ -20,6 +21,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Threading;
 using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
 
@@ -311,6 +313,116 @@ namespace Ohman {
                 return signer != null && signer.Equals(expected, StringComparison.OrdinalIgnoreCase);
             } catch (Exception ex) { Log.Write(System.IO.Path.GetFileName(path) + " signature: " + ex.Message); return false; }
             finally { if (pData != IntPtr.Zero) Marshal.FreeHGlobal(pData); if (pInfo != IntPtr.Zero) Marshal.FreeHGlobal(pInfo); }
+        }
+    }
+
+    /// <summary>The EC's two ports through PawnIO's LpcACPIEC module, which allows exactly 0x62 and 0x66.</summary>
+    public sealed class PawnIoEcPorts : IEcPorts, IDisposable {
+        readonly PawnIoModule m;
+        public PawnIoEcPorts(PawnIoModule module) { m = module; }
+        public int In(byte port, out byte value) {
+            var o = new ulong[1]; int n;
+            int rc = m.Execute("ioctl_pio_read", new ulong[] { port }, o, out n);
+            value = rc == 0 ? (byte)o[0] : (byte)0;
+            return rc;
+        }
+        public int Out(byte port, byte value) { int n; return m.Execute("ioctl_pio_write", new ulong[] { port, value }, null, out n); }
+        public void Dispose() { m.Dispose(); }
+    }
+
+    /// <summary>The CPU's registers through PawnIO's IntelMSR or AMDFamily17 module.</summary>
+    sealed class PawnIoCpuPort : CpuPort {
+        readonly PawnIoModule module;
+        Mutex pci;                          // the SMN goes through PCI config space, which every tool serialises on this name
+        bool pciTried;
+        public PawnIoCpuPort(PawnIoModule m) { module = m; }
+
+        public override bool ReadMsr(uint msr, out ulong value) {
+            var o = new ulong[1];
+            bool ok = module.Call("ioctl_read_msr", new ulong[] { msr }, o);
+            value = ok ? o[0] : 0;
+            return ok;
+        }
+        public override bool WriteMsr(uint msr, ulong value) { return module.Call("ioctl_write_msr", new ulong[] { msr, value }, null); }
+
+        public override bool ReadSmn(uint address, out uint value) {
+            value = 0;
+            if (!pciTried) { pciTried = true; try { pci = new Mutex(false, @"Global\Access_PCI"); } catch { } }
+            bool held = false;
+            try {
+                if (pci != null) { try { held = pci.WaitOne(250); } catch (AbandonedMutexException) { held = true; } }
+                var o = new ulong[1];
+                if (!module.Call("ioctl_read_smn", new ulong[] { address }, o)) return false;
+                value = (uint)o[0];
+                return true;
+            } finally { if (held) { try { pci.ReleaseMutex(); } catch { } } }
+        }
+
+        [DllImport("kernel32.dll")] static extern IntPtr SetThreadAffinityMask(IntPtr thread, IntPtr mask);
+        [DllImport("kernel32.dll")] static extern IntPtr GetCurrentThread();
+        /// <summary>Both from core 0: the thread is pinned there for the two reads and put back after.</summary>
+        public override bool ReadPair(uint first, uint second, out ulong a, out ulong b) {
+            a = 0; b = 0;      // && short-circuits, so the second may never be written
+            bool ok;
+            IntPtr prev = IntPtr.Zero;
+            Thread.BeginThreadAffinity();
+            try {
+                prev = SetThreadAffinityMask(GetCurrentThread(), (IntPtr)1);
+                // Zero means the mask was refused, and an unpinned pair can difference one core's counter
+                // against another's for a ratio that looks entirely plausible. No reading beats a wrong one.
+                ok = prev != IntPtr.Zero && ReadMsr(first, out a) && ReadMsr(second, out b);
+            } finally {
+                if (prev != IntPtr.Zero) SetThreadAffinityMask(GetCurrentThread(), prev);
+                Thread.EndThreadAffinity();
+            }
+            return ok;
+        }
+
+        public override void Dispose() { module.Dispose(); try { if (pci != null) pci.Close(); } catch { } }
+    }
+
+    /// <summary>The optional driver as the shared engine sees it: is it there, which version, and the two things
+    /// it opens. On Windows that is PawnIO, above. src\linux\Driver.cs is the same class for Linux, where it is
+    /// the ohman-wmi kernel module and the root helper. Nothing in the engine names either.</summary>
+    public static class Driver {
+        public const string Name = "PawnIO";
+        /// <summary>The installed driver's version, or null when it is not installed.</summary>
+        public static Version InstalledVersion() { return PawnIo.InstalledVersion(); }
+        /// <summary>The oldest version that will do; anything older is offered an update.</summary>
+        public static Version MinVersion { get { return PawnIo.MinVersion; } }
+        /// <summary>"running", "stopped", "not registered"...: whether the installed driver is actually up.</summary>
+        public static string ServiceState() { return PawnIo.ServiceState(); }
+
+        /// <summary>The CPU's registers. module is the PawnIO module for this CPU's vendor.</summary>
+        public static CpuPort OpenCpu(string module, out string why, out bool deviceAbsent) {
+            PawnIoModule m = PawnIo.Open(module, out why, out deviceAbsent);
+            return m == null ? null : new PawnIoCpuPort(m);
+        }
+        /// <summary>The embedded controller's ports, or null with the reason.</summary>
+        public static IEcPorts OpenEc(out string why) {
+            PawnIoModule m = PawnIo.Open("LpcACPIEC", out why);
+            return m == null ? null : new PawnIoEcPorts(m);
+        }
+
+        public static DriverInstallResult Install(Action<string> progress, out string error) { return PawnIo.Install(progress, out error); }
+        public static bool Uninstall(out string error) { return PawnIo.Uninstall(out error); }
+
+        /// <summary>The vendor the kernel recorded at boot; no CPUID instruction needed from here.</summary>
+        public static string CpuVendor() {
+            try {
+                using (RegistryKey k = Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0"))
+                    if (k != null) return (k.GetValue("VendorIdentifier") as string ?? "").Trim();
+            } catch { }
+            return "";
+        }
+        /// <summary>The nominal clock the kernel recorded at boot, which is the base clock on every machine we
+        /// have seen. 0 when unknown.</summary>
+        public static double NominalMhz() {
+            try {
+                using (RegistryKey k = Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0"))
+                    if (k != null) { object v = k.GetValue("~MHz"); if (v is int) return (int)v; }
+            } catch { }
+            return 0;
         }
     }
 }

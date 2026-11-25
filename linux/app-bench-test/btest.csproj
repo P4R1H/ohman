@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The harness for the ported benchmark page: it compiles the four control files and BenchUi.cs of ../app on their
+       own, shows the page in every state in a headless window at 200 %, and renders the share cards. Not shipped. -->
+  <Import Project="../Core.props" />
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>ohman</AssemblyName>
+    <ApplicationManifest />
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.*" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.*" />
+    <PackageReference Include="Avalonia.Themes.Simple" Version="11.3.*" />
+    <PackageReference Include="Avalonia.Headless" Version="11.3.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Test.cs" />
+    <Compile Include="../app/Theme.cs;../app/Controls.cs;../app/Curve.cs;../app/KeyboardView.cs;../app/BenchUi.cs" />
+    <AvaloniaResource Include="../../fonts/*.ttf" Link="fonts/%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

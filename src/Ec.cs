@@ -18,31 +18,53 @@
 // after which the EC takes the fans back, which is the 120 s expiry the mailbox path keeps alive with 0x10.
 using System;
 using System.Collections.Generic;
-using System.Security.AccessControl;
-using System.Security.Principal;
 using System.Text;
 using System.Threading;
 
 namespace Ohman {
 
-    /// <summary>The two EC ports, however they are reached. Return 0 on success, else a Win32 error.</summary>
+    /// <summary>The two EC ports, however they are reached. Return 0 on success, else an error number. Which
+    /// implementation is in use is the Driver class's business (src\win\Driver.cs, src\linux\Driver.cs).</summary>
     public interface IEcPorts {
         int In(byte port, out byte value);
         int Out(byte port, byte value);
     }
 
-    /// <summary>The ports through PawnIO's LpcACPIEC module, which allows exactly 0x62 and 0x66.</summary>
-    public sealed class PawnIoEcPorts : IEcPorts, IDisposable {
-        readonly PawnIoModule m;
-        public PawnIoEcPorts(PawnIoModule module) { m = module; }
+    /// <summary>An EC that is reached a register at a time rather than a port at a time. Return 0 on success,
+    /// else an error number. Linux is this: the kernel owns ports 0x62/0x66 and runs the handshake itself
+    /// (ec_read / ec_write), so there are no ports to hand out, only whole transactions.</summary>
+    public interface IEcRegisters {
+        int Read(byte register, out byte value);
+        int Write(byte register, byte value);
+    }
+
+    /// <summary>The two ports, played back onto whole register transactions. EmbeddedController speaks the port
+    /// handshake (command 0x80/0x81 to 0x66, address and data through 0x62) because that is what Windows gives
+    /// it; this follows that conversation and performs the read or write it amounts to, so the class above,
+    /// with its verify-before-write, its allow-list and its rest after timeouts, is the same code on both
+    /// systems. A transaction that fails is reported on the port access that completed it.</summary>
+    public sealed class EcRegisterPorts : IEcPorts, IDisposable {
+        readonly IEcRegisters ec;
+        byte status;                  // OBF as a real controller would show it; IBF is never set, a transaction is whole
+        int phase;                    // 0 idle, 1 got read cmd, 2 got write cmd, 3 write cmd + address
+        byte address, output;
+        public EcRegisterPorts(IEcRegisters registers) { ec = registers; }
         public int In(byte port, out byte value) {
-            var o = new ulong[1]; int n;
-            int rc = m.Execute("ioctl_pio_read", new ulong[] { port }, o, out n);
-            value = rc == 0 ? (byte)o[0] : (byte)0;
+            if (port == 0x66) { value = status; return 0; }
+            value = output; status &= unchecked((byte)~0x01);
+            return 0;
+        }
+        public int Out(byte port, byte value) {
+            if (port == 0x66) { phase = value == 0x80 ? 1 : value == 0x81 ? 2 : 0; return 0; }
+            int rc = 0;
+            switch (phase) {
+                case 1: phase = 0; rc = ec.Read(value, out output); if (rc == 0) status |= 0x01; break;
+                case 2: address = value; phase = 3; break;
+                case 3: phase = 0; rc = ec.Write(address, value); break;
+            }
             return rc;
         }
-        public int Out(byte port, byte value) { int n; return m.Execute("ioctl_pio_write", new ulong[] { port, value }, null, out n); }
-        public void Dispose() { m.Dispose(); }
+        public void Dispose() { var d = ec as IDisposable; if (d != null) d.Dispose(); }
     }
 
     /// <summary>Where things are in this generation's EC. Every address is a claim with a source behind it.</summary>
@@ -80,6 +102,10 @@ namespace Ohman {
         /// <summary>The 2018–2022 OMEN layout: OmenMon (developed on 8A14), omen-fan (16-c0140AX), OmenCore
         /// (8574 fan control confirmed in the field). Not the 2025 OMEN MAX, whose layout differs.</summary>
         public static EcMap Legacy() { return new EcMap { Name = "OMEN 2018-2022 (OmenMon / omen-fan map)" }; }
+
+        /// <summary>Every map there is. The Linux root helper builds its own allow-list from these, so a register
+        /// no map names cannot be written through it whatever asks. A new map is added here as well.</summary>
+        public static EcMap[] Known() { return new EcMap[] { Legacy() }; }
     }
 
     /// <summary>One read of everything the map names. -1 where the read failed.</summary>
@@ -111,20 +137,7 @@ namespace Ohman {
         public EmbeddedController(IEcPorts ports, EcMap map) {
             this.ports = ports;
             Map = map;
-            mutex = OpenMutex(@"Global\Access_EC");
-        }
-
-        /// <summary>The shared lock, created so that anyone can open it afterwards. OmenMon does the same; an
-        /// admin-only mutex would make the next tool fail to open it and go ahead without it, which is worse.</summary>
-        static Mutex OpenMutex(string name) {
-            try {
-                var sec = new MutexSecurity();
-                sec.AddAccessRule(new MutexAccessRule(new SecurityIdentifier(WellKnownSidType.WorldSid, null), MutexRights.FullControl, AccessControlType.Allow));
-                bool created;
-                return new Mutex(false, name, out created, sec);
-            } catch (UnauthorizedAccessException) {
-                try { return Mutex.OpenExisting(name, MutexRights.Synchronize | MutexRights.Modify); } catch { return null; }
-            } catch { return null; }
+            mutex = EcLock.Open(@"Global\Access_EC");
         }
 
         /// <summary>Resting after repeated timeouts. Callers on the fan path fall back to the mailbox meanwhile.</summary>

@@ -1,5 +1,6 @@
 ﻿// SPDX-License-Identifier: GPL-3.0-or-later
-// Ohman: display helpers: panel refresh rate (Win32 display settings) and display off. No firmware involved.
+// Ohman, Windows only: display helpers: panel refresh rate (Win32 display settings) and display off. No firmware
+// involved. src\linux\Display.cs is the same class for Linux.
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
@@ -7,6 +8,9 @@ using System.Runtime.InteropServices;
 namespace Ohman {
 
     public static class Display {
+        /// <summary>Whether the refresh rate can be read and set in this session. Always, on Windows.</summary>
+        public static bool Available { get { return true; } }
+
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
         struct DEVMODE {
             [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName;

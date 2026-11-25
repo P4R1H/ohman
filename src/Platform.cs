@@ -4,7 +4,6 @@
 // from what the firmware reports about itself.
 using System;
 using System.Collections.Generic;
-using System.Management;
 
 namespace Ohman {
 
@@ -315,11 +314,7 @@ namespace Ohman {
         /// <summary>DMI baseboard product id, e.g. "8C58". Empty when unavailable.</summary>
         public static string ReadBoard() {
             if (!string.IsNullOrEmpty(BoardOverride)) return BoardOverride;
-            try {
-                using (var s = new ManagementObjectSearcher("SELECT Product FROM Win32_BaseBoard"))
-                    foreach (ManagementObject mo in s.Get()) return (mo["Product"] as string ?? "").Trim();
-            } catch { }
-            return "";
+            return Dmi.Board();
         }
 
         static readonly int[] DesktopChassis = { 3, 4, 5, 6, 7, 13, 15, 16, 24, 35, 36 };   // SMBIOS chassis types: desktop, tower, mini PC, all in one...
@@ -329,24 +324,12 @@ namespace Ohman {
         public static bool IsDesktop() {
             if (desktop >= 0) return desktop == 1;
             bool d = ReadModel().IndexOf("Desktop", StringComparison.OrdinalIgnoreCase) >= 0;
-            try {
-                using (var s = new ManagementObjectSearcher("SELECT ChassisTypes FROM Win32_SystemEnclosure"))
-                    foreach (ManagementObject mo in s.Get()) {
-                        var t = mo["ChassisTypes"] as ushort[];
-                        if (t != null) foreach (ushort c in t) if (Array.IndexOf(DesktopChassis, (int)c) >= 0) d = true;
-                    }
-            } catch { }
+            foreach (int c in Dmi.ChassisTypes()) if (Array.IndexOf(DesktopChassis, c) >= 0) d = true;
             desktop = d ? 1 : 0;
             return d;
         }
 
-        public static string ReadModel() {
-            try {
-                using (var s = new ManagementObjectSearcher("SELECT Model FROM Win32_ComputerSystem"))
-                    foreach (ManagementObject mo in s.Get()) return (mo["Model"] as string ?? "").Trim();
-            } catch { }
-            return "";
-        }
+        public static string ReadModel() { return Dmi.Model(); }
 
         public static PlatformProfile Find(string board) {
             foreach (var p in Known) foreach (var b in p.Boards) if (string.Equals(b, board, StringComparison.OrdinalIgnoreCase)) { Floor(p); return Equip(p, board); }

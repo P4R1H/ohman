@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The interaction test for the real window: every source file of ../app, its Ui.axaml and the fonts, exactly as
+       ohman.csproj takes them, and a second entry point (UiTest.Main) that builds MainWindow on simulated hardware in
+       a headless Avalonia and drives it with pointer and key events. Not shipped. Run it with run.sh. -->
+  <Import Project="../Core.props" />
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>ohman</AssemblyName>
+    <StartupObject>Ohman.UiTest</StartupObject>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <ApplicationManifest />
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.*" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.*" />
+    <PackageReference Include="Avalonia.Themes.Simple" Version="11.3.*" />
+    <PackageReference Include="Avalonia.Headless" Version="11.3.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="*.cs" />
+    <Compile Include="../app/*.cs" />
+    <AvaloniaXaml Include="../app/Ui.axaml" Link="Ui.axaml" />
+    <AvaloniaResource Include="../../fonts/*.ttf" Link="fonts/%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

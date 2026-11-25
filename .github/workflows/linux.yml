@@ -1,0 +1,210 @@
+name: Linux
+
+# Builds the Linux side on every push and pull request that can affect it: the three programs, the probe
+# on simulated hardware, and the kernel module against the runner's own kernel headers.
+#
+# On a version tag it also builds the release tarball and attaches it to the GitHub release. That release
+# is created by release.yml (the Windows build), as a draft. This workflow never creates one: it waits
+# until the release exists and then uploads into it, so the two cannot end up with a release each.
+
+on:
+  push:
+    branches: [main, "linux-*"]
+    tags: ["v*"]
+    paths:
+      - "linux/**"
+      - "src/**"
+      - ".github/workflows/linux.yml"
+  pull_request:
+    paths:
+      - "linux/**"
+      - "src/**"
+      - ".github/workflows/linux.yml"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Attach the Linux tarball to this existing release (for example v1.4.0). Empty: build only."
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Shell scripts parse
+        run: |
+          for f in linux/install.sh linux/uninstall.sh linux/packaging/*.sh; do
+            bash -n "$f"
+          done
+          sh -n linux/packaging/dkms-sign.sh
+          # Reported, not enforced, until the scripts have been through it once.
+          shellcheck -S warning linux/install.sh linux/uninstall.sh linux/packaging/*.sh || echo "::warning::shellcheck has remarks"
+
+      - name: Build the three programs
+        run: |
+          for p in probe helper app; do
+            dotnet build "linux/$p" -c Release -nologo -v q
+          done
+
+      - name: Probe on simulated hardware
+        run: |
+          out=$(dotnet run --project linux/probe -c Release --no-build -- --demo --board 8A25)
+          printf '%s\n' "$out"
+          # The shared engine has to reach a decision for the board; an empty report is a failure.
+          printf '%s\n' "$out" | grep -q "8A25"
+
+      - name: Self tests
+        run: |
+          export OHMAN_HOME="$RUNNER_TEMP/ohman-home"
+          mkdir -p "$OHMAN_HOME"
+          probe() { dotnet run --project linux/probe -c Release --no-build -- "$@"; }
+          # ioctl numbers against the kernel's own macros, log and descriptor parsers, paths
+          probe selftest
+          # the benchmark's state machine on simulated frames, stored and read back
+          probe bench-selftest
+          # the whole socket path against a helper answering from simulated hardware
+          sock="$RUNNER_TEMP/ohman-helper.sock"
+          dotnet run --project linux/helper -c Release --no-build -- --demo --socket "$sock" &
+          helper=$!
+          for i in $(seq 1 30); do [ -S "$sock" ] && break; sleep 1; done
+          OHMAN_HELPER_SOCKET="$sock" probe helper-test
+          kill "$helper"
+
+      - name: The window renders
+        run: |
+          export OHMAN_HOME="$RUNNER_TEMP/ohman-home"
+          for page in home fans keyboard bench settings; do
+            dotnet run --project linux/app -c Release --no-build -- --demo --page "$page" --screenshot "$RUNNER_TEMP/$page.png"
+            test -s "$RUNNER_TEMP/$page.png"
+          done
+
+      - name: Kernel module compiles
+        run: |
+          kver=$(uname -r)
+          if [ ! -e "/lib/modules/$kver/build/Makefile" ]; then
+            sudo apt-get update -q
+            sudo apt-get install -y -q "linux-headers-$kver" || true
+          fi
+          if [ -e "/lib/modules/$kver/build/Makefile" ]; then
+            kdir=/lib/modules/$kver/build
+          else
+            # The runner's kernel is ahead of the package archive: any headers will show a compile error.
+            sudo apt-get install -y -q linux-headers-generic
+            kdir=$(ls -d /lib/modules/*/build | sort -V | tail -n 1)
+          fi
+          echo "building against $kdir"
+          make -C linux/driver KDIR="$kdir" W=1
+          modinfo linux/driver/ohman-wmi.ko
+          make -C linux/driver KDIR="$kdir" clean
+
+      - name: Unit, desktop entry and rules are well-formed
+        run: |
+          sudo apt-get install -y -q desktop-file-utils >/dev/null
+          desktop-file-validate linux/packaging/ohman.desktop
+          # The unit names a program and a group that only exist after an install; give it both.
+          sudo mkdir -p /opt/ohman && sudo install -m 755 /bin/true /opt/ohman/ohman-helper
+          sudo groupadd --system ohman
+          systemd-analyze verify linux/packaging/ohman-helper.service
+          udevadm verify linux/packaging/70-ohman.rules || udevadm --version
+
+      - name: Release tarball
+        run: linux/packaging/publish.sh --out dist
+
+      - name: Staged install and uninstall
+        run: |
+          tar -xzf dist/ohman-*-linux-x64.tar.gz -C "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP"/ohman-*-linux-x64
+          ./install.sh --check || true
+          ./install.sh --root "$RUNNER_TEMP/stage"
+          test -x "$RUNNER_TEMP/stage/opt/ohman/ohman-helper"
+          test -L "$RUNNER_TEMP/stage/usr/bin/ohman"
+          ./uninstall.sh --root "$RUNNER_TEMP/stage"
+          test -z "$(find "$RUNNER_TEMP/stage" -type f)"
+
+      - name: Real install on the runner
+        # Ubuntu, no Secure Boot, no HP firmware: the module builds under DKMS and refuses to load, which
+        # is what it should do on a machine that is not an HP. Everything else has to work.
+        run: |
+          cd "$RUNNER_TEMP"/ohman-*-linux-x64
+          # The helper may decline to stay up without the firmware; that alone is not a failed install.
+          sudo ./install.sh --install-deps --user "$USER" || echo "::warning::install.sh reported a step that did not work"
+          dkms status
+          # Only where the runner's kernel has headers on offer; the compile step above covers the rest.
+          if [ -e "/lib/modules/$(uname -r)/build/Makefile" ]; then
+            dkms status | grep ohman-wmi | grep -q installed
+          fi
+          test -x /opt/ohman/ohman-helper && id -nG "$USER" | grep -qw ohman
+          systemctl status ohman-helper --no-pager || true
+          ohman-probe --demo --board 8A25 | head -n 20
+          sudo ./install.sh --user "$USER" | tee "$RUNNER_TEMP/again.log" || true
+          if [ -e "/lib/modules/$(uname -r)/build/Makefile" ]; then
+            grep -q "not rebuilding" "$RUNNER_TEMP/again.log"
+          fi
+          sudo /opt/ohman/uninstall.sh --purge
+          test ! -e /opt/ohman && ! getent group ohman
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ohman-linux
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+            dist/ohman-install.sh
+          if-no-files-found: error
+
+  release:
+    # Only for a version tag (or a tag named by hand). Separate from the build so that only this job holds
+    # a token that can write to releases.
+    needs: build
+    if: github.ref_type == 'tag' || inputs.tag != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ohman-linux
+          path: dist
+
+      - name: Wait for the release that release.yml creates
+        run: |
+          # release.yml builds on Windows and then creates the release as a draft. `gh release view` finds
+          # drafts too. Thirty minutes covers its twenty-minute limit; if the release never appears (the
+          # Windows build failed), this fails and the tarball stays downloadable from this run's artifacts.
+          for i in $(seq 1 90); do
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              echo "release $TAG exists"
+              exit 0
+            fi
+            echo "no release for $TAG yet ($i/90)"
+            sleep 20
+          done
+          echo "::error::No release for $TAG after 30 minutes. Attach dist/* from this run's artifacts by hand, or run this workflow again with the tag."
+          exit 1
+
+      - name: Attach the Linux files
+        run: |
+          # --clobber: running this again for the same tag replaces the files instead of failing.
+          # The retry covers the moment in which release.yml is still uploading its own files.
+          for i in 1 2 3 4 5; do
+            if gh release upload "$TAG" dist/*.tar.gz dist/*.sha256 dist/ohman-install.sh --clobber; then
+              gh release view "$TAG" --json assets --jq '.assets[].name'
+              exit 0
+            fi
+            sleep 15
+          done
+          exit 1

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- ohman-helper: the root daemon. It uses the whole shared core for two things only: the allow-lists
+       (EcMap, Msr) and the simulated hardware behind its demo mode. It never constructs an Engine. -->
+  <Import Project="../Core.props" />
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>ohman-helper</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Helper.cs" />
+  </ItemGroup>
+</Project>

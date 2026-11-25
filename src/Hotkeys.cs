@@ -5,7 +5,6 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Windows.Input;
 
 namespace Ohman {
 
@@ -29,18 +28,8 @@ namespace Ohman {
         /// types a character with the combination pressed through AltGr.</summary>
         public bool TypesCharacter(IntPtr layout) {
             if ((Mods & (Ctrl | Alt)) != (Ctrl | Alt) || (Mods & Win) != 0 || Vk == 0) return false;
-            try {
-                var state = new byte[256];
-                state[0x11] = state[0xA2] = state[0x12] = state[0xA5] = 0x80;       // AltGr: Ctrl, left Ctrl, Alt, right Alt
-                if ((Mods & Shift) != 0) state[0x10] = state[0xA0] = 0x80;
-                var buf = new StringBuilder(8);
-                // Flag 4: leave the keyboard's dead-key state alone, so asking does not change what gets typed next.
-                int r = ToUnicodeEx(Vk, MapVirtualKeyEx(Vk, 0, layout), state, buf, buf.Capacity, 4, layout);
-                return r < 0 || (r > 0 && buf.Length > 0 && buf[0] >= 0x20);         // r < 0 is a dead key: AltGr starts a character
-            } catch { return false; }
+            return KeyNames.TypesWithAltGr(Mods, Vk, layout);     // the keyboard layout is the operating system's to ask
         }
-        [DllImport("user32.dll")] static extern uint MapVirtualKeyEx(uint code, uint type, IntPtr hkl);
-        [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int ToUnicodeEx(uint vk, uint scan, byte[] state, [Out] StringBuilder buf, int size, uint flags, IntPtr hkl);
 
         public override string ToString() {
             if (IsEmpty) return "";
@@ -64,7 +53,7 @@ namespace Ohman {
                 case 0x25: return "Left"; case 0x26: return "Up"; case 0x27: return "Right"; case 0x28: return "Down";
                 case 0x2D: return "Insert"; case 0x2E: return "Delete"; case 0x2C: return "PrintScreen"; case 0x91: return "ScrollLock"; case 0x13: return "Pause";
             }
-            try { return KeyInterop.KeyFromVirtualKey((int)vk).ToString(); } catch { return "0x" + vk.ToString("X2"); }
+            try { return KeyNames.FromVk(vk); } catch { return "0x" + vk.ToString("X2"); }
         }
 
         public static bool TryParse(string s, out Hotkey h) {
@@ -82,33 +71,13 @@ namespace Ohman {
                 else if (u.Length == 1 && (char.IsLetterOrDigit(u[0]))) vk = u[0];
                 else if (u.Length >= 2 && u[0] == 'F' && char.IsDigit(u[1])) { int n; if (int.TryParse(u.Substring(1), out n) && n >= 1 && n <= 24) vk = (uint)(0x6F + n); }
                 else {
-                    // The reverse of KeyName: a friendly name first, then WPF's own key names.
+                    // The reverse of KeyName: a friendly name first, then the platform's own key names.
                     for (uint c = 0; c < 256; c++) if (KeyName(c).Equals(t, StringComparison.OrdinalIgnoreCase)) { vk = c; break; }
-                    if (vk == 0) { Key k; if (Enum.TryParse<Key>(t, true, out k)) vk = (uint)KeyInterop.VirtualKeyFromKey(k); }
+                    if (vk == 0) vk = KeyNames.ToVk(t);
                 }
             }
             if (vk == 0) return false;
             h = new Hotkey(mods, vk);
-            return true;
-        }
-
-        /// <summary>From a key event: the modifiers held and the key under them. False while only a modifier
-        /// is down, which is the state between pressing Ctrl and pressing the letter.</summary>
-        public static bool FromKey(Key key, ModifierKeys held, out Hotkey h) {
-            h = None;
-            switch (key) {
-                case Key.LeftCtrl: case Key.RightCtrl: case Key.LeftAlt: case Key.RightAlt:
-                case Key.LeftShift: case Key.RightShift: case Key.LWin: case Key.RWin: case Key.None:
-                    return false;
-            }
-            uint mods = 0;
-            if ((held & ModifierKeys.Control) != 0) mods |= Ctrl;
-            if ((held & ModifierKeys.Alt) != 0) mods |= Alt;
-            if ((held & ModifierKeys.Shift) != 0) mods |= Shift;
-            if ((held & ModifierKeys.Windows) != 0) mods |= Win;
-            int vk = KeyInterop.VirtualKeyFromKey(key);
-            if (vk <= 0) return false;
-            h = new Hotkey(mods, (uint)vk);
             return true;
         }
     }

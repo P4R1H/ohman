@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../Core.props" />
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>ohman-probe</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Probe.cs;BenchProbe.cs" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,913 @@
+<!--
+  Ohman, Linux: the main window's layout. The Avalonia port of src\Ui.xaml, element for element: same names, same
+  structure, same numbers, so a change there can be carried over from its diff. Loaded by Ui.cs (LoadXaml).
+
+  Differences from the WPF original
+   - Keyed styles are style classes: Style="{StaticResource Row}" is Classes="Row". The control styles (Switch,
+     SwitchBig, Sl, Field, Bare, IconBtn, ScrollBar) are ControlThemes, and their triggers are selectors
+     (:checked, :pointerover, :disabled). The switch knob slides on a transform transition, same 0.16 s cubic ease-out.
+   - Visibility="Collapsed" is IsVisible="False"; ToolTip is ToolTip.Tip.
+   - The three glyphs that came from Segoe Fluent Icons (the colour palette, the brightness sun, the close cross)
+     are drawn as paths: that font does not exist here.
+   - The scroll bar is 17 wide with its 8 px track centred in it, which is what the WPF one measures on screen
+     (the system scroll bar width wins over the style's 8 there).
+   - Rows that only exist on some systems carry a name so the code can hide them from Host's capability flags
+     (SuppressRow, SyncPowerRow, BenchPillRow, AutostartRow, ResetRow), and the wording that named Windows names
+     the thing it maps to here (TxtSyncPower, TxtAutostart and their sub-lines, set in Ui.cs).
+   - Every TextBlock is an o:WpfTextBlock (Controls.cs): a TextBlock that measures a line the way WPF does. It
+     takes the TextBlock styles.
+   - BenchHost is the benchmark page's slot. It stays empty here; the page is built in code.
+-->
+<Grid xmlns="https://github.com/avaloniaui"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:o="clr-namespace:Ohman"
+      x:Name="Root" Background="#161311" UseLayoutRounding="True">
+  <Grid.Resources>
+    <!-- Accent and the two font families are installed from code (DynamicResource): the accent follows the mode,
+         IBM Plex ships inside the binary. Every other value here comes straight from the panel design. -->
+    <SolidColorBrush x:Key="Accent" Color="#3F8CFF"/>
+    <FontFamily x:Key="UiFont">avares://ohman/fonts#IBM Plex Sans</FontFamily>
+    <FontFamily x:Key="MonoFont">avares://ohman/fonts#IBM Plex Mono</FontFamily>
+    <SolidColorBrush x:Key="Card" Color="#161311"/>
+    <SolidColorBrush x:Key="Sunken" Color="#0F0D0B"/>
+    <SolidColorBrush x:Key="Well" Color="#0D0B0A"/>
+    <SolidColorBrush x:Key="Pill" Color="#201C19"/>
+    <SolidColorBrush x:Key="Line" Color="#2C2825"/>
+    <SolidColorBrush x:Key="Line2" Color="#272320"/>
+    <SolidColorBrush x:Key="Edge" Color="#343029"/>
+    <SolidColorBrush x:Key="Track" Color="#312D2A"/>
+    <SolidColorBrush x:Key="SwitchOff" Color="#36322F"/>
+    <SolidColorBrush x:Key="KnobOff" Color="#8A8581"/>
+    <SolidColorBrush x:Key="Text" Color="#EDEAE8"/>
+    <SolidColorBrush x:Key="TextHi" Color="#F4F1EF"/>
+    <SolidColorBrush x:Key="SegText" Color="#A8A3A0"/>
+    <SolidColorBrush x:Key="Hex" Color="#A29D99"/>
+    <SolidColorBrush x:Key="Sub" Color="#96918D"/>
+    <SolidColorBrush x:Key="Desc" Color="#908B87"/>
+    <SolidColorBrush x:Key="Status" Color="#8A8581"/>
+    <SolidColorBrush x:Key="Axis" Color="#847F7B"/>
+    <SolidColorBrush x:Key="Foot" Color="#7E7976"/>
+    <SolidColorBrush x:Key="Section" Color="#787370"/>
+
+    <!-- toggle: 38 x 21 in settings rows, 40 x 22 on the pages (the design uses both) -->
+    <ControlTheme x:Key="Switch" TargetType="ToggleButton">
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border x:Name="Track" Width="38" Height="21" CornerRadius="11" Background="{StaticResource SwitchOff}" VerticalAlignment="Center">
+            <Ellipse x:Name="Knob" Width="15" Height="15" Fill="{StaticResource KnobOff}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="3,0,0,0" RenderTransform="translateX(0px)">
+              <Ellipse.Transitions><Transitions><TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.16" Easing="CubicEaseOut"/></Transitions></Ellipse.Transitions>
+            </Ellipse>
+          </Border>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:checked /template/ Border#Track"><Setter Property="Background" Value="{DynamicResource Accent}"/></Style>
+      <Style Selector="^:checked /template/ Ellipse#Knob"><Setter Property="Fill" Value="White"/><Setter Property="RenderTransform" Value="translateX(17px)"/></Style>
+      <Style Selector="^:pointerover /template/ Border#Track"><Setter Property="Opacity" Value="0.85"/></Style>
+    </ControlTheme>
+    <ControlTheme x:Key="SwitchBig" TargetType="ToggleButton">
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border x:Name="Track" Width="40" Height="22" CornerRadius="11" Background="{StaticResource SwitchOff}" VerticalAlignment="Center">
+            <Ellipse x:Name="Knob" Width="16" Height="16" Fill="{StaticResource KnobOff}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="3,0,0,0" RenderTransform="translateX(0px)">
+              <Ellipse.Transitions><Transitions><TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.16" Easing="CubicEaseOut"/></Transitions></Ellipse.Transitions>
+            </Ellipse>
+          </Border>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:checked /template/ Border#Track"><Setter Property="Background" Value="{DynamicResource Accent}"/></Style>
+      <Style Selector="^:checked /template/ Ellipse#Knob"><Setter Property="Fill" Value="White"/><Setter Property="RenderTransform" Value="translateX(18px)"/></Style>
+      <Style Selector="^:pointerover /template/ Border#Track"><Setter Property="Opacity" Value="0.85"/></Style>
+    </ControlTheme>
+
+    <!-- slider: 2 px rail, 14 px round thumb, both in the accent -->
+    <ControlTheme x:Key="SlDecrease" TargetType="RepeatButton">
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="IsTabStop" Value="False"/>
+      <Setter Property="Template">
+        <ControlTemplate><Grid Background="Transparent"><Border Height="2" Background="{DynamicResource Accent}" VerticalAlignment="Center" Margin="7,0,0,0"/></Grid></ControlTemplate>
+      </Setter>
+    </ControlTheme>
+    <ControlTheme x:Key="Blank" TargetType="RepeatButton">
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="IsTabStop" Value="False"/>
+      <Setter Property="Template">
+        <ControlTemplate><Grid Background="Transparent"/></ControlTemplate>
+      </Setter>
+    </ControlTheme>
+    <ControlTheme x:Key="SlThumb" TargetType="Thumb">
+      <Setter Property="Template">
+        <ControlTemplate><Ellipse Fill="{DynamicResource Accent}"/></ControlTemplate>
+      </Setter>
+    </ControlTheme>
+    <ControlTheme x:Key="Sl" TargetType="Slider">
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Grid Height="16" Background="Transparent">
+            <Border Height="2" Background="{StaticResource Track}" VerticalAlignment="Center" Margin="7,0"/>
+            <Track x:Name="PART_Track" VerticalAlignment="Center" Orientation="Horizontal" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}" Value="{TemplateBinding Value, Mode=TwoWay}">
+              <!-- The two halves of the rail carry no PART_ name on purpose: Avalonia's Slider moves the thumb to a
+                   press on a part named so, and in the WPF window a press on the rail does nothing (its repeat
+                   buttons have no command). Only the thumb moves the value. -->
+              <Track.DecreaseButton>
+                <RepeatButton Theme="{StaticResource SlDecrease}"/>
+              </Track.DecreaseButton>
+              <Track.IncreaseButton>
+                <RepeatButton Theme="{StaticResource Blank}"/>
+              </Track.IncreaseButton>
+              <Thumb Width="14" Height="14" Focusable="False" Cursor="Hand" Theme="{StaticResource SlThumb}"/>
+            </Track>
+          </Grid>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:disabled"><Setter Property="Opacity" Value="0.45"/></Style>
+    </ControlTheme>
+    <ControlTheme x:Key="Field" TargetType="TextBox">
+      <Setter Property="Background" Value="{StaticResource Sunken}"/>
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="CaretBrush" Value="{StaticResource Text}"/>
+      <Setter Property="SelectionBrush" Value="#553F8CFF"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="FontFamily" Value="{DynamicResource MonoFont}"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="Padding" Value="10,7"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border CornerRadius="8" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+            <ScrollViewer x:Name="PART_ScrollViewer" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" VerticalAlignment="{TemplateBinding VerticalContentAlignment}">
+              <TextPresenter x:Name="PART_TextPresenter" Text="{TemplateBinding Text, Mode=TwoWay}" CaretIndex="{TemplateBinding CaretIndex}" SelectionStart="{TemplateBinding SelectionStart}" SelectionEnd="{TemplateBinding SelectionEnd}"
+                             CaretBrush="{TemplateBinding CaretBrush}" SelectionBrush="{TemplateBinding SelectionBrush}" SelectionForegroundBrush="{TemplateBinding SelectionForegroundBrush}"
+                             TextAlignment="{TemplateBinding TextAlignment}" TextWrapping="{TemplateBinding TextWrapping}"/>
+            </ScrollViewer>
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </ControlTheme>
+    <ControlTheme x:Key="Bare" TargetType="TextBox">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="CaretBrush" Value="{StaticResource Text}"/>
+      <Setter Property="SelectionBrush" Value="#553F8CFF"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="0"/>
+      <Setter Property="FontFamily" Value="{DynamicResource MonoFont}"/>
+      <Setter Property="FontSize" Value="13.5"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="Transparent">
+            <ScrollViewer x:Name="PART_ScrollViewer" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" VerticalAlignment="{TemplateBinding VerticalContentAlignment}">
+              <TextPresenter x:Name="PART_TextPresenter" Text="{TemplateBinding Text, Mode=TwoWay}" CaretIndex="{TemplateBinding CaretIndex}" SelectionStart="{TemplateBinding SelectionStart}" SelectionEnd="{TemplateBinding SelectionEnd}"
+                             CaretBrush="{TemplateBinding CaretBrush}" SelectionBrush="{TemplateBinding SelectionBrush}" SelectionForegroundBrush="{TemplateBinding SelectionForegroundBrush}"
+                             TextAlignment="{TemplateBinding TextAlignment}" TextWrapping="{TemplateBinding TextWrapping}"/>
+            </ScrollViewer>
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </ControlTheme>
+    <ControlTheme x:Key="IconBtn" TargetType="Button">
+      <Setter Property="Width" Value="20"/>
+      <Setter Property="Height" Value="20"/>
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="{StaticResource Status}"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border x:Name="B" CornerRadius="6" Background="{TemplateBinding Background}"><ContentPresenter x:Name="PART_ContentPresenter" Content="{TemplateBinding Content}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover"><Setter Property="Background" Value="{StaticResource Pill}"/><Setter Property="Foreground" Value="{StaticResource Text}"/></Style>
+    </ControlTheme>
+    <ControlTheme x:Key="ScrollThumb" TargetType="Thumb">
+      <Setter Property="Template">
+        <ControlTemplate><Border CornerRadius="3" Background="#3B3734" Margin="1,0"/></ControlTemplate>
+      </Setter>
+    </ControlTheme>
+    <ControlTheme x:Key="{x:Type ScrollBar}" TargetType="ScrollBar">
+      <Setter Property="Width" Value="17"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Grid Background="Transparent">
+            <Grid Width="8" HorizontalAlignment="Center">
+              <Track x:Name="PART_Track" Orientation="{TemplateBinding Orientation}" IsDirectionReversed="True" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}" Value="{TemplateBinding Value, Mode=TwoWay}" ViewportSize="{TemplateBinding ViewportSize}">
+                <Track.DecreaseButton><RepeatButton x:Name="PART_PageUpButton" Theme="{StaticResource Blank}" Opacity="0"/></Track.DecreaseButton>
+                <Track.IncreaseButton><RepeatButton x:Name="PART_PageDownButton" Theme="{StaticResource Blank}" Opacity="0"/></Track.IncreaseButton>
+                <Thumb Focusable="False" Theme="{StaticResource ScrollThumb}"/>
+              </Track>
+            </Grid>
+          </Grid>
+        </ControlTemplate>
+      </Setter>
+    </ControlTheme>
+    <!-- The Settings page's scroller, laid out as WPF lays one out: the content in its own column with the padding
+         around it, the bar in a column of its own beside it. (The stock one lays the bar over the content.) -->
+    <ControlTheme x:Key="Scroller" TargetType="ScrollViewer">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Grid ColumnDefinitions="*,Auto" Background="{TemplateBinding Background}">
+            <ScrollContentPresenter x:Name="PART_ContentPresenter" Margin="{TemplateBinding Padding}" Content="{TemplateBinding Content}"/>
+            <ScrollBar x:Name="PART_VerticalScrollBar" Grid.Column="1" Orientation="Vertical"/>
+          </Grid>
+        </ControlTemplate>
+      </Setter>
+    </ControlTheme>
+  </Grid.Resources>
+
+  <Grid.Styles>
+    <Style Selector="TextBlock.Title">
+      <Setter Property="FontFamily" Value="{DynamicResource UiFont}"/>
+      <Setter Property="FontSize" Value="15"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="TextBlock.Big">
+      <Setter Property="FontFamily" Value="{DynamicResource UiFont}"/>
+      <Setter Property="FontSize" Value="42"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="LineHeight" Value="46"/>
+      <!-- WPF's BlockLineHeight squeezes the line to 46 and moves the baseline up with it; Avalonia keeps the
+           font's own ascent above the baseline, so the text is lifted by the difference instead. -->
+      <Setter Property="Margin" Value="0,-6.5,0,6.5"/>
+      <Setter Property="TextTrimming" Value="None"/>
+    </Style>
+    <Style Selector="TextBlock.Row">
+      <Setter Property="FontFamily" Value="{DynamicResource UiFont}"/>
+      <Setter Property="FontSize" Value="14"/>
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="TextBlock.RowSub">
+      <Setter Property="FontFamily" Value="{DynamicResource UiFont}"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Foreground" Value="{StaticResource Desc}"/>
+      <Setter Property="TextWrapping" Value="Wrap"/>
+      <Setter Property="Margin" Value="0,3,0,0"/>
+    </Style>
+    <Style Selector="TextBlock.Cap">
+      <Setter Property="FontFamily" Value="{DynamicResource UiFont}"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="Foreground" Value="{StaticResource Sub}"/>
+      <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+    <Style Selector="TextBlock.Hint">
+      <Setter Property="FontFamily" Value="{DynamicResource UiFont}"/>
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="Foreground" Value="{StaticResource Sub}"/>
+      <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+    <Style Selector="TextBlock.Mono">
+      <Setter Property="FontFamily" Value="{DynamicResource MonoFont}"/>
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="Foreground" Value="{StaticResource Status}"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="TextBlock.MonoFoot">
+      <Setter Property="FontFamily" Value="{DynamicResource MonoFont}"/>
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="Foreground" Value="{StaticResource Foot}"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="TextBlock.MonoVal">
+      <Setter Property="FontFamily" Value="{DynamicResource MonoFont}"/>
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+      <Setter Property="TextAlignment" Value="Right"/>
+      <Setter Property="Width" Value="52"/>
+    </Style>
+    <Style Selector="TextBlock.Link">
+      <Setter Property="FontFamily" Value="{DynamicResource UiFont}"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+  </Grid.Styles>
+
+  <Grid.ColumnDefinitions>
+    <ColumnDefinition Width="62"/>
+    <ColumnDefinition Width="*"/>
+  </Grid.ColumnDefinitions>
+
+  <!-- the rail: mark on top, pages below it, settings at the bottom; the pill slides between them (code) -->
+  <Border x:Name="Rail" Background="{StaticResource Sunken}" BorderBrush="{StaticResource Line2}" BorderThickness="0,0,1,0">
+    <Grid x:Name="RailGrid">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+        <RowDefinition Height="Auto"/>
+      </Grid.RowDefinitions>
+      <Canvas x:Name="RailCanvas" Grid.RowSpan="3">
+        <Border x:Name="RailPill" Width="42" Height="42" CornerRadius="12" Background="{StaticResource Pill}" Opacity="0" RenderTransformOrigin="0,0">
+          <Border.RenderTransform><TranslateTransform/></Border.RenderTransform>
+        </Border>
+      </Canvas>
+      <Grid x:Name="LogoHost" Background="Transparent" ToolTip.Tip="Home" Cursor="Hand" Margin="0,20,0,16">
+        <Border x:Name="Mark" Width="13" Height="13" CornerRadius="2" Background="{DynamicResource Accent}" RenderTransformOrigin="50%,50%">
+          <Border.RenderTransform><RotateTransform Angle="45"/></Border.RenderTransform>
+        </Border>
+      </Grid>
+      <StackPanel x:Name="NavHost" Grid.Row="1"/>
+      <StackPanel x:Name="NavBottom" Grid.Row="2" Margin="0,0,0,20"/>
+    </Grid>
+  </Border>
+
+  <!-- the pages: one host, one visible at a time; its natural size drives the window (code) -->
+  <Grid Grid.Column="1" ClipToBounds="True">
+    <Grid x:Name="PageHost" HorizontalAlignment="Left" VerticalAlignment="Top" Width="398">
+
+      <!-- ============ HOME ============ -->
+      <StackPanel x:Name="PageHome" Margin="24,24,24,20">
+        <Grid x:Name="HeadHome" Background="Transparent">
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <o:WpfTextBlock x:Name="TxtHomeTitle" Classes="Title" Text="Balanced"/>
+            <Border x:Name="DemoBadge" IsVisible="False" Margin="8,1,0,0" CornerRadius="4" Background="#33F3821D" Padding="5,1" VerticalAlignment="Center" ToolTip.Tip="No route to the firmware: hardware is simulated">
+              <o:WpfTextBlock Text="DEMO" FontSize="9" FontWeight="Bold" Foreground="#F3821D" FontFamily="{DynamicResource UiFont}"/>
+            </Border>
+          </StackPanel>
+          <o:WpfTextBlock x:Name="TxtHomeStatus" Classes="Mono" HorizontalAlignment="Right"/>
+        </Grid>
+
+        <Border x:Name="ErrBanner" IsVisible="False" Background="#26FF5C5C" CornerRadius="8" Padding="10,8" Margin="0,20,0,0">
+          <o:WpfTextBlock x:Name="TxtErr" Classes="Cap" Foreground="#FF9A9A"/>
+        </Border>
+        <Border x:Name="InfoBanner" IsVisible="False" Background="#1F3F8CFF" CornerRadius="8" Padding="10,8" Margin="0,20,0,0">
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <o:WpfTextBlock x:Name="TxtInfo" Classes="Cap" Foreground="#B9CDF7" Margin="0,0,10,0"/>
+            <Border x:Name="InfoClose" Grid.Column="1" Background="Transparent" Cursor="Hand" VerticalAlignment="Top" Padding="6,0,2,4" Margin="0,-3,-4,0">
+              <o:WpfTextBlock Text="&#215;" FontFamily="{DynamicResource UiFont}" FontSize="15" Foreground="#7F9AC8"/>
+            </Border>
+          </Grid>
+        </Border>
+        <!-- The driver nudge. Only on boards whose mailbox refuses something the EC can do, only while the driver
+             is missing, and the link is the whole install: one click, nothing to find or read first. -->
+        <Border x:Name="DriverBanner" IsVisible="False" Background="#1F3F8CFF" CornerRadius="8" Padding="10,8" Margin="0,20,0,0">
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel Margin="0,0,10,0">
+              <o:WpfTextBlock x:Name="TxtDriverNudge" Classes="Cap" Foreground="#B9CDF7"/>
+              <o:WpfTextBlock x:Name="TxtDriverNudgeSub" Classes="Cap" Foreground="#7F9AC8" FontSize="11.5" Margin="0,2,0,0"/>
+            </StackPanel>
+            <o:WpfTextBlock x:Name="BtnDriverNudge" Grid.Column="1" Classes="Link" Text="Install driver" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <Border x:Name="DriverClose" Grid.Column="2" Background="Transparent" Cursor="Hand" VerticalAlignment="Top" Padding="6,0,2,4" Margin="0,-3,-4,0" ToolTip.Tip="Not now">
+              <o:WpfTextBlock Text="&#215;" FontFamily="{DynamicResource UiFont}" FontSize="15" Foreground="#7F9AC8"/>
+            </Border>
+          </Grid>
+        </Border>
+
+        <Grid Margin="0,24,0,0">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <StackPanel Margin="0,0,0,18">
+            <o:WpfTextBlock Classes="Big"><Run x:Name="BigCpu" Text="--"/><Run Text="°C" FontSize="18" FontWeight="Normal" Foreground="#96918D"/></o:WpfTextBlock>
+            <o:WpfTextBlock x:Name="SubCpu" Classes="Cap" Text="CPU" Margin="0,6,0,0"/>
+          </StackPanel>
+          <StackPanel Grid.Column="1" Margin="20,0,0,18">
+            <o:WpfTextBlock Classes="Big"><Run x:Name="BigGpu" Text="--"/><Run Text="°C" FontSize="18" FontWeight="Normal" Foreground="#96918D"/></o:WpfTextBlock>
+            <o:WpfTextBlock x:Name="SubGpu" Classes="Cap" Text="GPU" Margin="0,6,0,0"/>
+          </StackPanel>
+          <Border Grid.Row="1" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,18,0,0">
+            <StackPanel>
+              <o:WpfTextBlock Classes="Big"><Run x:Name="BigFan1" Text="--"/><Run Text=" rpm" FontSize="15" FontWeight="Normal" Foreground="#96918D"/></o:WpfTextBlock>
+              <o:WpfTextBlock Text="CPU fan" Classes="Cap" Margin="0,6,0,0"/>
+            </StackPanel>
+          </Border>
+          <Border Grid.Row="1" Grid.Column="1" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="20,18,0,0">
+            <StackPanel>
+              <o:WpfTextBlock Classes="Big"><Run x:Name="BigFan2" Text="--"/><Run Text=" rpm" FontSize="15" FontWeight="Normal" Foreground="#96918D"/></o:WpfTextBlock>
+              <o:WpfTextBlock Text="GPU fan" Classes="Cap" Margin="0,6,0,0"/>
+            </StackPanel>
+          </Border>
+        </Grid>
+
+        <Border x:Name="ModeHost" Margin="0,24,0,0"/>
+
+        <Grid x:Name="FanRow" Margin="0,24,0,0">
+          <o:WpfTextBlock Text="Fans" Classes="Row"/>
+          <Border x:Name="FanLinksHost" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+        </Grid>
+        <Grid x:Name="PowerRow" Margin="0,20,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <o:WpfTextBlock Text="Power gain" Classes="Row" ToolTip.Tip="What OMEN Gaming Hub calls Smart Performance Gain: a bigger shared CPU + GPU power budget"/>
+          <Slider x:Name="SlPower" Grid.Column="1" Theme="{StaticResource Sl}" Minimum="0" Maximum="15" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="18,0,18,0"/>
+          <o:WpfTextBlock x:Name="TxtPower" Grid.Column="2" Classes="MonoVal" Width="46" Text="+0 W"/>
+        </Grid>
+        <Grid x:Name="LightRow" Margin="0,20,0,0" Background="Transparent" Cursor="Hand">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <StackPanel VerticalAlignment="Center">
+            <o:WpfTextBlock Text="Lighting" Classes="Row"/>
+            <o:WpfTextBlock x:Name="TxtLightSub" Classes="Cap" Text="Static · 4 zones" Margin="0,3,0,0"/>
+          </StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+            <Border x:Name="MiniHost" Width="145" VerticalAlignment="Center"/>
+            <o:WpfTextBlock Text="→" FontFamily="{DynamicResource UiFont}" FontSize="15" Foreground="{DynamicResource Accent}" Margin="12,0,0,0" VerticalAlignment="Center"/>
+          </StackPanel>
+        </Grid>
+
+        <Border Margin="0,24,0,0" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,14,0,0">
+          <Grid>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <Ellipse x:Name="DotHb" Width="6" Height="6" Fill="#4AC06C" VerticalAlignment="Center" Margin="0,0,8,0"/>
+              <o:WpfTextBlock x:Name="TxtFoot" Classes="MonoFoot"/>
+            </StackPanel>
+            <o:WpfTextBlock x:Name="TxtFootRight" Classes="MonoFoot" HorizontalAlignment="Right"/>
+          </Grid>
+        </Border>
+      </StackPanel>
+
+      <!-- ============ FANS ============ -->
+      <StackPanel x:Name="PageFans" Margin="24,24,24,20" IsVisible="False">
+        <Grid x:Name="HeadFans" Background="Transparent">
+          <o:WpfTextBlock Text="Fans" Classes="Title"/>
+          <o:WpfTextBlock x:Name="TxtFansStatus" Classes="Mono" HorizontalAlignment="Right"/>
+        </Grid>
+        <Border x:Name="FanSegHost" Margin="0,24,0,0"/>
+
+        <!-- Auto and Curve: the graph -->
+        <StackPanel x:Name="CurveBlock" Margin="0,24,0,0">
+          <Grid>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <o:WpfTextBlock x:Name="TxtCurveTitle" Classes="Row" Text="CPU curve"/>
+              <Border x:Name="CurveWhichHost" Margin="14,0,0,0" VerticalAlignment="Center" IsVisible="False"/>
+            </StackPanel>
+            <o:WpfTextBlock x:Name="TxtCurveHint" Classes="Mono" FontSize="11.5" Foreground="{StaticResource Desc}" HorizontalAlignment="Right"/>
+          </Grid>
+          <Border x:Name="CurveHost" Margin="0,14,0,0"/>
+        </StackPanel>
+
+        <!-- Max: what it is doing and for how long -->
+        <Grid x:Name="MaxBlock" Margin="0,24,0,0" IsVisible="False">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <StackPanel Margin="0,0,0,18">
+            <o:WpfTextBlock Classes="Big"><Run x:Name="MaxFan1" Text="--"/><Run Text=" rpm" FontSize="15" FontWeight="Normal" Foreground="#96918D"/></o:WpfTextBlock>
+            <o:WpfTextBlock x:Name="MaxFan1Sub" Classes="Cap" Text="CPU fan" Margin="0,6,0,0"/>
+          </StackPanel>
+          <StackPanel Grid.Column="1" Margin="20,0,0,18">
+            <o:WpfTextBlock Classes="Big"><Run x:Name="MaxFan2" Text="--"/><Run Text=" rpm" FontSize="15" FontWeight="Normal" Foreground="#96918D"/></o:WpfTextBlock>
+            <o:WpfTextBlock x:Name="MaxFan2Sub" Classes="Cap" Text="GPU fan" Margin="0,6,0,0"/>
+          </StackPanel>
+          <Border Grid.Row="1" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,18,0,0">
+            <StackPanel>
+              <o:WpfTextBlock Classes="Big"><Run x:Name="MaxTemp" Text="--"/><Run Text="°C" FontSize="18" FontWeight="Normal" Foreground="#96918D"/></o:WpfTextBlock>
+              <o:WpfTextBlock x:Name="MaxTempSub" Classes="Cap" Text="CPU" Margin="0,6,0,0"/>
+            </StackPanel>
+          </Border>
+          <Border Grid.Row="1" Grid.Column="1" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="20,18,0,0">
+            <StackPanel>
+              <o:WpfTextBlock Classes="Big"><Run x:Name="MaxMins" Text="0"/><Run x:Name="MaxMinsUnit" Text=" min" FontSize="15" FontWeight="Normal" Foreground="#96918D"/></o:WpfTextBlock>
+              <o:WpfTextBlock x:Name="MaxMinsSub" Classes="Cap" Text="Running at max" Margin="0,6,0,0"/>
+            </StackPanel>
+          </Border>
+        </Grid>
+
+        <!-- Manual: the two levels as percentages -->
+        <Grid x:Name="ManualBlock" Margin="0,24,0,0" IsVisible="False">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <StackPanel>
+            <o:WpfTextBlock Classes="Big"><Run x:Name="ManPct1" Text="--"/><Run Text="%" FontSize="18" FontWeight="Normal" Foreground="#96918D"/></o:WpfTextBlock>
+            <o:WpfTextBlock x:Name="ManSub1" Classes="Cap" Text="CPU fan" Margin="0,6,0,0"/>
+          </StackPanel>
+          <StackPanel Grid.Column="1" Margin="20,0,0,0">
+            <o:WpfTextBlock Classes="Big"><Run x:Name="ManPct2" Text="--"/><Run Text="%" FontSize="18" FontWeight="Normal" Foreground="#96918D"/></o:WpfTextBlock>
+            <o:WpfTextBlock x:Name="ManSub2" Classes="Cap" Text="GPU fan" Margin="0,6,0,0"/>
+          </StackPanel>
+        </Grid>
+
+        <!-- per-mode controls -->
+        <Grid x:Name="OptsAuto" Margin="0,24,0,0" IsVisible="False">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <StackPanel VerticalAlignment="Center" Margin="0,0,20,0">
+            <o:WpfTextBlock Text="Cooler fans in Eco" Classes="Row"/>
+          </StackPanel>
+          <ToggleButton x:Name="TgEcoCool2" Grid.Column="1" Theme="{StaticResource SwitchBig}"/>
+        </Grid>
+
+        <StackPanel x:Name="OptsCurve" Margin="0,24,0,0" IsVisible="False">
+          <Grid>
+            <o:WpfTextBlock Text="Link GPU fan to CPU curve" Classes="Row"/>
+            <ToggleButton x:Name="TgLink" Theme="{StaticResource SwitchBig}" HorizontalAlignment="Right" ToolTip.Tip="On: one curve, both fans follow the hotter chip. Off: a curve per fan."/>
+          </Grid>
+          <Grid Margin="0,20,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <o:WpfTextBlock Text="Floor" Classes="Row" ToolTip.Tip="The lowest speed the curve may hold, whatever the temperature"/>
+            <Slider x:Name="SlFloor" Grid.Column="1" Theme="{StaticResource Sl}" Minimum="18" Maximum="45" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center" Margin="18,0,18,0"/>
+            <o:WpfTextBlock x:Name="TxtFloor" Grid.Column="2" Classes="MonoVal"/>
+          </Grid>
+          <Grid Margin="0,20,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <o:WpfTextBlock Text="Ramp delay" Classes="Row" ToolTip.Tip="How long the curve has to want the fans before they start, and how gently they climb after"/>
+            <Slider x:Name="SlRamp" Grid.Column="1" Theme="{StaticResource Sl}" Minimum="1" Maximum="10" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center" Margin="18,0,18,0"/>
+            <o:WpfTextBlock x:Name="TxtRamp" Grid.Column="2" Classes="MonoVal"/>
+          </Grid>
+        </StackPanel>
+
+        <StackPanel x:Name="OptsMax" Margin="0,24,0,0" IsVisible="False">
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel VerticalAlignment="Center" Margin="0,0,20,0">
+              <o:WpfTextBlock Text="Back to Auto when cool" Classes="Row"/>
+              <o:WpfTextBlock x:Name="TxtMaxCoolSub" Classes="Cap" Margin="0,3,0,0"/>
+            </StackPanel>
+            <ToggleButton x:Name="TgMaxCool" Grid.Column="1" Theme="{StaticResource SwitchBig}"/>
+          </Grid>
+          <Grid Margin="0,20,0,0">
+            <o:WpfTextBlock Text="Stop after" Classes="Row"/>
+            <Border x:Name="StopAfterHost" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+          </Grid>
+        </StackPanel>
+
+        <StackPanel x:Name="OptsManual" Margin="0,24,0,0" IsVisible="False">
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <o:WpfTextBlock Text="CPU fan" Classes="Row"/>
+            <Slider x:Name="SlFan1" Grid.Column="1" Theme="{StaticResource Sl}" Minimum="18" Maximum="57" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center" Margin="18,0,18,0"/>
+            <o:WpfTextBlock x:Name="TxtFan1" Grid.Column="2" Classes="MonoVal"/>
+          </Grid>
+          <Grid Margin="0,20,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <o:WpfTextBlock Text="GPU fan" Classes="Row"/>
+            <Slider x:Name="SlFan2" Grid.Column="1" Theme="{StaticResource Sl}" Minimum="18" Maximum="57" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center" Margin="18,0,18,0"/>
+            <o:WpfTextBlock x:Name="TxtFan2" Grid.Column="2" Classes="MonoVal"/>
+          </Grid>
+          <Grid Margin="0,20,0,0">
+            <o:WpfTextBlock Text="Move both together" Classes="Row"/>
+            <ToggleButton x:Name="TgManualLink" Theme="{StaticResource SwitchBig}" HorizontalAlignment="Right"/>
+          </Grid>
+          <StackPanel Orientation="Horizontal" Margin="0,20,0,0">
+            <Ellipse Width="6" Height="6" Fill="#F3821D" VerticalAlignment="Center" Margin="0,0,9,0"/>
+            <o:WpfTextBlock x:Name="TxtGuardNote" Classes="Cap" Foreground="{StaticResource Hex}" TextWrapping="NoWrap" Text="Ohman forces max fan above 90° CPU"/>
+          </StackPanel>
+        </StackPanel>
+
+        <Border Margin="0,24,0,0" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,14,0,0">
+          <Grid>
+            <o:WpfTextBlock x:Name="TxtFanApplied" Classes="MonoFoot" Text="Applied to Balanced"/>
+            <o:WpfTextBlock x:Name="TxtFanRight" Classes="MonoFoot" HorizontalAlignment="Right"/>
+            <o:WpfTextBlock x:Name="BtnFanAction" Classes="Link" FontFamily="{DynamicResource MonoFont}" FontSize="11" HorizontalAlignment="Right" Text="Edit as curve"/>
+          </Grid>
+        </Border>
+      </StackPanel>
+
+      <!-- ============ KEYBOARD ============ -->
+      <StackPanel x:Name="PageKbd" Margin="24,24,24,24" IsVisible="False">
+        <Grid x:Name="HeadKbd" Background="Transparent">
+          <o:WpfTextBlock Text="Keyboard" Classes="Title"/>
+          <o:WpfTextBlock x:Name="TxtKbdStatus" Classes="Mono" HorizontalAlignment="Right"/>
+        </Grid>
+        <Border x:Name="KbdModeHost" Margin="0,24,0,0" HorizontalAlignment="Left"/>
+
+        <Grid x:Name="SelectRow" Margin="0,22,0,0">
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <o:WpfTextBlock Text="Select" Classes="Row" FontSize="13" Foreground="{StaticResource SegText}" Margin="0,0,10,0"/>
+            <Border x:Name="GranHost" VerticalAlignment="Center"/>
+          </StackPanel>
+          <o:WpfTextBlock x:Name="TxtKeySel" Classes="Mono" Foreground="{StaticResource Desc}" HorizontalAlignment="Right" Text="Click the map to select"/>
+        </Grid>
+
+        <Border x:Name="KbdHost" Margin="0,22,0,0"/>
+
+        <!-- the editor: colour for the per-zone modes, speed + brightness for the firmware effects -->
+        <Border x:Name="EditorRow" Margin="0,22,0,0" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,18,0,0">
+          <StackPanel>
+            <Grid x:Name="ColorEditor">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="176"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+              <!-- centred, so that with the brightness row gone (breathe puts it in the effect row below) the
+                   colour chip still sits level with the middle of the hue box instead of hanging off its top -->
+              <StackPanel VerticalAlignment="Center">
+                <Grid Height="34">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                  <!-- the palette: Segoe Fluent Icons E790, drawn -->
+                  <Canvas Width="12" Height="12" VerticalAlignment="Center" Margin="0,0,9,0" Background="Transparent" ToolTip.Tip="Colour">
+                    <Path Stroke="{StaticResource Status}" StrokeThickness="0.6" StrokeJoin="Round" Data="M6.3 0.6 C9.3 0.6 11.5 3 11.5 6 C11.5 9.3 9.6 11.6 7.6 11.6 C6 11.6 5.6 10 5.6 8.6 C5.6 7.4 5 6.9 4.2 6.9 C3.5 6.9 3 7.3 2.2 7.3 C1.2 7.3 0.5 6.6 0.5 5.4 C0.5 2.8 3 0.6 6.3 0.6 Z"/>
+                    <Path Fill="{StaticResource Status}" Data="M5.9 2.35 A0.55 0.55 0 1 0 5.9 3.45 A0.55 0.55 0 1 0 5.9 2.35 Z M8.1 2.95 A0.55 0.55 0 1 0 8.1 4.05 A0.55 0.55 0 1 0 8.1 2.95 Z M9.5 4.75 A0.55 0.55 0 1 0 9.5 5.85 A0.55 0.55 0 1 0 9.5 4.75 Z M9.5 6.95 A0.55 0.55 0 1 0 9.5 8.05 A0.55 0.55 0 1 0 9.5 6.95 Z M8 8.55 A0.55 0.55 0 1 0 8 9.65 A0.55 0.55 0 1 0 8 8.55 Z"/>
+                  </Canvas>
+                  <Border Grid.Column="1" Height="34" Background="{StaticResource Well}" BorderBrush="{StaticResource Edge}" BorderThickness="1" ClipToBounds="True">
+                    <Grid>
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                      <Border x:Name="HexChip" Background="#3F8CFF"/>
+                      <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0">
+                        <o:WpfTextBlock Text="#" FontFamily="{DynamicResource MonoFont}" FontSize="13.5" Foreground="#7E7976" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <TextBox x:Name="TxtHex" Theme="{StaticResource Bare}" MaxLength="6" Width="70" VerticalAlignment="Center"/>
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                </Grid>
+                <Grid x:Name="LevelInline" Height="26" Margin="0,6,0,0">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <!-- the brightness sun: Segoe Fluent Icons E706, drawn -->
+                  <Canvas Width="12" Height="12" VerticalAlignment="Center" Margin="0,0,9,0" Background="Transparent" ToolTip.Tip="Brightness">
+                    <Path Stroke="{StaticResource Status}" StrokeThickness="0.6" Data="M6 3.4 A2.6 2.6 0 1 0 6 8.6 A2.6 2.6 0 1 0 6 3.4 Z M6 0.4 V1.5 M6 10.5 V11.6 M0.4 6 H1.5 M10.5 6 H11.6 M2.05 2.05 L2.8 2.8 M9.2 9.2 L9.95 9.95 M2.05 9.95 L2.8 9.2 M9.2 2.8 L9.95 2.05"/>
+                  </Canvas>
+                  <Slider x:Name="SlLevel" Grid.Column="1" Theme="{StaticResource Sl}" Minimum="5" Maximum="100" IsSnapToTickEnabled="True" TickFrequency="5" VerticalAlignment="Center"/>
+                  <o:WpfTextBlock x:Name="TxtLevel" Grid.Column="2" Classes="Mono" FontSize="11.5" Foreground="{StaticResource Hex}" Width="34" TextAlignment="Right"/>
+                </Grid>
+              </StackPanel>
+              <Border Grid.Column="2" ClipToBounds="True" VerticalAlignment="Top">
+                <StackPanel>
+                  <Border x:Name="HueHost" Height="33"/>
+                  <Border x:Name="ShadeHost" Height="33"/>
+                </StackPanel>
+              </Border>
+            </Grid>
+
+            <Grid x:Name="EffectEditor" IsVisible="False">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="32"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <o:WpfTextBlock Text="Speed" Classes="Row" FontSize="13"/>
+                <Slider x:Name="SlSpeed" Grid.Column="1" Theme="{StaticResource Sl}" Minimum="1" Maximum="5" IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center" Margin="12,0,12,0"/>
+                <o:WpfTextBlock x:Name="TxtSpeed" Grid.Column="2" Classes="Mono" FontSize="12.5" Foreground="{StaticResource Hex}" Width="32" TextAlignment="Right"/>
+              </Grid>
+              <Grid Grid.Column="2">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <o:WpfTextBlock Text="Brightness" Classes="Row" FontSize="13"/>
+                <Slider x:Name="SlLevel2" Grid.Column="1" Theme="{StaticResource Sl}" Minimum="5" Maximum="100" IsSnapToTickEnabled="True" TickFrequency="5" VerticalAlignment="Center" Margin="12,0,12,0"/>
+                <o:WpfTextBlock x:Name="TxtLevel2" Grid.Column="2" Classes="Mono" FontSize="12.5" Foreground="{StaticResource Hex}" Width="32" TextAlignment="Right"/>
+              </Grid>
+            </Grid>
+
+            <StackPanel x:Name="KbdInfo" IsVisible="False">
+              <o:WpfTextBlock x:Name="TxtKbdInfo" Classes="Hint"/>
+              <o:WpfTextBlock x:Name="BtnWinLighting" Classes="Link" FontSize="13" Text="Open Windows lighting settings" HorizontalAlignment="Left" Margin="0,10,0,0" IsVisible="False"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+
+      <!-- ============ SETTINGS ============ -->
+      <Grid x:Name="PageSettings" Height="640" IsVisible="False">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="*"/>
+          <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid x:Name="HeadSettings" Background="Transparent" Margin="24,24,24,16">
+          <o:WpfTextBlock Text="Settings" Classes="Title"/>
+          <o:WpfTextBlock x:Name="TxtMachine" Classes="Mono" HorizontalAlignment="Right"/>
+        </Grid>
+        <ScrollViewer x:Name="Scroll" Grid.Row="1" Theme="{StaticResource Scroller}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False" Padding="24,4,16,8">
+          <StackPanel>
+
+            <o:WpfTextBlock x:Name="SecKey" Text="OMEN KEY" Margin="0,0,0,12"/>
+            <o:WpfTextBlock Text="The OMEN key" Classes="Row"/>
+            <Border x:Name="KeySegHost" Margin="0,8,0,0"/>
+            <Grid Margin="0,8,0,0">
+              <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Ellipse x:Name="KeyDot" Width="6" Height="6" Fill="#4AC06C" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <!-- NoWrap: this line sits in a horizontal stack, where WPF never wraps it. Here the Cap style's wrapping
+                     broke it at the hyphen ("OMEN key auto-") whenever its rounded width came out a fraction under the text's. -->
+                <o:WpfTextBlock x:Name="TxtKeyInfo" Classes="Cap" TextWrapping="NoWrap" Text="OMEN key auto-detected"/>
+              </StackPanel>
+              <o:WpfTextBlock x:Name="BtnLearn" Classes="Link" Text="Relearn" HorizontalAlignment="Right" ToolTip.Tip="Click, then press the key you want to bind"/>
+            </Grid>
+            <Grid x:Name="KeyCmdRow" IsVisible="False" Margin="0,10,0,0">
+              <TextBox x:Name="TxtKeyCmd" Theme="{StaticResource Field}" FontFamily="{DynamicResource UiFont}" MaxLength="500" ToolTip.Tip="Command line the OMEN key starts, e.g. a game launcher or a script"/>
+              <o:WpfTextBlock x:Name="TxtKeyCmdHint" Text="Command line, e.g. steam://open/bigpicture" Classes="Cap" Margin="10,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
+            </Grid>
+
+            <Border x:Name="SuppressRow" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14" Margin="0,12,0,0">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <o:WpfTextBlock Text="Take over the OMEN key" Classes="Row"/>
+                  <o:WpfTextBlock Text="Stops the vendor key handler and its logon task" Classes="RowSub"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgSuppress" Grid.Column="1" Theme="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
+            <Border x:Name="HotkeysRow" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <o:WpfTextBlock Text="Hotkeys" Classes="Row"/>
+                  <o:WpfTextBlock x:Name="TxtHotkeysSub" Classes="RowSub" FontFamily="{DynamicResource MonoFont}" FontSize="11"/>
+                </StackPanel>
+                <Button x:Name="BtnHotkeys" Grid.Column="1" Theme="{StaticResource IconBtn}" Width="24" Height="24" Margin="0,0,12,0" ToolTip.Tip="Change the shortcuts: click one, then press the keys you want. Esc keeps the old one, Backspace removes it."/>
+                <ToggleButton x:Name="TgHotkeys" Grid.Column="2" Theme="{StaticResource Switch}"/>
+                <StackPanel x:Name="HotkeyPanel" Grid.Row="1" Grid.ColumnSpan="3" IsVisible="False" Margin="0,8,0,-4"/>
+              </Grid>
+            </Border>
+
+            <o:WpfTextBlock x:Name="SecPower" Text="POWER" Margin="0,26,0,6"/>
+            <Border x:Name="GpuRow" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <o:WpfTextBlock Text="GPU power" Classes="Row"/>
+                  <o:WpfTextBlock x:Name="TxtGpuSub" Text="Follows the mode" Classes="RowSub"/>
+                </StackPanel>
+                <Border x:Name="GpuSegHost" Grid.Column="1" VerticalAlignment="Center"/>
+              </Grid>
+            </Border>
+            <Border BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <o:WpfTextBlock Text="Eco on battery" Classes="Row"/>
+                  <o:WpfTextBlock Text="Restores your mode when plugged in" Classes="RowSub"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgEcoBattery" Grid.Column="1" Theme="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
+            <Border x:Name="SyncPowerRow" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <o:WpfTextBlock x:Name="TxtSyncPower" Text="Sync Windows power mode" Classes="Row"/>
+                  <o:WpfTextBlock x:Name="TxtSyncPowerSub" Text="Efficiency · Balanced · Best performance" Classes="RowSub"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgSyncPower" Grid.Column="1" Theme="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
+            <Border BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,44,0">
+                  <o:WpfTextBlock Text="Thermal guard" Classes="Row"/>
+                  <o:WpfTextBlock x:Name="TxtGuardSub" Classes="RowSub"/>
+                  <WrapPanel x:Name="GuardLine" Margin="0,4,0,0"/>
+                  <o:WpfTextBlock x:Name="TxtGuardRelease" Classes="RowSub" Margin="0,6,0,0"/>
+                </StackPanel>
+                <Button x:Name="BtnGuard" Grid.Column="1" Theme="{StaticResource IconBtn}" Width="24" Height="24" Margin="0,0,10,0" ToolTip.Tip="Change the rule"/>
+                <ToggleButton x:Name="TgGuard" Grid.Column="2" Theme="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
+
+            <o:WpfTextBlock x:Name="SecDisplay" Text="DISPLAY" Margin="0,26,0,6"/>
+            <Border x:Name="GfxRow" IsVisible="False" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <o:WpfTextBlock Text="Graphics" Classes="Row"/>
+                  <o:WpfTextBlock x:Name="TxtGfxSub" Text="Takes effect after a restart" Classes="RowSub"/>
+                </StackPanel>
+                <Border x:Name="GfxSegHost" Grid.Column="1" VerticalAlignment="Center"/>
+              </Grid>
+            </Border>
+            <Border x:Name="HzRow" IsVisible="False" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <o:WpfTextBlock Text="Refresh rate" Classes="Row"/>
+                  <o:WpfTextBlock Text="Built-in display" Classes="RowSub"/>
+                </StackPanel>
+                <Border x:Name="HzSegHost" Grid.Column="1" VerticalAlignment="Center"/>
+              </Grid>
+            </Border>
+            <Border x:Name="LowHzRow" IsVisible="False" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <o:WpfTextBlock Text="Lowest refresh rate on battery" Classes="Row"/>
+                  <o:WpfTextBlock Text="Back to your choice when plugged in" Classes="RowSub"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgLowHzBattery" Grid.Column="1" Theme="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
+
+            <!-- The one optional piece of kernel-mode anything. The row says what state it is in and offers the one
+                 action that state allows; the switch only exists once there is a driver to switch. -->
+            <o:WpfTextBlock x:Name="SecDriver" Text="DRIVER" Margin="0,26,0,6"/>
+            <Border x:Name="DriverRow" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <o:WpfTextBlock x:Name="TxtDriverTitle" Text="Hardware driver" Classes="Row"/>
+                  <o:WpfTextBlock x:Name="TxtDriverSub" Classes="RowSub"/>
+                </StackPanel>
+                <o:WpfTextBlock x:Name="BtnDriver" Grid.Column="1" Classes="Link" Text="Install" Margin="0,0,18,0"/>
+                <ToggleButton x:Name="TgDriver" Grid.Column="2" Theme="{StaticResource Switch}" ToolTip.Tip="Read the CPU's own temperature and power limits through the driver, and drive the fans through it where the firmware refuses"/>
+              </Grid>
+            </Border>
+
+            <o:WpfTextBlock x:Name="SecApp" Text="APP" Margin="0,26,0,6"/>
+            <Border BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <o:WpfTextBlock Text="Temperature in the tray" Classes="Row"/>
+                  <o:WpfTextBlock Text="CPU temperature drawn on the tray icon" Classes="RowSub"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgTrayTemp" Grid.Column="1" Theme="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
+            <Border x:Name="BenchPillRow" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <o:WpfTextBlock Text="Benchmark overlay" Classes="Row"/>
+                  <o:WpfTextBlock Text="Warm-up, countdown and result over the game" Classes="RowSub"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgBenchPill" Grid.Column="1" Theme="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
+            <!-- For white-only backlights: no firmware answer tells them from RGB, so the owner decides. -->
+            <Border x:Name="LightPageRow" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <o:WpfTextBlock Text="Keyboard lighting controls" Classes="Row"/>
+                  <o:WpfTextBlock x:Name="TxtLightPageSub" Text="Turn off for a white-only backlight. Fn still switches it" Classes="RowSub"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgLightPage" Grid.Column="1" Theme="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
+            <Border x:Name="AutostartRow" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <o:WpfTextBlock x:Name="TxtAutostart" Text="Start with Windows" Classes="Row"/>
+                  <o:WpfTextBlock x:Name="TxtAutostartSub" Text="Scheduled task, no prompt at logon" Classes="RowSub"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgAutostart" Grid.Column="1" Theme="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
+            <Border BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <o:WpfTextBlock Text="Sensor refresh" Classes="Row"/>
+                  <o:WpfTextBlock Text="While the window is open. Faster costs a little battery" Classes="RowSub"/>
+                </StackPanel>
+                <Border x:Name="PollSegHost" Grid.Column="1" VerticalAlignment="Center"/>
+              </Grid>
+            </Border>
+            <Border x:Name="ResetRow" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <o:WpfTextBlock Text="Uninstall" Classes="Row"/>
+                  <o:WpfTextBlock Text="Resets to default then quits" Classes="RowSub"/>
+                </StackPanel>
+                <o:WpfTextBlock x:Name="BtnReset" Grid.Column="1" Classes="Link" FontSize="13" Text="Reset" VerticalAlignment="Center"/>
+              </Grid>
+            </Border>
+            <!-- Once a build is staged the title becomes the button: "Restart Ohman to update" says the whole
+                 thing in the space a heading already occupies, and leaves the right of the row to Changelog
+                 alone. A second link beside it did not fit and pushed the title into an ellipsis. -->
+            <Border x:Name="UpdateRow" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel x:Name="UpdateText" Background="Transparent" VerticalAlignment="Center" Margin="0,0,18,0">
+                  <o:WpfTextBlock x:Name="TxtUpdateTitle" Text="Check for updates" Classes="Row"/>
+                  <o:WpfTextBlock x:Name="TxtUpdate" Classes="RowSub" FontFamily="{DynamicResource MonoFont}" FontSize="11"/>
+                </StackPanel>
+                <o:WpfTextBlock x:Name="BtnUpdate" Grid.Column="1" Classes="Link" Text="Check now" Margin="0,0,18,0"/>
+                <ToggleButton x:Name="TgUpdateAuto" Grid.Column="2" Theme="{StaticResource Switch}" ToolTip.Tip="Check once a day when Ohman starts, and download a new version in the background"/>
+              </Grid>
+            </Border>
+            <o:WpfTextBlock x:Name="TxtDiag" Classes="Mono" FontSize="10.5" Margin="0,14,0,0" IsVisible="False" TextWrapping="Wrap"/>
+          </StackPanel>
+        </ScrollViewer>
+        <Border Grid.Row="2" Background="{StaticResource Card}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="24,16">
+          <StackPanel Orientation="Horizontal">
+            <o:WpfTextBlock x:Name="BtnDiag" Classes="Link" FontSize="13" Foreground="{StaticResource SegText}" Text="Diagnostics"/>
+            <o:WpfTextBlock x:Name="BtnSupport" Classes="Link" FontSize="13" Foreground="{StaticResource SegText}" Text="Report Issue" Margin="22,0,0,0" ToolTip.Tip="Collects everything needed to add or fix this laptop, copies it, and opens a prefilled GitHub issue"/>
+            <o:WpfTextBlock x:Name="BtnLog" Classes="Link" FontSize="13" Foreground="{StaticResource SegText}" Text="Log" Margin="22,0,0,0"/>
+            <o:WpfTextBlock x:Name="BtnExit" Classes="Link" FontSize="13" Text="Exit Ohman" Margin="22,0,0,0"/>
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <!-- ============ BENCHMARK ============ -->
+      <!-- BENCH: the benchmark page's slot (WPF adds BenchPage to PageHost from code, after Settings). Empty here. -->
+      <Grid x:Name="BenchHost" IsVisible="False"/>
+    </Grid>
+
+    <!-- hide to tray: invisible until the pointer is over the window, so the pages stay exactly as designed -->
+    <!-- The window has no title bar. Every page starts 24 px down, so this strip is the empty band along the top
+         edge where a person reaches to move a window, and there is no control in it to steal a click from. -->
+    <Border x:Name="DragStrip" Height="24" VerticalAlignment="Top" Background="Transparent" Cursor="SizeAll"/>
+
+    <!-- the cross: Segoe Fluent Icons E8BB at 8 px, drawn -->
+    <Button x:Name="BtnClose" Theme="{StaticResource IconBtn}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,6,6,0" Opacity="0" ToolTip.Tip="Hide (keeps running in the tray) · Esc">
+      <Path Width="8" Height="8" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="0.8" Data="M0.4 0.4 L7.6 7.6 M7.6 0.4 L0.4 7.6"/>
+    </Button>
+
+    <!-- transient status, over the page bottom -->
+    <Border x:Name="Toast" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="24,0,24,14" CornerRadius="8" Background="#D4100D0B" BorderBrush="#2C2825" BorderThickness="1" Padding="12,7" Opacity="0" IsHitTestVisible="False">
+      <o:WpfTextBlock x:Name="TxtToast" Classes="Cap" Foreground="{StaticResource Text}" TextWrapping="NoWrap"/>
+    </Border>
+  </Grid>
+</Grid>

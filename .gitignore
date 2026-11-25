@@ -38,3 +38,12 @@ driver-check.txt
 
 # benchmark: PresentMon and the runs, written next to the executable
 bench/
+
+# Linux build output
+linux/.build/
+linux/driver/*.o
+linux/driver/*.ko
+linux/driver/*.mod*
+linux/driver/.*.cmd
+linux/driver/Module.symvers
+linux/driver/modules.order

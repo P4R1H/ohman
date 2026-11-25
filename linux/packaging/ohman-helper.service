@@ -1,0 +1,125 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# ohman-helper: the one part of Ohman that runs as root. The window runs as the logged-in user and holds
+# all the policy; this service only forwards hardware access for it over /run/ohman/helper.sock.
+#
+# What it has to be able to do, and nothing below may take any of it away:
+#   - open /dev/ohman-wmi (the ohman-wmi kernel module: BIOS mailbox and EC bytes)
+#   - read /dev/input/event* (the "HP WMI hotkeys" device: OMEN key, Fn keys)
+#   - read /dev/cpu/*/msr (die temperature, power limits, throttle reasons) and write the power limit
+#   - read /sys (input devices, powercap energy counters) and write hp-wmi's pwm1_enable there
+#   - create its socket in /run/ohman, group ohman, mode 0660
+#
+# Every hardening line says what it removes and why the list above survives it. The options that are
+# deliberately absent are listed at the end, with the item each one would break.
+
+[Unit]
+Description=Ohman hardware helper (HP OMEN and Victus laptops)
+Documentation=https://github.com/P4R1H/Ohman/blob/main/docs/linux.md
+# The module is loaded from /etc/modules-load.d at boot. Starting after that means /dev/ohman-wmi exists when
+# the device allow-list below is built; see DeviceAllow.
+After=systemd-modules-load.service
+
+[Service]
+# exec, not simple: "systemctl start" then waits until the program has really been started, and reports it
+# when the group is missing, the sandbox cannot be set up or the binary will not run, instead of saying ok.
+Type=exec
+ExecStart=/opt/ohman/ohman-helper
+# A crash must not leave the window without hardware. A clean stop (systemctl stop, uninstall) stays stopped.
+Restart=on-failure
+RestartSec=2
+
+# Root, because the device nodes above are root-only. The group is ohman so that everything the helper
+# creates belongs to root:ohman without it ever calling chown: the directory below and the socket in it.
+User=root
+Group=ohman
+# /run/ohman, made at start and removed at stop. 0750 root:ohman: members of the group can reach the socket,
+# nobody else can even look.
+RuntimeDirectory=ohman
+RuntimeDirectoryMode=0750
+# The socket is born 0660 (rw for root and the group, nothing for others); there is no moment at which it
+# is open wider than that.
+UMask=0117
+
+# .NET writes a diagnostics pipe into /tmp at start-up so a debugger can attach. A root daemon does not need
+# to be attachable, and the listener is one more thing to reach.
+Environment=DOTNET_EnableDiagnostics=0
+
+# --- Capabilities ---------------------------------------------------------------------------------------
+# Root keeps exactly one. CAP_SYS_RAWIO is what the ohman-wmi ioctls ask for, and what the kernel asks for
+# before it opens an msr device. (A module built from a source that still checks CAP_SYS_ADMIN is refused
+# under this unit: the two have to be installed together, which the installer does.) It is the capability for talking to hardware directly, which is all the helper does.
+# Files are opened as their owner (root), so CAP_DAC_OVERRIDE is not needed; nothing is chowned, so neither
+# is CAP_CHOWN; and without CAP_SYS_ADMIN there is no mounting, no namespaces, no tracing.
+CapabilityBoundingSet=CAP_SYS_RAWIO
+# No setuid binary and no file capability can give a child process more than the helper has.
+NoNewPrivileges=yes
+
+# --- Devices --------------------------------------------------------------------------------------------
+# Only the listed devices can be opened, plus the harmless ones every program gets (null, zero, urandom).
+# Disks, /dev/mem, /dev/uinput, /dev/kvm and the rest are refused by the kernel even though this is root.
+DevicePolicy=closed
+# The mailbox and EC passthrough. Named by path because it is a misc device with a number the kernel picks
+# when the module loads; allowing all of "char-misc" would also let in uinput, kvm and fuse. The number is
+# looked up when the service starts, which is why the unit starts after the module is loaded, and why
+# the service has to be restarted if the module is reloaded by hand.
+DeviceAllow=/dev/ohman-wmi rw
+# Key events. Read only: the helper listens to the firmware's keys and never injects any.
+DeviceAllow=char-input r
+# The CPU's model-specific registers. Read for temperature and throttle reasons; written for exactly one
+# register, the package power limit (0x610). Under Secure Boot the kernel refuses msr writes anyway, and
+# the helper reports that and carries on.
+DeviceAllow=char-cpu/msr rw
+
+# --- File system ----------------------------------------------------------------------------------------
+# Everything is read-only for this service except /dev, /proc, /sys and its own /run/ohman. The helper
+# keeps no files: settings and logs belong to the user's own Ohman process.
+ProtectSystem=strict
+# /home, /root and /run/user are empty for it. It never reads anybody's files.
+ProtectHome=yes
+# Its own empty /tmp, gone when it stops.
+PrivateTmp=yes
+# cgroups are read-only. Not something a fan controller touches.
+ProtectControlGroups=yes
+
+# --- Kernel ---------------------------------------------------------------------------------------------
+# It cannot load or unload kernel modules. Both modules it uses (ohman-wmi, msr) are loaded at boot from
+# /etc/modules-load.d/ohman-wmi.conf, not by the helper.
+ProtectKernelModules=yes
+# It cannot read the kernel log.
+ProtectKernelLogs=yes
+# It cannot set the clock or the host name.
+ProtectClock=yes
+ProtectHostname=yes
+
+# --- Network --------------------------------------------------------------------------------------------
+# The helper's only channel is a Unix socket that lives in the file system, which a private network
+# namespace does not affect. It has no network interface but a loopback of its own and cannot open
+# anything but Unix sockets.
+PrivateNetwork=yes
+RestrictAddressFamilies=AF_UNIX
+
+# --- Process --------------------------------------------------------------------------------------------
+# No new namespaces, no realtime scheduling, no setuid/setgid files, no switching to another ABI.
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+# Native system calls only, and only the set an ordinary service uses (which includes ioctl, the one call
+# the device work is made of). Mounting, rebooting, swap, kexec, raw port access and loading modules are
+# refused with "operation not permitted" instead of killing the process, so a refusal shows up in the log.
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# --- Deliberately not set ---------------------------------------------------------------------------------
+# PrivateDevices=yes          would hide /dev/ohman-wmi, /dev/input and /dev/cpu: all three device items.
+# ProtectKernelTunables=yes   would make /sys read-only: no handing the fans back through hp-wmi's pwm1_enable.
+# MemoryDenyWriteExecute=yes  the .NET runtime compiles code at run time and needs pages it can write and
+#                             then execute.
+# PrivateUsers=yes            root inside a user namespace is not root to the kernel: every device open and
+#                             the capability check in the module would fail.
+# DynamicUser=yes / User=     the device nodes are root-only by design; that is the point of the helper.
+
+[Install]
+WantedBy=multi-user.target

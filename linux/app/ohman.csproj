@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../Core.props" />
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>ohman</AssemblyName>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <ApplicationManifest />
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.*" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.*" />
+    <PackageReference Include="Avalonia.Themes.Simple" Version="11.3.*" />
+    <PackageReference Include="Avalonia.Headless" Version="11.3.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="*.cs" />
+    <AvaloniaResource Include="../../fonts/*.ttf" Link="fonts/%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

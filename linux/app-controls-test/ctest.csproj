@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The harness for the ported controls: it compiles the four control files of ../app on their own, so they can be
+       built, rendered and poked while the window around them is still being written. Not shipped. -->
+  <Import Project="../Core.props" />
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>ohman</AssemblyName>
+    <ApplicationManifest />
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.*" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.*" />
+    <PackageReference Include="Avalonia.Themes.Simple" Version="11.3.*" />
+    <PackageReference Include="Avalonia.Headless" Version="11.3.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Test.cs" />
+    <!-- -p:Stub=true builds without the shared core, against Stubs.cs: for the moments when the core does not
+         compile for reasons that have nothing to do with the controls. -->
+    <Compile Remove="$(Src)**" Condition="'$(Stub)' == 'true'" />
+    <Compile Include="Stubs.cs" Condition="'$(Stub)' == 'true'" />
+    <Compile Include="../app/Theme.cs;../app/Controls.cs;../app/Curve.cs;../app/KeyboardView.cs" />
+    <AvaloniaResource Include="../../fonts/*.ttf" Link="fonts/%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>
