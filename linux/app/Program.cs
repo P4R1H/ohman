@@ -158,7 +158,14 @@ namespace Ohman {
             AppBuilder app = AppBuilder.Configure<App>();
             // Off-screen: Skia draws for real, into memory, and no display is needed or touched.
             if (headless) app = app.UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });
-            else app = app.UsePlatformDetect();
+            else {
+                app = app.UsePlatformDetect();
+                // Drawn by the processor unless asked otherwise. A GL context pulls the whole 3D driver into the
+                // process (Mesa and LLVM, or the vendor's), 100 to 250 MB that stays for as long as Ohman sits in the
+                // tray, to draw one small window that changes once a second. OHMAN_GPU=1 puts it back.
+                if (Environment.GetEnvironmentVariable("OHMAN_GPU") != "1")
+                    app = app.With(new X11PlatformOptions { RenderingMode = new[] { X11RenderingMode.Software } });
+            }
             try { app.StartWithClassicDesktopLifetime(args, ShutdownMode.OnExplicitShutdown); }
             catch (Exception ex) {
                 Log.Write("the window system failed: " + ex);

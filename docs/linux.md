@@ -303,6 +303,12 @@ one node. If none does, find your keyboard's ids with `ls -l /sys/class/hidraw/*
 `VENDOR:PRODUCT.number`), add a line for it to `/etc/udev/rules.d/70-ohman.rules` as the file describes, and
 tell us the ids so the next release has them.
 
+### The window draws slowly
+
+The window is drawn by the processor, not the graphics card: a GL context would load the whole 3D driver
+into a program that mostly sits in the tray, at a cost of 100 to 250 MB of memory. If animations stutter on
+your machine, `OHMAN_GPU=1 ohman` draws through the graphics card instead; tell us if that was needed.
+
 ## Uninstall
 
 ```
