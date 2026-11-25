@@ -72,6 +72,8 @@ namespace Ohman {
 
         static Engine engine;
         static Sensors sensors;
+        static PowerProfileWatch profileWatch;      // started once the window is up; the system's own power profile, followed
+        static bool hwDemo;                          // the engine runs on simulated hardware: nothing outside may be followed or pushed
         static string shot;
         static bool hidden, settings, headless;
         static int exitCode;
@@ -134,6 +136,7 @@ namespace Ohman {
 
             bool route = !demo && FirmwareReachable();
             IHardware hw = (demo || !route) ? (IHardware)new DemoHardware() : new Bios();
+            hwDemo = hw.IsDemo;
             Log.Write("---- " + AppName + " " + Version + " start · route=" + route + " · hardware=" + (hw.IsDemo ? "demo" : "bios") + (hidden ? " · hidden" : ""));
             if (!demo && !route) {
                 Log.Write("no route to the firmware: " + NoRouteWhy());
@@ -200,12 +203,17 @@ namespace Ohman {
                 try { signals.Add(PosixSignalRegistration.Create(sig, delegate(PosixSignalContext c) { c.Cancel = true; Dispatcher.UIThread.Post(RaiseSessionEnding); })); } catch { }
             }
             if (!hidden || shot != null) win.Show();
+            // The system's own power profile, followed as anything else moves it: the desktop's quick settings,
+            // tuned-adm in a terminal. Not in a screenshot or demo run (both drive simulated hardware), and
+            // not headless, where the app exists for tests and machines without a session bus at hand.
+            if (shot == null && !headless && !hwDemo) profileWatch = PowerProfileWatch.Start(engine);
         }
 
         static void RaiseSessionEnding() { var h = SessionEnding; if (h != null) h(); }
 
         /// <summary>Application.Current.Shutdown().</summary>
         public static void Shutdown() {
+            try { if (profileWatch != null) profileWatch.Dispose(); } catch { }
             try { if (lifetime != null) lifetime.Shutdown(exitCode); else Environment.Exit(exitCode); }
             catch { Environment.Exit(exitCode); }
         }

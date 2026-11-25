@@ -2052,6 +2052,23 @@ namespace Ohman {
             if (changed) lock (applySync) Try(delegate { Hw.SetMode(ModeByte, FansByBios); }, "Set mode");   // re-send with the DC flag like OGH
         }
 
+        // ---------- the system's own power profile, moved from outside ----------
+        /// <summary>tuned or power-profiles-daemon switched while Ohman runs -- the desktop's own quick settings,
+        /// tuned-adm in a terminal, a daemon restarting into another profile. With "Sync the system power
+        /// profile" on, our mode follows it as if the owner had picked it here: the BIOS mode and the mode's own
+        /// fans, power and GPU move with it, and the window and the tray say so. When the sync is off the two
+        /// are none of each other's business and the mode stays. The push the other way is SetWinPowerOverlay;
+        /// the two cannot chase each other, because a mode that did not change does nothing here. The Linux
+        /// window's watch calls this (linux/app/PowerProfiles.cs); nothing calls it on Windows, where there is
+        /// nothing to watch but the overlay Ohman itself holds.</summary>
+        public void OnSystemProfile(int modeIndex, string profile) {
+            if (modeIndex < 0 || modeIndex > 2) return;
+            if (!S.SyncWinPower) return;
+            if (modeIndex == ModeIndex) return;
+            Log.Write("the system power profile is now " + profile + "; the mode follows it");
+            SetMode(modeIndex, false);
+        }
+
         // ---------- OGH suppression ----------
         // The vendor's app fights for the OMEN key and the fans where it exists. What stopping it takes is the
         // operating system's business: Host (src\win\Host.cs; on Linux there is no such app and these do nothing).
@@ -2369,7 +2386,7 @@ namespace Ohman {
 
                 // ---------- Windows power-mode overlay ----------
         /// <summary>The operating system's own power mode, made to follow ours: the Windows power-mode overlay,
-        /// or power-profiles-daemon on Linux.</summary>
+        /// or tuned / power-profiles-daemon on Linux.</summary>
         public void SetWinPowerOverlay(int modeIndex) { Host.SetPowerMode(modeIndex); }
 
         // ---------- diagnostics ----------
