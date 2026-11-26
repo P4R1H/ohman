@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The version number and the publisher strings that every Ohman binary carries.
 //
 // Windows reads these for the Properties > Details tab, for the name on the UAC prompt, and for Task Manager.
@@ -8,7 +8,9 @@
 // Compiled into Ohman.exe, preview\Ohman.exe and tools\omenprobe.exe alike, so the release checklist is to bump
 // Version here and nothing else. The title and description differ per binary and sit next to each entry point.
 using System.Reflection;
+using System.Runtime.InteropServices;
 
+[assembly: DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
 [assembly: AssemblyProduct("Ohman")]
 [assembly: AssemblyCompany("Ohman")]
 [assembly: AssemblyCopyright("Copyright (C) 2026 Ohman contributors - GPL-3.0-or-later")]
@@ -19,6 +21,6 @@ using System.Reflection;
 namespace Ohman {
     /// <summary>The one place the version lives. Program.Version reads from here.</summary>
     public static class Meta {
-        public const string Version = "1.3.5";
+        public const string Version = "1.3.5.14";
     }
 }

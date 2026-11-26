@@ -41,18 +41,8 @@ namespace Ohman {
         /// <summary>The build we replaced, kept until the new one is running.</summary>
         public static string OldPath { get { return Path.Combine(Dir, Program.FileStem + ".old.exe"); } }
 
-        /// <summary>False when this build must never replace itself. The development tree is the case that
-        /// matters: Ohman.exe builds to the repository root, so a working copy would otherwise overwrite the
-        /// binary being worked on the first time it saw a published release.</summary>
-        public static bool CanReplace {
-            get {
-                try {
-                    if (Directory.Exists(Path.Combine(Dir, "src"))) return false;
-                    string exe = ExePath;
-                    return !string.IsNullOrEmpty(exe) && File.Exists(exe);
-                } catch { return false; }
-            }
-        }
+        // This portable build has no signed update channel.
+        public static bool CanReplace { get { return false; } }
 
         // ---------- asking ----------
         /// <summary>The newest release, or null when the check failed.</summary>
@@ -234,6 +224,7 @@ namespace Ohman {
         /// <summary>Swap the staged build in and start it. The caller exits straight after; until it does, the new
         /// process is sitting on the single-instance mutex waiting for it.</summary>
         public static bool Swap(out string error) {
+            if (!CanReplace) { error = "This build does not install updates."; return false; }
             error = null;
             string exe = ExePath, stage = StagePath, old = OldPath;
             bool renamed = false, moved = false;

@@ -137,6 +137,9 @@ namespace Ohman {
         public int BenchWarm = 0, BenchMeasure = 1; // benchmark: warm up auto / 2:00 / skip, measure 0:30 / 1:00 / 3:00
         public int ShareLayout = 0;                 // share card: 0 Summary, 1 Graphs, 2 Square
         public bool BenchPill = true;               // the small overlay over the game during a run
+        public bool BoostAuto;
+        public int BoostSelection;
+        public string[] BoostGames = new string[0];
         public readonly Dictionary<string, string> GameSettings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);   // per game (exe name, lower case): the settings line the owner typed
 
         static readonly string File_ = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, Program.FileStem + ".state");
@@ -254,6 +257,9 @@ namespace Ohman {
                         case "BenchMeasure": if (TryInt(v, out n)) s.BenchMeasure = Math.Max(0, Math.Min(2, n)); break;
                         case "ShareLayout": if (TryInt(v, out n)) s.ShareLayout = Math.Max(0, Math.Min(2, n)); break;
                         case "BenchPill": if (bool.TryParse(v, out b)) s.BenchPill = b; break;
+                        case "BoostAuto": if (bool.TryParse(v, out b)) s.BoostAuto = b; break;
+                        case "BoostSelection": if (TryInt(v, out n)) s.BoostSelection = n & 255; break;
+                        case "BoostGames": s.BoostGames = Booster.ParseGames(v); break;
                     }
                 }
             } catch (Exception ex) { Log.Write("settings apply " + k + ": " + ex.Message); }
@@ -354,6 +360,9 @@ namespace Ohman {
                 sb.AppendLine("BenchMeasure=" + BenchMeasure);
                 sb.AppendLine("ShareLayout=" + ShareLayout);
                 sb.AppendLine("BenchPill=" + BenchPill);
+                if (BoostAuto) sb.AppendLine("BoostAuto=True");
+                if (BoostSelection != 0) sb.AppendLine("BoostSelection=" + BoostSelection);
+                if (BoostGames.Length > 0) sb.AppendLine("BoostGames=" + string.Join("|", BoostGames));
                 var games = new List<string>(GameSettings.Keys);
                 games.Sort(StringComparer.Ordinal);
                 foreach (string g in games) if (g.IndexOf('=') < 0) sb.AppendLine("Game." + g + "=" + GameSettings[g].Replace('\r', ' ').Replace('\n', ' '));   // a key with '=' would read back as another
@@ -2109,7 +2118,8 @@ namespace Ohman {
         public void SetOghTasks(bool disable) {
             if (Hw.IsDemo) return;
             try {
-                var psi = new ProcessStartInfo("schtasks.exe", "/Query /FO CSV /NH") { CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true };
+                string scheduler = Path.Combine(Environment.SystemDirectory, "schtasks.exe");
+                var psi = new ProcessStartInfo(scheduler, "/Query /FO CSV /NH") { CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true };
                 string csv = "";
                 var outLines = new System.Text.StringBuilder();
                 using (var q = new Process()) {
@@ -2124,7 +2134,7 @@ namespace Ohman {
                 foreach (string line in csv.Split('\n')) {
                     if (!line.StartsWith("\"\\OmenInstallMonitor", StringComparison.OrdinalIgnoreCase)) continue;
                     string task = line.Split('"')[1];
-                    using (var c = Process.Start(new ProcessStartInfo("schtasks.exe", "/Change /TN \"" + task + "\" " + (disable ? "/DISABLE" : "/ENABLE")) { CreateNoWindow = true, UseShellExecute = false })) {
+                    using (var c = Process.Start(new ProcessStartInfo(scheduler, "/Change /TN \"" + task + "\" " + (disable ? "/DISABLE" : "/ENABLE")) { CreateNoWindow = true, UseShellExecute = false })) {
                         if (c.WaitForExit(5000)) { if (c.ExitCode == 0) n++; else Log.Write("schtasks " + task + " rc=" + c.ExitCode); }
                         else { try { c.Kill(); } catch { } c.WaitForExit(2000); if (!c.HasExited) Log.Write("could not stop " + task); Log.Write("schtasks " + task + " timed out"); }
                     }

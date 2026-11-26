@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Ohman: WPF main window (layout in the embedded Ui.xaml): a rail on the left with Home, Fans, Keyboard, Benchmark
 // (built in code, BenchUi.cs) and Settings, one page visible at a time; the window morphs to each page's size. Also the tray icon, hotkeys and the
 // live readouts. Every size and colour here comes from the panel design.
@@ -28,8 +28,8 @@ using SD = System.Drawing;
 namespace Ohman {
 
 
-    public sealed class MainWindow : Window {
-        enum Page { Home = 0, Fans = 1, Keyboard = 2, Settings = 3, Bench = 4 }
+    public sealed partial class MainWindow : Window {
+        enum Page { Home = 0, Fans = 1, Keyboard = 2, Settings = 3, Bench = 4, Booster = 5 }
         const double RailW = 62, PageW = 398, KbdPageW = 638, SettingsH = 640;
 
         Osd osd;
@@ -56,10 +56,10 @@ namespace Ohman {
         FrameworkElement root;
         Grid pageHost;
         ScrollViewer scroll;
-        readonly FrameworkElement[] pages = new FrameworkElement[5];
+        readonly FrameworkElement[] pages = new FrameworkElement[6];
         Page cur = Page.Home;
         bool pageShown;
-        readonly NavBtn[] nav = new NavBtn[5];
+        readonly NavBtn[] nav = new NavBtn[6];
         // benchmark
         Bench bench;
         BenchPage benchPage;
@@ -232,6 +232,7 @@ namespace Ohman {
             BuildFans();
             BuildKeyboard();
             BuildSettings();
+            BuildBooster();
             BuildBench();
             BuildIcons();
             BuildTray();
@@ -278,7 +279,6 @@ namespace Ohman {
             if (!E.BiosOk && !E.Hw.IsDemo) ShowToast("BIOS interface unavailable: " + E.LastError, true);
             else if (E.LastError.Length > 0) ShowToast(E.LastError, true);      // a write already failed during Init, before this handler existed
             QueryAutostartAsync();
-            if (!E.Hw.IsDemo && E.S.UpdateOnLaunch) Slow(delegate { E.CheckForUpdate(false); });
             StartShowListener();
             // Build the window handle now rather than on first Show. Started from the logon task this window
             // may never be shown at all, and without a handle there is nowhere to register a hotkey or to hook
@@ -311,6 +311,7 @@ namespace Ohman {
             pages[1] = F<FrameworkElement>("PageFans");
             pages[2] = F<FrameworkElement>("PageKbd");
             pages[3] = F<FrameworkElement>("PageSettings");
+            pages[(int)Page.Booster] = F<FrameworkElement>("PageBooster");
             txtHomeTitle = F<TextBlock>("TxtHomeTitle");
             txtHomeStatus = F<TextBlock>("TxtHomeStatus");
             demoBadge = F<FrameworkElement>("DemoBadge");
@@ -496,11 +497,13 @@ namespace Ohman {
             nav[2] = new NavBtn(2, "Keyboard", new[] { ICO_KBD }, new string[0]);
             nav[3] = new NavBtn(3, "Settings", new string[0], new[] { GearPath(12, 12, 10, 7.6, 8, 3.4) });
             nav[4] = new NavBtn(4, "Benchmark", new[] { ICO_BENCH }, new[] { ICO_BENCH_DOT });
+            nav[(int)Page.Booster] = new NavBtn((int)Page.Booster, "Booster", new string[0], new[] { BOLT });
             for (int i = 0; i < nav.Length; i++) { nav[i].HorizontalAlignment = HorizontalAlignment.Center; nav[i].Clicked += delegate(int idx) { Navigate((Page)idx, true); }; }
             host.Children.Add(nav[0]);
             host.Children.Add(nav[1]);
             host.Children.Add(nav[2]);
             host.Children.Add(nav[4]);
+            host.Children.Add(nav[(int)Page.Booster]);
             // Above Settings, and only while there is something to install. It is a signpost rather than a page:
             // it goes where the update lives instead of doing anything itself, so nothing is one stray click from
             // restarting the app. It stays out of nav[] deliberately -- the rail pill tracks the current page, and
@@ -814,6 +817,10 @@ namespace Ohman {
                     + "Afterwards you can delete " + Program.AppName + ".exe and nothing of it is left behind.";
                 if (MessageBox.Show(IsVisible ? (Window)this : null, ask, Program.DisplayName,
                         MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+                if (!BoosterReadyToClose()) {
+                    MessageBox.Show(this, "Ohman is restoring your Windows settings. Wait for restoration before using Reset.", Program.DisplayName, MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
                 // The driver is the one thing Ohman may have put on the machine outside its own folder. Only when
                 // it was us, and only with a yes: FanControl or LibreHardwareMonitor may be using the same one.
                 // Asked here, beside the other question, so that both answers are in before any work starts -
@@ -1361,10 +1368,10 @@ namespace Ohman {
                 CompositionTarget.Rendering += MorphTick;
             }
         }
-        /// <summary>What the visible page wants to be, measured with no height limit (Settings is a fixed, scrolling page). Only the
+        /// <summary>What the visible page wants to be, with a fixed target for the scrolling Settings and Booster pages. Only the
         /// current page counts: the outgoing one is still in the host while it fades.</summary>
         double NaturalHeight() {
-            if (cur == Page.Settings) return SettingsH;
+            if (cur == Page.Settings || cur == Page.Booster) return SettingsH;
             if (cur == Page.Bench) return benchPage.Fit(SystemParameters.WorkArea.Height - 24);
             var page = pages[(int)cur];
             if (page == null || pageHost.Width <= 0) return 0;
@@ -2136,6 +2143,7 @@ namespace Ohman {
                 tgGuard.IsChecked = S.Guard;
                 GuardText();          // the limits, the release points and whether the chassis counts all change after start
                 tgUpdateAuto.IsChecked = S.UpdateOnLaunch;
+                tgAutostart.IsChecked = autostart;
                 int hzNow = Display.CurrentHz();
                 if (hzSeg != null) for (int i = 0; i < hzSeg.Count; i++) if ((int)hzSeg.Tags[i] == hzNow) hzSeg.Select(i, IsVisible && cur == Page.Settings);
                 foreach (var m in trayHz) m.Checked = (int)m.Tag == hzNow;
@@ -2152,7 +2160,6 @@ namespace Ohman {
                 if (hk != hotkeySubFor) { hotkeySubFor = hk; txtHotkeysSub.Text = hk; if (hotkeysOpen) BuildHotkeyPanel(); }
                 tgEcoBattery.IsChecked = S.EcoOnBattery;
                 tgSyncPower.IsChecked = S.SyncWinPower;
-                tgAutostart.IsChecked = autostart;
                 demoBadge.Visibility = E.Hw.IsDemo && screenshotPath == null ? Visibility.Visible : Visibility.Collapsed;
                 bool err = (!E.BiosOk || E.ReadOnly) && !E.Hw.IsDemo;
                 errBanner.Visibility = err ? Visibility.Visible : Visibility.Collapsed;
@@ -2612,6 +2619,7 @@ namespace Ohman {
             if (page == "fans") Navigate(Page.Fans, false);
             else if (page == "keyboard" && E.Light != null) Navigate(Page.Keyboard, false);
             else if (page == "settings") Navigate(Page.Settings, false);
+            else if (page == "booster") Navigate(Page.Booster, false);
             else if (page == "update") ShowUpdateRow();          // where the rail button goes: settings, at the update row
             else if (page == "driver") ShowDriverRow();          // settings, at the driver row (screenshot aid)
             else if (page == "hotkeys") { Navigate(Page.Settings, false); ToggleHotkeyPanel(); }   // settings, hotkey panel open (screenshot aid)
@@ -2714,6 +2722,7 @@ namespace Ohman {
         bool resetting, quietExit;
         void ExitApp() {
             if (exiting) return;
+            if (!quietExit && !BoosterReadyToClose()) { WaitForBoosterExit(); return; }
             exiting = true;
             if (resetting) { try { E.S.Delete(); } catch { } } else { try { E.S.Save(); } catch { } }
             try { UnregisterHotkeys(); } catch { }
@@ -2724,6 +2733,7 @@ namespace Ohman {
             try { if (osd != null) osd.Close(); } catch { }
             try { if (trayTempIcon != null) { IntPtr h = trayTempIcon.Handle; trayTempIcon.Dispose(); DestroyIcon(h); } } catch { }
             try { E.Park(quietExit); } catch { }   // before Dispose: the timers must still be alive to write
+            try { CloseBooster(); } catch (Exception ex) { Log.Write("booster exit: " + ex.Message); }
             // After the fans are handed back: stopping a capture can take a few seconds, and at logoff Windows may not wait.
             try { bench.Dispose(); } catch { }
             try { if (pill != null) pill.Close(); } catch { }
@@ -2765,12 +2775,12 @@ namespace Ohman {
                     // The task names one exe by its full path, and only the first run ever wrote it. Download a new
                     // build to another folder, or let the browser save it as "Ohman (1).exe", and the switch still
                     // reads on while logon starts the old copy, or nothing once that copy is deleted. The copy the
-                    // owner is running now is the one they mean. Not from a development tree (Update.CanReplace),
+                    // owner is running now is the one they mean. Not from a development tree,
                     // or building Ohman would take the task away from the copy that is actually installed.
                     // Compared with the path we registered, not the task's own XML: schtasks prints that in the console
                     // code page, and a profile folder with letters outside it never matched, so every start re-registered.
                     string self = SelfExe(), was = E.S.AutostartExe ?? "";
-                    bool elsewhere = self != null && Update.CanReplace
+                    bool elsewhere = self != null && CanRetargetAutostart(self)
                         && !string.Equals(FullPath(was), FullPath(self), StringComparison.OrdinalIgnoreCase);
                     if (elsewhere) Log.Write("logon task was registered for " + (was.Length > 0 ? was : "an earlier copy") + "; pointing it at " + self);
                     if (elsewhere || xml.IndexOf("<StopIfGoingOnBatteries>true", StringComparison.OrdinalIgnoreCase) >= 0 || xml.IndexOf("<DisallowStartIfOnBatteries>true", StringComparison.OrdinalIgnoreCase) >= 0) {
@@ -2812,6 +2822,10 @@ namespace Ohman {
             if (!E.S.FirstRun) Dispatcher.BeginInvoke((Action)delegate { ShowToast(rc == 0 ? (on ? "Starts with Windows" : "Autostart removed") : "schtasks failed (" + rc + ")", rc != 0); });
         }
         bool autostartTemp;                        // registered from %TEMP%: that warning is the one to keep on screen
+        static bool CanRetargetAutostart(string exe) {
+            try { return !System.IO.Directory.Exists(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "src")) && System.IO.File.Exists(exe); }
+            catch { return false; }
+        }
         static string SelfExe() { try { return Process.GetCurrentProcess().MainModule.FileName; } catch { return null; } }
         static string FullPath(string p) { try { return System.IO.Path.GetFullPath(p); } catch { return p; } }
         /// <summary>Logon task for this user: highest privileges (no UAC prompt), starts and keeps running on battery, no time limit.</summary>
@@ -2832,7 +2846,7 @@ namespace Ohman {
         }
         static string SchtasksOut(string args) {
             try {
-                var psi = new ProcessStartInfo("schtasks.exe", args) { CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true };
+                var psi = new ProcessStartInfo(System.IO.Path.Combine(Environment.SystemDirectory, "schtasks.exe"), args) { CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true };
                 var outLines = new System.Text.StringBuilder();
                 using (var p = new Process()) {
                     p.StartInfo = psi;
@@ -2850,7 +2864,7 @@ namespace Ohman {
         }
         static int RunSchtasks(string args) {
             try {
-                using (var p = Process.Start(new ProcessStartInfo("schtasks.exe", args) { CreateNoWindow = true, UseShellExecute = false, WindowStyle = ProcessWindowStyle.Hidden })) {
+                using (var p = Process.Start(new ProcessStartInfo(System.IO.Path.Combine(Environment.SystemDirectory, "schtasks.exe"), args) { CreateNoWindow = true, UseShellExecute = false, WindowStyle = ProcessWindowStyle.Hidden })) {
                     if (p.WaitForExit(5000)) return p.ExitCode;
                     try { p.Kill(); } catch { }
                     p.WaitForExit(2000);

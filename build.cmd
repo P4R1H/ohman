@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 :: Builds Ohman with the C# compiler that ships inside Windows (.NET Framework 4.8) - no SDK needed.
 ::   build.cmd            -> Ohman.exe (real; asks for administrator rights), preview\Ohman.exe, tools\omenprobe.exe
 ::   build.cmd preview    -> only preview\Ohman.exe (same UI, simulated hardware, no elevation)
@@ -8,7 +8,7 @@ cd /d "%~dp0"
 set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 set WPF=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\WPF
 set REFS=/r:System.Management.dll /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Xaml.dll /r:"%WPF%\PresentationCore.dll" /r:"%WPF%\PresentationFramework.dll" /r:"%WPF%\WindowsBase.dll"
-set SRC=src\Meta.cs src\Support.cs src\Platform.cs src\Hardware.cs src\Driver.cs src\Ec.cs src\Cpu.cs src\Hid.cs src\McuKeyboard.cs src\Lighting.cs src\Keyboard.cs src\Display.cs src\Update.cs src\Theme.cs src\Controls.cs src\Curve.cs src\Sensors.cs src\Hotkeys.cs src\Engine.cs src\Bench.cs src\BenchUi.cs src\Ui.cs src\Program.cs
+set SRC=src\Meta.cs src\Support.cs src\Platform.cs src\Hardware.cs src\Driver.cs src\Ec.cs src\Cpu.cs src\Hid.cs src\McuKeyboard.cs src\Lighting.cs src\Keyboard.cs src\Display.cs src\Update.cs src\Theme.cs src\Controls.cs src\Curve.cs src\Sensors.cs src\Hotkeys.cs src\Engine.cs src\Bench.cs src\BenchUi.cs src\Booster.cs src\BoostWindows.cs src\BoostKeys.cs src\BoostGameBar.cs src\BoostUi.cs src\Ui.cs src\Program.cs
 set RES=/resource:src\Ui.xaml,Ohman.Ui.xaml /resource:fonts\IBMPlexSans-Regular.ttf,Ohman.fonts.IBMPlexSans-Regular.ttf /resource:fonts\IBMPlexSans-Medium.ttf,Ohman.fonts.IBMPlexSans-Medium.ttf /resource:fonts\IBMPlexSans-SemiBold.ttf,Ohman.fonts.IBMPlexSans-SemiBold.ttf /resource:fonts\IBMPlexMono-Regular.ttf,Ohman.fonts.IBMPlexMono-Regular.ttf /resource:fonts\IBMPlexMono-Medium.ttf,Ohman.fonts.IBMPlexMono-Medium.ttf /resource:fonts\OFL.txt,Ohman.fonts.OFL.txt
 :: Signed PawnIO modules (third_party\PawnIO.Modules, LGPL-2.1): the driver loads only these, so they travel inside the exe.
 :: Game names for the benchmark (third_party\CapFrameX, MIT): exe name to the name people know the game by.
