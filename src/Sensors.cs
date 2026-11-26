@@ -118,8 +118,7 @@ namespace Ohman {
                 foreach (string inst in cat.GetInstanceNames())
                     if (inst.IndexOf("PKG", StringComparison.OrdinalIgnoreCase) >= 0) { cpuPower = new PerformanceCounter("Energy Meter", "Power", inst, true); cpuPower.NextValue(); Log.Write("cpu power counter: " + inst); break; }
             } catch (Exception ex) { Log.Write("no cpu power counter: " + ex.Message); }
-            foreach (string p in new string[] { Path.Combine(Environment.SystemDirectory, "nvidia-smi.exe"), @"C:\Program Files\NVIDIA Corporation\NVSMI\nvidia-smi.exe" })
-                if (File.Exists(p)) { nvsmi = p; break; }
+            nvsmi = FindNvidiaUtility();
             if (nvsmi == null) Log.Write("nvidia-smi not found; GPU stats disabled");
             else {
                 try {
@@ -375,22 +374,47 @@ namespace Ohman {
         // Measured on 8C58 (RTX, driver 58x): nvidia-smi takes ~650 ms a call, nearly all of it the NVML init it runs
         // every time, and a held NVML session answers the same four questions in ~10 ms. While a game runs that init
         // was happening every 10 s (#72). The session is held only while the GPU is busy, when it is awake anyway, and
-        // shut as soon as it goes quiet or to sleep, so it never keeps an idle dGPU out of D3. nvml.dll is loaded by
-        // full path first, so the DllImports below bind to that module: by name alone they would also take an
-        // nvml.dll dropped beside Ohman.exe, in a process running as administrator. nvidia-smi stays the fallback.
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr LoadLibraryW(string path);
-        [DllImport("nvml.dll")] static extern int nvmlInit_v2();
-        [DllImport("nvml.dll")] static extern int nvmlShutdown();
-        [DllImport("nvml.dll")] static extern int nvmlDeviceGetHandleByIndex_v2(uint index, out IntPtr device);
-        [DllImport("nvml.dll")] static extern int nvmlDeviceGetTemperature(IntPtr device, int sensor, out uint temp);
+        // shut as soon as it goes quiet or to sleep, so it never keeps an idle dGPU out of D3.
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr LoadLibraryEx(string path, IntPtr file, uint flags);
+        [DllImport("kernel32.dll", ExactSpelling = true)] static extern IntPtr GetProcAddress(IntPtr module, [MarshalAs(UnmanagedType.LPStr)] string name);
+        [DllImport("kernel32.dll")] static extern bool FreeLibrary(IntPtr module);
         [StructLayout(LayoutKind.Sequential)] struct NvmlUtil { public uint Gpu, Memory; }
-        [DllImport("nvml.dll")] static extern int nvmlDeviceGetUtilizationRates(IntPtr device, out NvmlUtil util);
-        [DllImport("nvml.dll")] static extern int nvmlDeviceGetPowerUsage(IntPtr device, out uint milliwatts);
-        [DllImport("nvml.dll")] static extern int nvmlDeviceGetClockInfo(IntPtr device, int type, out uint mhz);
-        // What is holding the clock back. The current name exists from NVML 12.2; older drivers only have the old one.
-        [DllImport("nvml.dll", EntryPoint = "nvmlDeviceGetCurrentClocksEventReasons")] static extern int nvmlClocksEventReasons(IntPtr device, out ulong reasons);
-        [DllImport("nvml.dll", EntryPoint = "nvmlDeviceGetCurrentClocksThrottleReasons")] static extern int nvmlClocksThrottleReasons(IntPtr device, out ulong reasons);
-        int reasonsCall;                              // 0 = try the new name, 1 = the old one, 2 = neither exists
+        delegate int NvmlCall();
+        delegate int NvmlHandle(uint index, out IntPtr device);
+        delegate int NvmlMetric(IntPtr device, int type, out uint value);
+        delegate int NvmlLoad(IntPtr device, out NvmlUtil util);
+        delegate int NvmlPower(IntPtr device, out uint value);
+        delegate int NvmlLimits(IntPtr device, out ulong value);
+        NvmlCall nvmlInit_v2, nvmlShutdown;
+        NvmlHandle nvmlDeviceGetHandleByIndex_v2;
+        NvmlMetric nvmlDeviceGetTemperature, nvmlDeviceGetClockInfo;
+        NvmlLoad nvmlDeviceGetUtilizationRates;
+        NvmlPower nvmlDeviceGetPowerUsage;
+        NvmlLimits nvmlClockLimits;
+
+        static T NvmlExport<T>(IntPtr module, string name, bool optional = false) where T : class {
+            IntPtr fn = GetProcAddress(module, name);
+            if (fn != IntPtr.Zero) return (T)(object)Marshal.GetDelegateForFunctionPointer(fn, typeof(T));
+            if (optional) return null;
+            throw new EntryPointNotFoundException(name);
+        }
+
+        void BindNvml(string path) {
+            // Resolve exports on this specific module and restrict dependency lookup to the DLL folder and System32.
+            IntPtr module = LoadLibraryEx(path, IntPtr.Zero, 0x100 | 0x800);
+            if (module == IntPtr.Zero) throw new System.ComponentModel.Win32Exception();
+            try {
+                nvmlInit_v2 = NvmlExport<NvmlCall>(module, "nvmlInit_v2");
+                nvmlShutdown = NvmlExport<NvmlCall>(module, "nvmlShutdown");
+                nvmlDeviceGetHandleByIndex_v2 = NvmlExport<NvmlHandle>(module, "nvmlDeviceGetHandleByIndex_v2");
+                nvmlDeviceGetTemperature = NvmlExport<NvmlMetric>(module, "nvmlDeviceGetTemperature");
+                nvmlDeviceGetClockInfo = NvmlExport<NvmlMetric>(module, "nvmlDeviceGetClockInfo");
+                nvmlDeviceGetUtilizationRates = NvmlExport<NvmlLoad>(module, "nvmlDeviceGetUtilizationRates");
+                nvmlDeviceGetPowerUsage = NvmlExport<NvmlPower>(module, "nvmlDeviceGetPowerUsage");
+                nvmlClockLimits = NvmlExport<NvmlLimits>(module, "nvmlDeviceGetCurrentClocksEventReasons", true)
+                    ?? NvmlExport<NvmlLimits>(module, "nvmlDeviceGetCurrentClocksThrottleReasons", true);
+            } catch { FreeLibrary(module); throw; }
+        }
         double lastGoodWatts = double.NaN;
         bool nvmlLoaded, nvmlGone;
         volatile bool nvmlOpen;
@@ -405,9 +429,10 @@ namespace Ohman {
             try {
                 if (!nvmlLoaded) {
                     string dll = null;
-                    foreach (string p in new string[] { Path.Combine(Environment.SystemDirectory, "nvml.dll"), @"C:\Program Files\NVIDIA Corporation\NVSMI\nvml.dll" })
+                    foreach (string p in new string[] { Path.Combine(Environment.SystemDirectory, "nvml.dll"), Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"NVIDIA Corporation\NVSMI\nvml.dll") })
                         if (File.Exists(p)) { dll = p; break; }
-                    if (dll == null || LoadLibraryW(dll) == IntPtr.Zero) { nvmlGone = true; Log.Write("nvml not found; GPU stats through nvidia-smi"); return false; }
+                    if (dll == null) { nvmlGone = true; Log.Write("nvml not found; GPU stats through nvidia-smi"); return false; }
+                    BindNvml(dll);
                     nvmlLoaded = true;
                     Log.Write("gpu stats: NVML in process (" + dll + ")");
                 }
@@ -431,12 +456,8 @@ namespace Ohman {
                     if (mw < 250000 && !(busy && mw < 3000)) { s.GpuWatts = mw / 1000.0; lastGoodWatts = s.GpuWatts; }
                     else s.GpuWatts = lastGoodWatts;
                 }
-                if (reasonsCall < 2) {
-                    ulong why = 0; int rr = -1;
-                    try { rr = reasonsCall == 0 ? nvmlClocksEventReasons(nvmlDev, out why) : nvmlClocksThrottleReasons(nvmlDev, out why); }
-                    catch (EntryPointNotFoundException) { reasonsCall++; }
-                    if (rr == 0) s.GpuLimits = why;
-                }
+                ulong why;
+                if (nvmlClockLimits != null && nvmlClockLimits(nvmlDev, out why) == 0) s.GpuLimits = why;
                 uint mhz; if (nvmlDeviceGetClockInfo(nvmlDev, 0, out mhz) == 0 && mhz >= 100) s.GpuMhz = mhz;   // 0 = graphics clock
                 nvmlFail = 0;
                 return true;
@@ -451,6 +472,13 @@ namespace Ohman {
             if (!nvmlOpen) return;
             nvmlOpen = false;
             try { nvmlShutdown(); } catch { }
+        }
+
+        internal static string FindNvidiaUtility() {
+            string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            foreach (string path in new[] { Path.Combine(Environment.SystemDirectory, "nvidia-smi.exe"), Path.Combine(programFiles, @"NVIDIA Corporation\NVSMI\nvidia-smi.exe") })
+                if (File.Exists(path)) return path;
+            return null;
         }
 
         void ReadNvidia(SensorSnapshot s) {

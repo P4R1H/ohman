@@ -257,6 +257,25 @@
         </Setter.Value>
       </Setter>
     </Style>
+    <Style x:Key="BoostButton" TargetType="Button">
+      <Setter Property="FontFamily" Value="{DynamicResource UiFont}"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Foreground" Value="{StaticResource Text}"/>
+      <Setter Property="Padding" Value="10,6"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Surface" CornerRadius="5" Background="{StaticResource Pill}" BorderBrush="{StaticResource Edge}" BorderThickness="1" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>
+              <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.5"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
   </Grid.Resources>
 
   <Grid.ColumnDefinitions>
@@ -625,7 +644,30 @@
         <ScrollViewer x:Name="Scroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False" Padding="24,4,16,8">
           <StackPanel>
 
-            <TextBlock x:Name="SecKey" Text="OMEN KEY" Margin="0,0,0,12"/>
+            <TextBlock x:Name="SecBooster" Text="BOOSTER" Margin="0,0,0,8"/>
+            <Expander x:Name="BoostOptionsPanel" Header="CPU and memory" Foreground="{StaticResource Text}" FontFamily="{DynamicResource UiFont}" FontSize="13">
+              <StackPanel Margin="0,10,0,0">
+                <TextBlock x:Name="TxtBoostStatus" Style="{StaticResource RowSub}" TextWrapping="Wrap"/>
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,12">
+                  <Button x:Name="BtnBoostApply" Content="Manual boost" Style="{StaticResource BoostButton}" Margin="0,0,6,0"/>
+                  <Button x:Name="BtnBoostRestore" Content="Restore" Style="{StaticResource BoostButton}"/>
+                </StackPanel>
+                <DockPanel Margin="0,0,0,12">
+                  <ToggleButton x:Name="TgBoostAuto" DockPanel.Dock="Right" Style="{StaticResource Switch}" AutomationProperties.Name="Automatically boost selected games"/>
+                  <TextBlock Text="Automatically boost selected games" Style="{StaticResource Row}" VerticalAlignment="Center"/>
+                </DockPanel>
+                <StackPanel x:Name="BoostChoices"/>
+                <TextBlock Text="Games" Style="{StaticResource Row}" Margin="0,2,0,4"/>
+                <TextBlock Text="Add game executables for automatic boost, priority, and key filtering." Style="{StaticResource RowSub}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                <ListBox x:Name="BoostGames" Height="62" Background="{StaticResource Pill}" Foreground="{StaticResource Text}" BorderBrush="{StaticResource Line2}" AutomationProperties.Name="Selected games"/>
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                  <Button x:Name="BtnBoostGameAdd" Content="Add games…" Style="{StaticResource BoostButton}" Margin="0,0,6,0"/>
+                  <Button x:Name="BtnBoostGameRemove" Content="Remove" Style="{StaticResource BoostButton}" IsEnabled="False"/>
+                </StackPanel>
+              </StackPanel>
+            </Expander>
+
+            <TextBlock x:Name="SecKey" Text="OMEN KEY" Margin="0,26,0,12"/>
             <TextBlock Text="The OMEN key" Style="{StaticResource Row}"/>
             <Border x:Name="KeySegHost" Margin="0,8,0,0"/>
             <Grid Margin="0,8,0,0">
@@ -793,16 +835,6 @@
               <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
-                  <TextBlock Text="Start with Windows" Style="{StaticResource Row}"/>
-                  <TextBlock Text="Scheduled task, no prompt at logon" Style="{StaticResource RowSub}"/>
-                </StackPanel>
-                <ToggleButton x:Name="TgAutostart" Grid.Column="1" Style="{StaticResource Switch}"/>
-              </Grid>
-            </Border>
-            <Border BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
-              <Grid>
-                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
                   <TextBlock Text="Sensor refresh" Style="{StaticResource Row}"/>
                   <TextBlock Text="While the window is open. Faster costs a little battery" Style="{StaticResource RowSub}"/>
                 </StackPanel>
@@ -822,7 +854,7 @@
             <!-- Once a build is staged the title becomes the button: "Restart Ohman to update" says the whole
                  thing in the space a heading already occupies, and leaves the right of the row to Changelog
                  alone. A second link beside it did not fit and pushed the title into an ellipsis. -->
-            <Border x:Name="UpdateRow" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+            <Border x:Name="UpdateRow" Visibility="Collapsed" BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
               <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                 <StackPanel x:Name="UpdateText" Background="Transparent" VerticalAlignment="Center" Margin="0,0,18,0">

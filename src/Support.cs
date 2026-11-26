@@ -582,7 +582,9 @@ namespace Ohman {
             try {
                 // power.limit is [N/A] on every laptop so far; enforced.power.limit is the cap the GPU is held to right now,
                 // the number a "less wattage than Hub" report turns on (#91)
-                var psi = new ProcessStartInfo("nvidia-smi", "--query-gpu=name,power.limit,power.default_limit,power.min_limit,power.max_limit,enforced.power.limit,power.draw,pstate --format=csv,noheader") {
+                string nvidia = Sensors.FindNvidiaUtility();
+                if (nvidia == null) throw new System.IO.FileNotFoundException();
+                var psi = new ProcessStartInfo(nvidia, "--query-gpu=name,power.limit,power.default_limit,power.min_limit,power.max_limit,enforced.power.limit,power.draw,pstate --format=csv,noheader") {
                     UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true
                 };
                 using (var pr = Process.Start(psi)) {
