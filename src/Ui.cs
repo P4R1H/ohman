@@ -128,7 +128,7 @@ namespace Ohman {
         FrameworkElement keyCmdRow, gfxRow, hzRow, lowHzRow, gpuRow;
         TextBox txtKeyCmd;
         Ellipse keyDot;
-        ToggleButton tgSuppress, tgHotkeys, tgEcoBattery, tgSyncPower, tgLowHzBattery, tgTrayTemp, tgGuard, tgUpdateAuto, tgLightPage, tgBenchPill;
+        ToggleButton tgSuppress, tgHotkeys, tgAutostart, tgEcoBattery, tgSyncPower, tgLowHzBattery, tgTrayTemp, tgGuard, tgUpdateAuto, tgLightPage, tgBenchPill;
         Border lightPageRow;
         TextBlock txtLightPageSub;
         // hotkeys
@@ -160,7 +160,7 @@ namespace Ohman {
         readonly WF.ToolStripMenuItem[] trayModes = new WF.ToolStripMenuItem[3];
         readonly SD.Icon[] icons = new SD.Icon[3];
         readonly BitmapSource[] appIcons = new BitmapSource[3];
-        bool syncing, exiting, reading;
+        bool syncing, exiting, reading, autostart;
         int shownMode = -1, lastBiosTemp = -1;
         int[] lastFans;
         readonly List<double> tempTrail = new List<double>();
@@ -278,6 +278,7 @@ namespace Ohman {
             Refresh();
             if (!E.BiosOk && !E.Hw.IsDemo) ShowToast("BIOS interface unavailable: " + E.LastError, true);
             else if (E.LastError.Length > 0) ShowToast(E.LastError, true);      // a write already failed during Init, before this handler existed
+            QueryAutostartAsync();
             StartShowListener();
             // Build the window handle now rather than on first Show. Started from the logon task this window
             // may never be shown at all, and without a handle there is nowhere to register a hotkey or to hook
@@ -423,6 +424,7 @@ namespace Ohman {
             tgLightPage = F<ToggleButton>("TgLightPage");
             lightPageRow = F<Border>("LightPageRow");
             txtLightPageSub = F<TextBlock>("TxtLightPageSub");
+            tgAutostart = F<ToggleButton>("TgAutostart");
             tgGuard = F<ToggleButton>("TgGuard");
             tgUpdateAuto = F<ToggleButton>("TgUpdateAuto");
             txtGuardSub = F<TextBlock>("TxtGuardSub");
@@ -741,6 +743,7 @@ namespace Ohman {
                 }
             });
             OnSwitch(tgSuppress, delegate(bool on) { Bg(delegate { E.SetOghSuppression(on); }); });
+            OnSwitch(tgAutostart, delegate(bool on) { Slow(delegate { SetAutostart(on); }); });
             OnSwitch(tgGuard, delegate(bool on) {
                 if (!on && !ConfirmGuardOff()) { Synced(delegate { tgGuard.IsChecked = true; }); return; }
                 Bg(delegate { E.SetGuard(on); });
@@ -832,6 +835,7 @@ namespace Ohman {
                         try { if (E.RemoveDriver(false)) what += "  - removed the driver\n"; } catch (Exception ex) { Log.Write("reset driver: " + ex.Message); }
                     }
                     Dispatcher.BeginInvoke((Action)delegate {
+                        try { SetAutostart(false); } catch (Exception ex) { Log.Write("reset autostart: " + ex.Message); }
                         resetting = true;                    // ExitApp must delete the settings, not save them
                         string folder = "";
                         try { folder = System.IO.Path.GetDirectoryName(Log.Path); } catch { }
@@ -2136,6 +2140,7 @@ namespace Ohman {
                 tgGuard.IsChecked = S.Guard;
                 GuardText();          // the limits, the release points and whether the chassis counts all change after start
                 tgUpdateAuto.IsChecked = S.UpdateOnLaunch;
+                tgAutostart.IsChecked = autostart;
                 int hzNow = Display.CurrentHz();
                 if (hzSeg != null) for (int i = 0; i < hzSeg.Count; i++) if ((int)hzSeg.Tags[i] == hzNow) hzSeg.Select(i, IsVisible && cur == Page.Settings);
                 foreach (var m in trayHz) m.Checked = (int)m.Tag == hzNow;
@@ -2757,5 +2762,114 @@ namespace Ohman {
             toastTimer.Start();
         }
 
+        // ---------- autostart (scheduled task with highest privileges = no UAC prompt at logon) ----------
+        void QueryAutostartAsync() {
+            Slow(delegate {
+                bool on = RunSchtasks("/Query /TN " + Program.AppName) == 0;
+                if (on && !E.Hw.IsDemo) {
+                    // tasks made by 1.1 stop the app when the laptop goes on battery; re-register those once
+                    string xml = SchtasksOut("/Query /TN " + Program.AppName + " /XML");
+                    // The task names one exe by its full path, and only the first run ever wrote it. Download a new
+                    // build to another folder, or let the browser save it as "Ohman (1).exe", and the switch still
+                    // reads on while logon starts the old copy, or nothing once that copy is deleted. The copy the
+                    // owner is running now is the one they mean. Not from a development tree,
+                    // or building Ohman would take the task away from the copy that is actually installed.
+                    // Compared with the path we registered, not the task's own XML: schtasks prints that in the console
+                    // code page, and a profile folder with letters outside it never matched, so every start re-registered.
+                    string self = SelfExe(), was = E.S.AutostartExe ?? "";
+                    bool elsewhere = self != null && CanRetargetAutostart(self)
+                        && !string.Equals(FullPath(was), FullPath(self), StringComparison.OrdinalIgnoreCase);
+                    if (elsewhere) Log.Write("logon task was registered for " + (was.Length > 0 ? was : "an earlier copy") + "; pointing it at " + self);
+                    if (elsewhere || xml.IndexOf("<StopIfGoingOnBatteries>true", StringComparison.OrdinalIgnoreCase) >= 0 || xml.IndexOf("<DisallowStartIfOnBatteries>true", StringComparison.OrdinalIgnoreCase) >= 0) {
+                        if (!elsewhere) Log.Write("logon task has battery restrictions; re-registering it");
+                        SetAutostart(true);
+                        on = autostart;
+                    }
+                }
+                if (!on && E.S.FirstRun && !E.Hw.IsDemo) {              // first launch: start with Windows like every vendor app does; the switch turns it off
+                    SetAutostart(true);
+                    on = autostart;
+                    if (on && !autostartTemp) Dispatcher.BeginInvoke((Action)delegate { ShowToast("Starts with Windows from now on (Settings to change)", false); });
+                }
+                Dispatcher.BeginInvoke((Action)delegate { autostart = on; syncing = true; tgAutostart.IsChecked = on; syncing = false; });
+            });
+        }
+        void SetAutostart(bool on) {
+            if (E.Hw.IsDemo) { Dispatcher.BeginInvoke((Action)delegate { ShowToast("Autostart needs the administrator build", true); }); return; }
+            string exe = SelfExe();
+            int rc;
+            if (on) {
+                // registered from XML: a task made with plain "schtasks /Create" stops the app when the laptop goes on battery and refuses to start it on battery
+                string tmp = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Program.FileStem + "-task.xml");
+                try { System.IO.File.WriteAllText(tmp, TaskXml(exe), System.Text.Encoding.Unicode); } catch (Exception ex) { Log.Write("task xml: " + ex.Message); }
+                rc = RunSchtasks("/Create /TN " + Program.AppName + " /XML \"" + tmp + "\" /F");
+                try { System.IO.File.Delete(tmp); } catch { }
+            } else rc = RunSchtasks("/Delete /TN " + Program.AppName + " /F");
+            Log.Write("autostart " + on + " rc=" + rc);
+            autostart = on && rc == 0;
+            if (autostart) { E.S.AutostartExe = exe; E.S.Save(); }
+            // Opened straight from the zip, Explorer runs it out of %TEMP%\Temp1_...zip and deletes that later, and
+            // the logon task goes with it. Say so once, now, rather than let the next restart find out.
+            if (autostart && FullPath(exe).StartsWith(FullPath(System.IO.Path.GetTempPath()), StringComparison.OrdinalIgnoreCase)) {
+                Log.Write("autostart: running from a temporary folder (" + exe + ")");
+                autostartTemp = true;
+                Dispatcher.BeginInvoke((Action)delegate { ShowToast("Ohman is running from a temporary folder. Move it somewhere permanent or it will not start with Windows", true); });
+                return;
+            }
+            if (!E.S.FirstRun) Dispatcher.BeginInvoke((Action)delegate { ShowToast(rc == 0 ? (on ? "Starts with Windows" : "Autostart removed") : "schtasks failed (" + rc + ")", rc != 0); });
+        }
+        bool autostartTemp;                        // registered from %TEMP%: that warning is the one to keep on screen
+        static bool CanRetargetAutostart(string exe) {
+            try { return !System.IO.Directory.Exists(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "src")) && System.IO.File.Exists(exe); }
+            catch { return false; }
+        }
+        static string SelfExe() { try { return Process.GetCurrentProcess().MainModule.FileName; } catch { return null; } }
+        static string FullPath(string p) { try { return System.IO.Path.GetFullPath(p); } catch { return p; } }
+        /// <summary>Logon task for this user: highest privileges (no UAC prompt), starts and keeps running on battery, no time limit.</summary>
+        static string TaskXml(string exe) {
+            string sid = System.Security.Principal.WindowsIdentity.GetCurrent().User.Value;
+            return "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\n" +
+                "<Task version=\"1.4\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\n" +
+                "  <RegistrationInfo><Description>" + Program.AppName + " starts with Windows</Description></RegistrationInfo>\n" +
+                "  <Triggers><LogonTrigger><Enabled>true</Enabled><UserId>" + sid + "</UserId></LogonTrigger></Triggers>\n" +
+                "  <Principals><Principal id=\"Author\"><UserId>" + sid + "</UserId><LogonType>InteractiveToken</LogonType><RunLevel>HighestAvailable</RunLevel></Principal></Principals>\n" +
+                "  <Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>" +
+                "<StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><AllowHardTerminate>false</AllowHardTerminate><StartWhenAvailable>true</StartWhenAvailable>" +
+                "<RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable><IdleSettings><StopOnIdleEnd>false</StopOnIdleEnd><RestartOnIdle>false</RestartOnIdle></IdleSettings>" +
+                "<AllowStartOnDemand>true</AllowStartOnDemand><Enabled>true</Enabled><Hidden>false</Hidden><RunOnlyIfIdle>false</RunOnlyIfIdle><WakeToRun>false</WakeToRun>" +
+                "<ExecutionTimeLimit>PT0S</ExecutionTimeLimit><Priority>7</Priority></Settings>\n" +
+                "  <Actions Context=\"Author\"><Exec><Command>" + System.Security.SecurityElement.Escape(exe) + "</Command><Arguments>--hidden</Arguments></Exec></Actions>\n" +
+                "</Task>\n";
+        }
+        static string SchtasksOut(string args) {
+            try {
+                var psi = new ProcessStartInfo(System.IO.Path.Combine(Environment.SystemDirectory, "schtasks.exe"), args) { CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true };
+                var outLines = new System.Text.StringBuilder();
+                using (var p = new Process()) {
+                    p.StartInfo = psi;
+                    p.OutputDataReceived += delegate(object s, DataReceivedEventArgs e) { if (e.Data != null) lock (outLines) outLines.Append(e.Data).Append("\n"); };
+                    p.Start();
+                    p.BeginOutputReadLine();
+                    if (p.WaitForExit(5000)) { p.WaitForExit(); return outLines.ToString(); }
+                    try { p.Kill(); } catch { }
+                    p.WaitForExit(2000);
+                    if (!p.HasExited) Log.Write("could not stop schtasks: " + args);
+                    Log.Write("schtasks timed out: " + args);
+                    return "";
+                }
+            } catch (Exception ex) { Log.Write("schtasks: " + ex.Message); return ""; }
+        }
+        static int RunSchtasks(string args) {
+            try {
+                using (var p = Process.Start(new ProcessStartInfo(System.IO.Path.Combine(Environment.SystemDirectory, "schtasks.exe"), args) { CreateNoWindow = true, UseShellExecute = false, WindowStyle = ProcessWindowStyle.Hidden })) {
+                    if (p.WaitForExit(5000)) return p.ExitCode;
+                    try { p.Kill(); } catch { }
+                    p.WaitForExit(2000);
+                    if (!p.HasExited) Log.Write("could not stop schtasks: " + args);
+                    Log.Write("schtasks timed out: " + args);
+                    return -1;
+                }
+            } catch (Exception ex) { Log.Write("schtasks: " + ex.Message); return -1; }
+        }
     }
 }

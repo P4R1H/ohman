@@ -1,4 +1,4 @@
-﻿<Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+<Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       x:Name="Root" Background="#161311" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType" UseLayoutRounding="True">
   <Grid.Resources>
@@ -829,6 +829,16 @@
                   <TextBlock x:Name="TxtLightPageSub" Text="Turn off for a white-only backlight. Fn still switches it" Style="{StaticResource RowSub}"/>
                 </StackPanel>
                 <ToggleButton x:Name="TgLightPage" Grid.Column="1" Style="{StaticResource Switch}"/>
+              </Grid>
+            </Border>
+            <Border BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center" Margin="0,0,18,0">
+                  <TextBlock Text="Start with Windows" Style="{StaticResource Row}"/>
+                  <TextBlock Text="Scheduled task, no prompt at logon" Style="{StaticResource RowSub}"/>
+                </StackPanel>
+                <ToggleButton x:Name="TgAutostart" Grid.Column="1" Style="{StaticResource Switch}"/>
               </Grid>
             </Border>
             <Border BorderBrush="{StaticResource Line2}" BorderThickness="0,1,0,0" Padding="0,14">

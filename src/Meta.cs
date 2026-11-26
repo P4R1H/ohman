@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: GPL-3.0-or-later
 // The version number and the publisher strings that every Ohman binary carries.
 //
 // Windows reads these for the Properties > Details tab, for the name on the UAC prompt, and for Task Manager.
@@ -21,6 +21,6 @@ using System.Runtime.InteropServices;
 namespace Ohman {
     /// <summary>The one place the version lives. Program.Version reads from here.</summary>
     public static class Meta {
-        public const string Version = "1.3.5.10";
+        public const string Version = "1.3.5.13";
     }
 }
