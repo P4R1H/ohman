@@ -140,18 +140,6 @@ namespace Ohman {
             return null;
         }
 
-        /// <summary>The mode a profile name stands for, or -1 when it is not one of ours: tuned's names
-        /// (TunedModes) and the three power-profiles-daemon spells. Anything else -- a profile an admin made,
-        /// "virtual-guest" and its like -- is the caller's to leave alone.</summary>
-        public static int ProfileIndexFor(string profile) {
-            if (string.IsNullOrEmpty(profile)) return -1;
-            profile = profile.Trim();
-            for (int i = 0; i < TunedModes.Length; i++) if (Array.IndexOf(TunedModes[i], profile) >= 0) return i;
-            if (profile == "power-saver") return 0;
-            if (profile == "performance") return 2;
-            return -1;
-        }
-
         // ---------- small things the other Linux classes share ----------
         /// <summary>The full path of a program on PATH, or null. Looked up each time: PATH is short and this is
         /// asked a few times a session.</summary>
