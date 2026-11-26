@@ -392,7 +392,7 @@ namespace Ohman {
             sb.AppendLine();
 
             sb.AppendLine("Host");
-            sb.AppendLine("  power profiles:  " + (Host.HasPowerModeSync ? "power-profiles-daemon present" : "no powerprofilesctl") + "   autostart: " + (Autostart.IsOn() ? "on" : "off"));
+            sb.AppendLine("  power profiles:  " + Host.PowerModeSync + "   autostart: " + (Autostart.IsOn() ? "on" : "off"));
             sb.AppendLine("  files:           settings " + Scrub(AppPaths.StateFile) + "   log " + Scrub(Log.Path));
             sb.AppendLine();
 
@@ -402,7 +402,7 @@ namespace Ohman {
                 string[] marks = { "platform:", "generic profile", "BIOS ok", "self-test", "read-only", "no fan table", "system data", "thermal zone", "keyboard lighting",
                     "FAIL ", "driver:", "fan route", "EC ", "EC:", "giving up", "lighting:", "lamparray", "max fan:", "fan ceiling", "refresh rate", "mcu keyboard", "per-key board",
                     "hotkey ", "cpu temperature", "display on", "display off", "fans held by the firmware", "fans back with the curve", "GPU power query", "no GPU power control",
-                    "parked fans", "fans handed", "---- ", "works again after", "hotkey watcher", "mailbox:", "hid " };
+                    "power profile", "powerprofilesctl", "tuned", "parked fans", "fans handed", "---- ", "works again after", "hotkey watcher", "mailbox:", "hid " };
                 var keep = new List<string>();
                 foreach (string line in File.ReadLines(Log.Path)) {
                     bool want = line.IndexOf("thermal guard", StringComparison.OrdinalIgnoreCase) >= 0;
