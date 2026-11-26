@@ -69,7 +69,7 @@ namespace Ohman {
             boostUiTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(500) };
             boostUiTimer.Tick += delegate {
                 boostKeys.Update();
-                if (cur == Page.Settings && IsVisible) {
+                if (cur == Page.Booster && IsVisible) {
                     status.Text = boostKeys.Failed ? booster.Status + " · key filter unavailable" : booster.Status;
                     apply.IsEnabled = settings.BoostSelection != 0 && !booster.Manual && !booster.Draining;
                 }

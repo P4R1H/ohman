@@ -29,7 +29,7 @@ namespace Ohman {
 
 
     public sealed partial class MainWindow : Window {
-        enum Page { Home = 0, Fans = 1, Keyboard = 2, Settings = 3, Bench = 4 }
+        enum Page { Home = 0, Fans = 1, Keyboard = 2, Settings = 3, Bench = 4, Booster = 5 }
         const double RailW = 62, PageW = 398, KbdPageW = 638, SettingsH = 640;
 
         Osd osd;
@@ -56,10 +56,10 @@ namespace Ohman {
         FrameworkElement root;
         Grid pageHost;
         ScrollViewer scroll;
-        readonly FrameworkElement[] pages = new FrameworkElement[5];
+        readonly FrameworkElement[] pages = new FrameworkElement[6];
         Page cur = Page.Home;
         bool pageShown;
-        readonly NavBtn[] nav = new NavBtn[5];
+        readonly NavBtn[] nav = new NavBtn[6];
         // benchmark
         Bench bench;
         BenchPage benchPage;
@@ -311,6 +311,7 @@ namespace Ohman {
             pages[1] = F<FrameworkElement>("PageFans");
             pages[2] = F<FrameworkElement>("PageKbd");
             pages[3] = F<FrameworkElement>("PageSettings");
+            pages[(int)Page.Booster] = F<FrameworkElement>("PageBooster");
             txtHomeTitle = F<TextBlock>("TxtHomeTitle");
             txtHomeStatus = F<TextBlock>("TxtHomeStatus");
             demoBadge = F<FrameworkElement>("DemoBadge");
@@ -458,7 +459,7 @@ namespace Ohman {
             toast = F<Border>("Toast");
             txtToast = F<TextBlock>("TxtToast");
             btnExit.Text = "Exit " + Program.DisplayName;
-            foreach (string n in new[] { "SecBooster", "SecKey", "SecPower", "SecDisplay", "SecDriver", "SecApp" }) Track(n);
+            foreach (string n in new[] { "SecKey", "SecPower", "SecDisplay", "SecDriver", "SecApp" }) Track(n);
         }
         /// <summary>Swap a placeholder TextBlock for the letter-spaced section label the design uses.</summary>
         void Track(string name) {
@@ -496,11 +497,13 @@ namespace Ohman {
             nav[2] = new NavBtn(2, "Keyboard", new[] { ICO_KBD }, new string[0]);
             nav[3] = new NavBtn(3, "Settings", new string[0], new[] { GearPath(12, 12, 10, 7.6, 8, 3.4) });
             nav[4] = new NavBtn(4, "Benchmark", new[] { ICO_BENCH }, new[] { ICO_BENCH_DOT });
+            nav[(int)Page.Booster] = new NavBtn((int)Page.Booster, "Booster", new string[0], new[] { BOLT });
             for (int i = 0; i < nav.Length; i++) { nav[i].HorizontalAlignment = HorizontalAlignment.Center; nav[i].Clicked += delegate(int idx) { Navigate((Page)idx, true); }; }
             host.Children.Add(nav[0]);
             host.Children.Add(nav[1]);
             host.Children.Add(nav[2]);
             host.Children.Add(nav[4]);
+            host.Children.Add(nav[(int)Page.Booster]);
             // Above Settings, and only while there is something to install. It is a signpost rather than a page:
             // it goes where the update lives instead of doing anything itself, so nothing is one stray click from
             // restarting the app. It stays out of nav[] deliberately -- the rail pill tracks the current page, and
@@ -1365,10 +1368,10 @@ namespace Ohman {
                 CompositionTarget.Rendering += MorphTick;
             }
         }
-        /// <summary>What the visible page wants to be, measured with no height limit (Settings is a fixed, scrolling page). Only the
+        /// <summary>What the visible page wants to be, with a fixed target for the scrolling Settings and Booster pages. Only the
         /// current page counts: the outgoing one is still in the host while it fades.</summary>
         double NaturalHeight() {
-            if (cur == Page.Settings) return SettingsH;
+            if (cur == Page.Settings || cur == Page.Booster) return SettingsH;
             if (cur == Page.Bench) return benchPage.Fit(SystemParameters.WorkArea.Height - 24);
             var page = pages[(int)cur];
             if (page == null || pageHost.Width <= 0) return 0;
@@ -2616,7 +2619,7 @@ namespace Ohman {
             if (page == "fans") Navigate(Page.Fans, false);
             else if (page == "keyboard" && E.Light != null) Navigate(Page.Keyboard, false);
             else if (page == "settings") Navigate(Page.Settings, false);
-            else if (page == "booster") { F<Expander>("BoostOptionsPanel").IsExpanded = true; Navigate(Page.Settings, false); }
+            else if (page == "booster") Navigate(Page.Booster, false);
             else if (page == "update") ShowUpdateRow();          // where the rail button goes: settings, at the update row
             else if (page == "driver") ShowDriverRow();          // settings, at the driver row (screenshot aid)
             else if (page == "hotkeys") { Navigate(Page.Settings, false); ToggleHotkeyPanel(); }   // settings, hotkey panel open (screenshot aid)

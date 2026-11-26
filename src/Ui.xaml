@@ -630,6 +630,38 @@
         </Border>
       </StackPanel>
 
+      <!-- ============ BOOSTER ============ -->
+      <Grid x:Name="PageBooster" Visibility="Collapsed">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <StackPanel Margin="24,24,24,16">
+          <TextBlock Text="Booster" Style="{StaticResource Title}"/>
+          <TextBlock x:Name="TxtBoostStatus" Style="{StaticResource RowSub}" Margin="0,8,0,0" TextWrapping="Wrap"/>
+          <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+            <Button x:Name="BtnBoostApply" Content="Manual boost" Style="{StaticResource BoostButton}" Margin="0,0,6,0"/>
+            <Button x:Name="BtnBoostRestore" Content="Restore" Style="{StaticResource BoostButton}"/>
+          </StackPanel>
+        </StackPanel>
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False" Padding="24,4,16,16">
+          <StackPanel>
+            <DockPanel Margin="0,0,0,14">
+              <ToggleButton x:Name="TgBoostAuto" DockPanel.Dock="Right" VerticalAlignment="Center" Style="{StaticResource Switch}" AutomationProperties.Name="Automatically boost selected games"/>
+              <TextBlock Text="Automatically boost selected games" Style="{StaticResource Row}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            </DockPanel>
+            <StackPanel x:Name="BoostChoices"/>
+            <TextBlock Text="Games" Style="{StaticResource Row}" Margin="0,2,0,4"/>
+            <TextBlock Text="Add game executables for automatic boost, priority, and key filtering." Style="{StaticResource RowSub}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+            <ListBox x:Name="BoostGames" Height="62" Background="{StaticResource Pill}" Foreground="{StaticResource Text}" BorderBrush="{StaticResource Line2}" AutomationProperties.Name="Selected games"/>
+            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+              <Button x:Name="BtnBoostGameAdd" Content="Add games…" Style="{StaticResource BoostButton}" Margin="0,0,6,0"/>
+              <Button x:Name="BtnBoostGameRemove" Content="Remove" Style="{StaticResource BoostButton}" IsEnabled="False"/>
+            </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+      </Grid>
+
       <!-- ============ SETTINGS ============ -->
       <Grid x:Name="PageSettings" Height="640" Visibility="Collapsed">
         <Grid.RowDefinitions>
@@ -644,30 +676,7 @@
         <ScrollViewer x:Name="Scroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False" Padding="24,4,16,8">
           <StackPanel>
 
-            <TextBlock x:Name="SecBooster" Text="BOOSTER" Margin="0,0,0,8"/>
-            <Expander x:Name="BoostOptionsPanel" Header="CPU and memory" Foreground="{StaticResource Text}" FontFamily="{DynamicResource UiFont}" FontSize="13">
-              <StackPanel Margin="0,10,0,0">
-                <TextBlock x:Name="TxtBoostStatus" Style="{StaticResource RowSub}" TextWrapping="Wrap"/>
-                <StackPanel Orientation="Horizontal" Margin="0,6,0,12">
-                  <Button x:Name="BtnBoostApply" Content="Manual boost" Style="{StaticResource BoostButton}" Margin="0,0,6,0"/>
-                  <Button x:Name="BtnBoostRestore" Content="Restore" Style="{StaticResource BoostButton}"/>
-                </StackPanel>
-                <DockPanel Margin="0,0,0,12">
-                  <ToggleButton x:Name="TgBoostAuto" DockPanel.Dock="Right" Style="{StaticResource Switch}" AutomationProperties.Name="Automatically boost selected games"/>
-                  <TextBlock Text="Automatically boost selected games" Style="{StaticResource Row}" VerticalAlignment="Center"/>
-                </DockPanel>
-                <StackPanel x:Name="BoostChoices"/>
-                <TextBlock Text="Games" Style="{StaticResource Row}" Margin="0,2,0,4"/>
-                <TextBlock Text="Add game executables for automatic boost, priority, and key filtering." Style="{StaticResource RowSub}" TextWrapping="Wrap" Margin="0,0,0,6"/>
-                <ListBox x:Name="BoostGames" Height="62" Background="{StaticResource Pill}" Foreground="{StaticResource Text}" BorderBrush="{StaticResource Line2}" AutomationProperties.Name="Selected games"/>
-                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                  <Button x:Name="BtnBoostGameAdd" Content="Add games…" Style="{StaticResource BoostButton}" Margin="0,0,6,0"/>
-                  <Button x:Name="BtnBoostGameRemove" Content="Remove" Style="{StaticResource BoostButton}" IsEnabled="False"/>
-                </StackPanel>
-              </StackPanel>
-            </Expander>
-
-            <TextBlock x:Name="SecKey" Text="OMEN KEY" Margin="0,26,0,12"/>
+            <TextBlock x:Name="SecKey" Text="OMEN KEY" Margin="0,0,0,12"/>
             <TextBlock Text="The OMEN key" Style="{StaticResource Row}"/>
             <Border x:Name="KeySegHost" Margin="0,8,0,0"/>
             <Grid Margin="0,8,0,0">
