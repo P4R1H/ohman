@@ -174,9 +174,7 @@ the tray menu, the on-screen flash, start at login, and the same window, page fo
   launch option to copy when it finds no such game. See [benchmark.md](benchmark.md).
 - **"Sync the system power profile"** follows the mode through `tuned` (`tuned-adm profile`, preferred) or
   `power-profiles-daemon` (`powerprofilesctl`), where Windows has its power-mode slider. The row is hidden when
-  neither is installed. The sync is both ways: change the profile in the desktop's own settings (or run
-  `tuned-adm` yourself) while Ohman runs and the mode follows -- through D-Bus signals and a watch on tuned's
-  own file, events, never a timer.
+  neither is installed.
 - **Refresh rate** is switched through `xrandr`, so the row is there on X11 and hidden on Wayland.
 - No PawnIO. What the optional driver does on Windows (the CPU's own registers, the embedded controller)
   goes through the kernel instead: `/dev/cpu/*/msr` and the `ohman-wmi` module, both via the helper. Ohman
@@ -297,9 +295,8 @@ CoolerControl profile is driving these fans, stop it while Ohman runs.
 
 `power-profiles-daemon` and `tuned` are a milder case. They do not touch the fans, but the performance mode
 they set through `platform_profile` and the mode you pick in Ohman are the same firmware setting, and the
-last one to write wins. With "Sync the system power profile" on, the two move together: Ohman writes the
-profile when its mode changes, and a profile changed elsewhere -- the desktop's own settings, `tuned-adm` in
-a terminal -- moves Ohman's mode with it. If modes seem to change by themselves, that is where to look.
+last one to write wins. With "Sync the system power profile" on, Ohman writes the profile when its mode
+changes. If modes seem to change by themselves, that is where to look.
 
 ### The keyboard does not light, or only as root
 

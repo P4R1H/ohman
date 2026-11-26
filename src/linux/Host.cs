@@ -50,6 +50,8 @@ namespace Ohman {
             new string[] { "balanced", "desktop" },                                             // balanced
             new string[] { "throughput-performance", "accelerator-performance", "latency-performance" },   // performance
         };
+        static readonly object TunedListSync = new object();
+        static string tunedList;
 
         /// <summary>tuned-adm's full path, or null. It lives in /usr/sbin, which is not on every desktop
         /// session's PATH, so the two places it is packaged into are looked at before PATH is.</summary>
@@ -93,20 +95,31 @@ namespace Ohman {
         /// and counts as done: the mode is the owner's choice, not something to retry on another daemon.</summary>
         static bool SetTunedProfile(string tuned, int modeIndex) {
             try {
-                string list;
-                int rc = Run(tuned, "list", 4000, out list);
-                if (rc == 0) {
-                    string[] want = TunedModes[Math.Max(0, Math.Min(2, modeIndex))];
-                    string name = TunedOffered(list, want);
-                    if (name == null) { Log.Write("tuned offers none of " + string.Join("/", want) + "; the mode is left to it"); return false; }
-                    string err;
-                    rc = Run(tuned, "profile " + name, 4000, out err);
-                    if (rc != 0) Log.Write("tuned-adm profile " + name + ": rc " + rc + (err.Length > 0 ? " (" + err.Trim() + ")" : ""));
-                    return true;
-                }
-                Log.Write("tuned-adm list: rc " + rc);
+                string list = TunedProfiles(tuned);
+                if (list == null) return false;
+                string[] want = TunedModes[Math.Max(0, Math.Min(2, modeIndex))];
+                string name = TunedOffered(list, want);
+                if (name == null) { Log.Write("tuned offers none of " + string.Join("/", want) + "; the mode is left to it"); return false; }
+                string err;
+                int rc = Run(tuned, "profile " + name, 4000, out err);
+                if (rc != 0) Log.Write("tuned-adm profile " + name + ": rc " + rc + (err.Length > 0 ? " (" + err.Trim() + ")" : ""));
+                return true;
             } catch (Exception ex) { Log.Write("tuned profile: " + ex.Message); }
             return false;
+        }
+
+        /// <summary>The profiles offered by tuned. A successful answer is kept for the rest of this run: the
+        /// installed profiles do not change while Ohman runs, and asking for the list on every mode switch holds
+        /// the engine's apply lock for a command whose answer is the same. A failure is not cached.</summary>
+        static string TunedProfiles(string tuned) {
+            lock (TunedListSync) {
+                if (tunedList != null) return tunedList;
+                string list;
+                int rc = Run(tuned, "list", 4000, out list);
+                if (rc != 0) { Log.Write("tuned-adm list: rc " + rc); return null; }
+                tunedList = list;
+                return list;
+            }
         }
 
         /// <summary>The first of Ohman's candidates that this tuned offers. `tuned-adm list` prints one profile
