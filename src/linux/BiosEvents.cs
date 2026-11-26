@@ -14,6 +14,8 @@ using System;
 
 namespace Ohman {
     sealed class BiosEvents : IDisposable {
+        /// <summary>What the log calls the source of these events. hpqBEvnt is the Windows event's name.</summary>
+        public const string Name = "hotkey";
         IDisposable source;
 
         /// <summary>Start listening. Throws when the events cannot be had; the caller logs that and carries on.</summary>

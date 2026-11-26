@@ -7,6 +7,8 @@ using System.Management;
 
 namespace Ohman {
     sealed class BiosEvents : IDisposable {
+        /// <summary>What the log calls the source of these events.</summary>
+        public const string Name = "hpqBEvnt";
         ManagementEventWatcher watcher;
         Action<uint, uint> handler;
 

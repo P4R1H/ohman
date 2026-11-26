@@ -33,7 +33,10 @@ namespace Ohman {
                     else s = Replace(s, user, "<user>");
                 }
                 string host = Environment.MachineName;
-                if (!string.IsNullOrEmpty(host) && host.Length > 2 && host != "localhost") s = Replace(s, host, "<host>");
+                // A machine named after the laptop ("victus", "omen") would turn the model name into "<host> by HP
+                // Laptop" on every line, and such a name gives nobody away.
+                if (!string.IsNullOrEmpty(host) && host.Length > 2 && host != "localhost"
+                    && !Array.Exists(ProductWords, delegate(string w) { return string.Equals(w, host, StringComparison.OrdinalIgnoreCase); })) s = Replace(s, host, "<host>");
             } catch { }
             return s;
         }
@@ -399,7 +402,7 @@ namespace Ohman {
                 string[] marks = { "platform:", "generic profile", "BIOS ok", "self-test", "read-only", "no fan table", "system data", "thermal zone", "keyboard lighting",
                     "FAIL ", "driver:", "fan route", "EC ", "EC:", "giving up", "lighting:", "lamparray", "max fan:", "fan ceiling", "refresh rate", "mcu keyboard", "per-key board",
                     "hotkey ", "cpu temperature", "display on", "display off", "fans held by the firmware", "fans back with the curve", "GPU power query", "no GPU power control",
-                    "parked fans", "fans handed", "---- ", "works again after", "hpqBEvnt watcher", "hid " };
+                    "parked fans", "fans handed", "---- ", "works again after", "hotkey watcher", "mailbox:", "hid " };
                 var keep = new List<string>();
                 foreach (string line in File.ReadLines(Log.Path)) {
                     bool want = line.IndexOf("thermal guard", StringComparison.OrdinalIgnoreCase) >= 0;

@@ -340,7 +340,7 @@ namespace Ohman {
             try {
                 string p = Path.Combine(Path.GetDirectoryName(Log.Path), fileName);
                 File.WriteAllText(p, rep);
-                Console.WriteLine("saved to " + p);
+                Console.WriteLine("saved to " + Host.Tilde(p));
             } catch (Exception ex) { Console.WriteLine("could not save: " + ex.Message); }
             try { eng.Dispose(); } catch { }
             return 0;

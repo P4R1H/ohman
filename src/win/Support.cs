@@ -37,7 +37,9 @@ namespace Ohman {
                     else s = Replace(s, user, "<user>");
                 }
                 string host = Environment.MachineName;
-                if (!string.IsNullOrEmpty(host) && host.Length > 2) s = Replace(s, host, "<host>");
+                // The same for a machine named after the laptop, and such a name gives nobody away.
+                if (!string.IsNullOrEmpty(host) && host.Length > 2
+                    && !Array.Exists(ProductWords, w => string.Equals(w, host, StringComparison.OrdinalIgnoreCase))) s = Replace(s, host, "<host>");
             } catch { }
             return s;
         }

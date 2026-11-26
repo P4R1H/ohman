@@ -94,5 +94,25 @@ namespace Ohman {
         public static string ReadText(string path) {
             try { return File.ReadAllText(path).Trim(); } catch { return ""; }
         }
+
+        /// <summary>Everything a stream has, read until it says there is no more. For files under /sys, whose
+        /// stated length is the size of the kernel's buffer and not of what is in it.</summary>
+        public static byte[] ReadToEnd(Stream s) {
+            var all = new MemoryStream();
+            var buf = new byte[4096];
+            int n;
+            while ((n = s.Read(buf, 0, buf.Length)) > 0) all.Write(buf, 0, n);
+            return all.ToArray();
+        }
+
+        /// <summary>A path as its owner would type it, the home directory as "~": for a line that is printed
+        /// to a terminal and then pasted somewhere public.</summary>
+        public static string Tilde(string path) {
+            try {
+                string home = Environment.GetEnvironmentVariable("HOME");
+                if (!string.IsNullOrEmpty(home) && home.Length > 1 && path.StartsWith(home + "/", StringComparison.Ordinal)) return "~" + path.Substring(home.Length);
+            } catch { }
+            return path;
+        }
     }
 }

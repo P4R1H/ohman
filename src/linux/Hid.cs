@@ -86,7 +86,10 @@ namespace Ohman {
                 string n = Host.ReadText(System.IO.Path.Combine(hid, "..", "bInterfaceNumber"));
                 if (n.Length > 0) mi = "#mi_" + Convert.ToInt32(n, 16).ToString("x2");
             } catch { }
-            byte[] desc = File.ReadAllBytes(System.IO.Path.Combine(hid, "report_descriptor"));
+            // Not File.ReadAllBytes: sysfs says this file is 4096 bytes long whatever the descriptor's size, and
+            // ReadAllBytes takes a file at its word and fails when it ends early. Every keyboard was lost that way.
+            byte[] desc;
+            using (var f = new FileStream(System.IO.Path.Combine(hid, "report_descriptor"), FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1, false)) desc = Host.ReadToEnd(f);
             var node = new Node();
             List<Info> cols = ParseDescriptor(desc, node);
             lock (nodes) nodes[dev] = node;

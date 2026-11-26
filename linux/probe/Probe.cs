@@ -108,7 +108,7 @@ namespace Ohman {
             try {
                 string p = Path.Combine(Path.GetDirectoryName(Log.Path), driverOnly ? "driver-check.txt" : "support-info.txt");
                 File.WriteAllText(p, rep);
-                Console.WriteLine("saved to " + p);
+                Console.WriteLine("saved to " + Host.Tilde(p));
             } catch (Exception ex) { Console.WriteLine("could not save: " + ex.Message); }
             try { e.Dispose(); } catch { }
             return 0;
@@ -176,6 +176,7 @@ namespace Ohman {
             int outSize = int.Parse(a[3], CultureInfo.InvariantCulture);
             var data = new byte[Math.Max(0, a.Count - 4)];
             for (int i = 4; i < a.Count; i++) data[i - 4] = byte.Parse(a[i], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            Mailbox.PadEmptyReads = false;                       // raw: what is typed is what is sent
             try {
                 byte[] o = Bios.Call(command, type, data, outSize);
                 Console.WriteLine("rc=0  " + Bios.Hex(o, 64));
@@ -398,6 +399,13 @@ namespace Ohman {
         /// <summary>The pieces of the Linux layer that read other programs' formats, checked against known
         /// input: xrandr's output, a HID report descriptor, the hotkey translation, the ioctl numbers. None of
         /// it touches a device, so it runs anywhere.</summary>
+        /// <summary>A file the way sysfs presents one: a stated length that is the kernel's buffer, and less inside.</summary>
+        sealed class ShortFile : MemoryStream {
+            readonly long stated;
+            public ShortFile(byte[] content, long stated) : base(content) { this.stated = stated; }
+            public override long Length { get { return stated; } }
+        }
+
         static int SelfTest() {
             failures = 0;
             const string xr = "Screen 0: minimum 320 x 200, current 4480 x 1440, maximum 16384 x 16384\n"
@@ -482,6 +490,78 @@ namespace Ohman {
             Check("msr 0x610: a locked register is not written", Msr.LimitWriteRefusal(cur | (1ul << 63), fine | (1ul << 63), u, false, 0) != null, "");
             ulong firmware = (cur & ~Msr.LimitWritable) | (135ul * 8) | (1ul << 15) | ((157ul * 8) << 32) | (1ul << 47);      // what an HX part ships with
             Check("msr 0x610: the value found before the first write may always be put back", Msr.LimitWriteRefusal(fine, firmware, u, true, firmware) == null && Msr.LimitWriteRefusal(fine, firmware, u, true, cur) != null, "");
+
+            // A firmware that fails a call with no input (8BD4), one that answers it (88F9), and one that fails both.
+            {
+                var sent = new List<int>();
+                bool emptyFails = true, paddedFails = false, unreachable = false;
+                Mailbox.Sender old = Mailbox.Wire;
+                Mailbox.Wire = delegate(uint command, uint type, byte[] data, int outSize, out uint rc, out bool methodFailed) {
+                    rc = 0; methodFailed = false;
+                    sent.Add(data.Length);
+                    if (unreachable) throw new IOException("ohman-helper did not answer");
+                    if ((data.Length == 0 && emptyFails) || (data.Length == 4 && paddedFails)) { methodFailed = true; throw new IOException("input/output error (errno 5), input " + data.Length); }
+                    return new byte[] { 4, 0, 0, 0 };
+                };
+                try {
+                    Mailbox.ForgetPadding();
+                    uint rc;
+                    byte[] o = Mailbox.Invoke(0x20008, 0x2B, new byte[0], 4, out rc);
+                    Check("mailbox: a call with no input that fails is sent again with four zero bytes", o.Length == 4 && o[0] == 4 && sent.Count == 2 && sent[0] == 0 && sent[1] == 4, string.Join(",", sent));
+                    sent.Clear();
+                    Mailbox.Invoke(0x20009, 0x01, new byte[0], 128, out rc);
+                    Check("mailbox: and the next one goes padded at once, with no failing call first", sent.Count == 1 && sent[0] == 4, string.Join(",", sent));
+                    sent.Clear();
+                    Mailbox.Invoke(0x20009, 0x02, new byte[] { 0 }, 128, out rc);
+                    Check("mailbox: a call that has input is sent as it is", sent.Count == 1 && sent[0] == 1, string.Join(",", sent));
+
+                    Mailbox.ForgetPadding(); emptyFails = false; sent.Clear();
+                    Mailbox.Invoke(0x20008, 0x2B, new byte[0], 4, out rc);
+                    Mailbox.Invoke(0x20008, 0x2B, null, 4, out rc);
+                    Check("mailbox: firmware that answers the empty call keeps getting it empty", sent.Count == 2 && sent[0] == 0 && sent[1] == 0, string.Join(",", sent));
+
+                    Mailbox.ForgetPadding(); emptyFails = true; paddedFails = true; sent.Clear();
+                    string said = "";
+                    try { Mailbox.Invoke(0x20008, 0x2B, new byte[0], 4, out rc); } catch (IOException ex) { said = ex.Message; }
+                    Check("mailbox: when both fail, the empty call's failure is the one reported", said.EndsWith("input 0") && sent.Count == 2, said);
+                    sent.Clear(); paddedFails = false;
+                    Mailbox.Invoke(0x20008, 0x2B, new byte[0], 4, out rc);
+                    Check("mailbox: and nothing was learned from that", sent.Count == 2 && sent[0] == 0, string.Join(",", sent));
+
+                    Mailbox.ForgetPadding(); unreachable = true; sent.Clear(); said = "";
+                    try { Mailbox.Invoke(0x20008, 0x2B, new byte[0], 4, out rc); } catch (IOException ex) { said = ex.Message; }
+                    Check("mailbox: a helper that does not answer is not asked twice", sent.Count == 1 && said.Length > 0, sent.Count + " sent");
+
+                    Mailbox.ForgetPadding(); unreachable = false; Mailbox.PadEmptyReads = false; sent.Clear(); said = "";
+                    try { Mailbox.Invoke(0x20008, 0x2B, new byte[0], 4, out rc); } catch (IOException ex) { said = ex.Message; }
+                    Check("mailbox: the probe's raw call sends what was typed and reports the failure", sent.Count == 1 && sent[0] == 0 && said.Length > 0, said);
+                } catch (Exception ex) { Check("mailbox: empty calls", false, ex.ToString()); }
+                finally { Mailbox.Wire = old; Mailbox.PadEmptyReads = true; Mailbox.ForgetPadding(); }
+            }
+
+            // sysfs states 4096 bytes for a report descriptor of any size; File.ReadAllBytes fails on such a file.
+            {
+                var lying = new ShortFile(new byte[] { 0x05, 0x01, 0x09, 0x06, 0xA1, 0x01, 0xC0 }, 4096);
+                byte[] got = Host.ReadToEnd(lying);
+                Check("sysfs: a file shorter than its stated length is read whole", got.Length == 7 && got[6] == 0xC0 && lying.Length == 4096, got.Length + " bytes");
+                bool real = false; string which = "no /sys/class/hidraw here";
+                try {
+                    if (Directory.Exists("/sys/class/hidraw"))
+                        foreach (string d in Directory.GetDirectories("/sys/class/hidraw")) {
+                            string f = Path.Combine(d, "device", "report_descriptor");
+                            if (!File.Exists(f)) continue;
+                            using (var s = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1, false)) { byte[] b = Host.ReadToEnd(s); real = b.Length > 0; which = Path.GetFileName(d) + ": " + b.Length + " bytes, stated " + new FileInfo(f).Length; }
+                            break;
+                        }
+                    else real = true;
+                    if (which.StartsWith("no ") || Directory.GetDirectories("/sys/class/hidraw").Length == 0) real = true;
+                } catch (Exception ex) { which = ex.Message; }
+                Check("sysfs: this machine's first HID report descriptor reads", real, which);
+                int before = 0, after = 0;
+                try { before = Hid.Enumerate().Count; after = before; } catch (Exception ex) { which = ex.Message; after = -1; }
+                Check("hid: every node is described without an error", after >= 0, before + " collections");
+            }
+            Check("paths: the home directory is printed as ~", Host.Tilde((Environment.GetEnvironmentVariable("HOME") ?? "/nowhere") + "/.local/state/ohman/support-info.txt") == "~/.local/state/ohman/support-info.txt" && Host.Tilde("/etc/x") == "/etc/x", "");
 
             string autostart = Autostart.File_;
             Check("autostart: the entry is under the XDG config directory", autostart.EndsWith("/autostart/ohman.desktop"), autostart);

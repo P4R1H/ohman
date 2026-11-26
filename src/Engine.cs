@@ -2075,8 +2075,8 @@ namespace Ohman {
         void StartKeyWatcher() {
             try {
                 watcher = BiosEvents.Start(OnBiosEvent);
-                Log.Write("hpqBEvnt watcher started");
-            } catch (Exception ex) { Log.Write("hpqBEvnt watcher failed: " + ex.Message); }
+                Log.Write(BiosEvents.Name + " watcher started");
+            } catch (Exception ex) { Log.Write(BiosEvents.Name + " watcher failed: " + ex.Message); }
         }
 
         void OnBiosEvent(uint id, uint data) {

@@ -65,11 +65,54 @@ namespace Ohman {
         /// code; a call that fails as a call (rather than being refused by the firmware) throws. The caller holds
         /// the lock: one call at a time.</summary>
         public static byte[] Invoke(uint command, uint commandType, byte[] data, int outSize, out uint rc) {
+            if (data == null) data = new byte[0];
+            if (data.Length > 0 || !PadEmptyReads) return Send(command, commandType, data, outSize, out rc);
+            if (padNeeded) return Send(command, commandType, new byte[4], outSize, out rc);
+            try { return Send(command, commandType, data, outSize, out rc); }
+            catch (MethodFailed first) {
+                byte[] o;
+                try { o = Send(command, commandType, new byte[4], outSize, out rc); }
+                catch (MethodFailed) { throw first; }             // not the empty input, then: the first failure is the one to report
+                padNeeded = true;
+                Log.Write("mailbox: this firmware fails a call that carries no input; such calls are sent with four zero bytes from here on");
+                return o;
+            }
+        }
+
+        // A call with no input at all. Windows hands the firmware exactly that and every board answers. Under
+        // Linux's ACPI interpreter some firmware fails the whole method instead (board 8BD4: both keyboard
+        // questions came back as I/O errors, and the single-zone keyboard was shown as four zones), and answers
+        // as soon as four zero bytes come with it, which is what the kernel's own hp-wmi driver sends on such
+        // firmware. Other boards answer the empty call as it is (88F9), and hp-wmi notes firmware that insists on
+        // it, so the empty call goes first and the padded one only after it failed as a call. What was learned is
+        // kept for the life of the process, so the failing call is made once.
+        /// <summary>False sends an empty call as it is and lets it fail: the probe's raw "call" command.</summary>
+        public static bool PadEmptyReads = true;
+        static volatile bool padNeeded;
+
+        /// <summary>The method itself failed (the kernel's EIO), as opposed to no route, no helper, or a timeout.</summary>
+        sealed class MethodFailed : IOException { public MethodFailed(string m) : base(m) { } }
+
+        /// <summary>How one call is made. A test puts its own firmware here.</summary>
+        internal delegate byte[] Sender(uint command, uint commandType, byte[] data, int outSize, out uint rc, out bool methodFailed);
+        internal static Sender Wire = OverRoute;
+        internal static void ForgetPadding() { padNeeded = false; }
+
+        static byte[] Send(uint command, uint commandType, byte[] data, int outSize, out uint rc) {
+            bool methodFailed = false;
+            try { return Wire(command, commandType, data, outSize, out rc, out methodFailed); }
+            catch (IOException ex) { if (methodFailed) throw new MethodFailed(ex.Message); throw; }
+        }
+
+        static byte[] OverRoute(uint command, uint commandType, byte[] data, int outSize, out uint rc, out bool methodFailed) {
+            methodFailed = false;
             switch (Route.Now) {
-                case Route.Via.Device: return KernelModule.Call(command, commandType, data, outSize, out rc);
+                case Route.Via.Device:
+                    try { return KernelModule.Call(command, commandType, data, outSize, out rc); }
+                    catch (IOException) { methodFailed = Native.Errno == Native.EIO; throw; }
                 case Route.Via.Helper:
                     try { return HelperClient.Mailbox(command, commandType, data, outSize, out rc); }
-                    catch (HelperException ex) { throw new IOException("the mailbox call failed as a call: " + ex.Message); }
+                    catch (HelperException ex) { methodFailed = ex.Status == HelperProtocol.Failed; throw new IOException("the mailbox call failed as a call: " + ex.Message); }
                 default: throw new InvalidOperationException(Route.WhyNone);
             }
         }
